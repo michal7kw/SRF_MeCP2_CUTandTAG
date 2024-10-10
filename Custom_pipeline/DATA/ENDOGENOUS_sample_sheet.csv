@@ -1,0 +1,7 @@
+SampleID,Tissue,Factor,Condition,Replicate,bamReads,Peaks,PeakCaller
+NeuM2,Neuron,Endo,Endogenous,2,results/aligned/NeuM2.bam,results/peaks/NeuM2_peaks.narrowPeak,narrow
+NeuM3,Neuron,Endo,Endogenous,3,results/aligned/NeuM3.bam,results/peaks/NeuM3_peaks.narrowPeak,narrow
+NSCM1,NSC,Endo,Endogenous,1,results/aligned/NSCM1.bam,results/peaks/NSCM1_peaks.narrowPeak,narrow
+NSCM2,NSC,Endo,Endogenous,2,results/aligned/NSCM2.bam,results/peaks/NSCM2_peaks.narrowPeak,narrow
+NSCM3,NSC,Endo,Endogenous,3,results/aligned/NSCM3.bam,results/peaks/NSCM3_peaks.narrowPeak,narrow
+IgM,Unknown,IgG,Control,1,results/aligned/IgM.bam,results/peaks/IgM_peaks.narrowPeak,narrow

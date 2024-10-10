@@ -1,0 +1,5 @@
+genome_index: /beegfs/scratch/ric.broccoli/kubacki.michal/MIRKO_DATA/mm10_bowtie2_index/mm10
+genome_size: mm
+EXOGENOUS_control: NSCv1
+ENDOGENOUS_control: IgM
+POL2_control: 2G1
