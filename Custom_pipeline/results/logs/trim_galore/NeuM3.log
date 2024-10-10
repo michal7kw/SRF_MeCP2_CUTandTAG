@@ -1,0 +1,530 @@
+Using an excessive number of cores has a diminishing return! It is recommended not to exceed 8 cores per trimming process (you asked for 16 cores). Please consider re-specifying
+Path to Cutadapt set as: 'cutadapt' (default)
+Cutadapt seems to be working fine (tested command 'cutadapt --version')
+Cutadapt version: 4.9
+Could not detect version of Python used by Cutadapt from the first line of Cutadapt (but found this: >>>#!/bin/sh<<<)
+Letting the (modified) Cutadapt deal with the Python version instead
+pigz 2.8
+Parallel gzip (pigz) detected. Proceeding with multicore (de)compression using 16 cores
+
+igzip command line interface 2.31.0
+igzip detected. Using igzip for decompressing
+
+No quality encoding type selected. Assuming that the data provided uses Sanger encoded Phred scores (default)
+
+Output will be written into the directory: /beegfs/scratch/ric.broccoli/kubacki.michal/MIRKO_DATA/Custom_pipeline/results/trimmed/
+
+
+AUTO-DETECTING ADAPTER TYPE
+===========================
+Attempting to auto-detect adapter type from the first 1 million sequences of the first file (>> DATA/ENDOGENOUS/NeuM3_R1_001.fastq.gz <<)
+
+Found perfect matches for the following adapter sequences:
+Adapter type	Count	Sequence	Sequences analysed	Percentage
+Nextera	428272	CTGTCTCTTATA	1000000	42.83
+smallRNA	5	TGGAATTCTCGG	1000000	0.00
+Illumina	2	AGATCGGAAGAGC	1000000	0.00
+Using Nextera adapter for trimming (count: 428272). Second best hit was smallRNA (count: 5)
+
+Writing report to '/beegfs/scratch/ric.broccoli/kubacki.michal/MIRKO_DATA/Custom_pipeline/results/trimmed/NeuM3_R1_001.fastq.gz_trimming_report.txt'
+
+SUMMARISING RUN PARAMETERS
+==========================
+Input filename: DATA/ENDOGENOUS/NeuM3_R1_001.fastq.gz
+Trimming mode: paired-end
+Trim Galore version: 0.6.10
+Cutadapt version: 4.9
+Python version: could not detect
+Number of cores used for trimming: 16
+Quality Phred score cutoff: 20
+Quality encoding type selected: ASCII+33
+Adapter sequence: 'CTGTCTCTTATA' (Nextera Transposase sequence; auto-detected)
+Maximum trimming error rate: 0.1 (default)
+Minimum required adapter overlap (stringency): 1 bp
+Minimum required sequence length for both reads before a sequence pair gets removed: 20 bp
+Running FastQC on the data once trimming has completed
+Output file(s) will be GZIP compressed
+
+Cutadapt seems to be fairly up-to-date (version 4.9). Setting -j 16
+Writing final adapter and quality trimmed output to NeuM3_R1_001_trimmed.fq.gz
+
+
+  >>> Now performing quality (cutoff '-q 20') and adapter trimming in a single pass for the adapter sequence: 'CTGTCTCTTATA' from file DATA/ENDOGENOUS/NeuM3_R1_001.fastq.gz <<< 
+10000000 sequences processed
+20000000 sequences processed
+30000000 sequences processed
+40000000 sequences processed
+50000000 sequences processed
+60000000 sequences processed
+This is cutadapt 4.9 with Python 3.11.8
+Command line parameters: -j 16 -e 0.1 -q 20 -O 1 -a CTGTCTCTTATA DATA/ENDOGENOUS/NeuM3_R1_001.fastq.gz
+Processing single-end reads on 16 cores ...
+Finished in 202.305 s (3.293 µs/read; 18.22 M reads/minute).
+
+=== Summary ===
+
+Total reads processed:              61,429,277
+Reads with adapters:                37,072,145 (60.3%)
+Reads written (passing filters):    61,429,277 (100.0%)
+
+Total basepairs processed: 9,214,391,550 bp
+Quality-trimmed:              98,436,917 bp (1.1%)
+Total written (filtered):  7,522,980,286 bp (81.6%)
+
+=== Adapter 1 ===
+
+Sequence: CTGTCTCTTATA; Type: regular 3'; Length: 12; Trimmed: 37072145 times
+
+Minimum overlap: 1
+No. of allowed errors:
+1-9 bp: 0; 10-12 bp: 1
+
+Bases preceding removed adapters:
+  A: 13.0%
+  C: 41.3%
+  G: 25.7%
+  T: 19.9%
+  none/other: 0.0%
+
+Overview of removed sequences
+length	count	expect	max.err	error counts
+1	7783226	15357319.2	0	7783226
+2	2729292	3839329.8	0	2729292
+3	934871	959832.5	0	934871
+4	344268	239958.1	0	344268
+5	177939	59989.5	0	177939
+6	136790	14997.4	0	136790
+7	113222	3749.3	0	113222
+8	107926	937.3	0	107926
+9	135768	234.3	0	134372 1396
+10	119418	58.6	1	111513 7905
+11	162943	14.6	1	148294 14649
+12	156003	3.7	1	147060 8943
+13	192635	3.7	1	176010 16625
+14	169664	3.7	1	157741 11923
+15	170733	3.7	1	155486 15247
+16	138607	3.7	1	128243 10364
+17	119525	3.7	1	111579 7946
+18	100309	3.7	1	93128 7181
+19	104270	3.7	1	97181 7089
+20	117065	3.7	1	108598 8467
+21	158957	3.7	1	144466 14491
+22	163342	3.7	1	154254 9088
+23	207216	3.7	1	195102 12114
+24	209421	3.7	1	199185 10236
+25	201878	3.7	1	189337 12541
+26	167974	3.7	1	157694 10280
+27	153128	3.7	1	139259 13869
+28	170714	3.7	1	159259 11455
+29	56417	3.7	1	51544 4873
+30	109314	3.7	1	103600 5714
+31	157926	3.7	1	147727 10199
+32	199855	3.7	1	188097 11758
+33	276183	3.7	1	259574 16609
+34	217091	3.7	1	207210 9881
+35	223451	3.7	1	213374 10077
+36	193996	3.7	1	184335 9661
+37	179210	3.7	1	169972 9238
+38	129013	3.7	1	123192 5821
+39	116317	3.7	1	110923 5394
+40	132735	3.7	1	121822 10913
+41	158073	3.7	1	149212 8861
+42	251370	3.7	1	231440 19930
+43	265690	3.7	1	252223 13467
+44	746316	3.7	1	709282 37034
+45	268359	3.7	1	256988 11371
+46	357374	3.7	1	344706 12668
+47	131925	3.7	1	126114 5811
+48	1978321	3.7	1	1948168 30153
+49	370379	3.7	1	360701 9678
+50	372429	3.7	1	361353 11076
+51	171760	3.7	1	166161 5599
+52	882871	3.7	1	869752 13119
+53	217957	3.7	1	211282 6675
+54	116004	3.7	1	112096 3908
+55	264548	3.7	1	258985 5563
+56	118493	3.7	1	114469 4024
+57	43949	3.7	1	41076 2873
+58	79791	3.7	1	77064 2727
+59	164983	3.7	1	161471 3512
+60	30850	3.7	1	28180 2670
+61	105279	3.7	1	102302 2977
+62	28486	3.7	1	26577 1909
+63	29940	3.7	1	27267 2673
+64	167951	3.7	1	163203 4748
+65	472789	3.7	1	464256 8533
+66	66380	3.7	1	62888 3492
+67	78035	3.7	1	74456 3579
+68	71413	3.7	1	66945 4468
+69	60753	3.7	1	58352 2401
+70	44578	3.7	1	42760 1818
+71	38199	3.7	1	35806 2393
+72	50270	3.7	1	47988 2282
+73	129654	3.7	1	123889 5765
+74	274558	3.7	1	268169 6389
+75	438626	3.7	1	429167 9459
+76	520467	3.7	1	509922 10545
+77	467323	3.7	1	457924 9399
+78	338845	3.7	1	331748 7097
+79	225378	3.7	1	220069 5309
+80	153073	3.7	1	149416 3657
+81	144062	3.7	1	140471 3591
+82	157332	3.7	1	151936 5396
+83	249868	3.7	1	243696 6172
+84	376753	3.7	1	368662 8091
+85	577795	3.7	1	566572 11223
+86	719024	3.7	1	705621 13403
+87	683061	3.7	1	670034 13027
+88	520254	3.7	1	510642 9612
+89	318425	3.7	1	312472 5953
+90	196489	3.7	1	192475 4014
+91	127356	3.7	1	123751 3605
+92	124039	3.7	1	121035 3004
+93	182538	3.7	1	177896 4642
+94	291811	3.7	1	285611 6200
+95	452118	3.7	1	443889 8229
+96	606072	3.7	1	594840 11232
+97	637086	3.7	1	627139 9947
+98	515503	3.7	1	506405 9098
+99	345360	3.7	1	338720 6640
+100	191361	3.7	1	187596 3765
+101	104699	3.7	1	102483 2216
+102	75705	3.7	1	73503 2202
+103	90065	3.7	1	88026 2039
+104	131389	3.7	1	127976 3413
+105	186627	3.7	1	182821 3806
+106	209163	3.7	1	205140 4023
+107	199365	3.7	1	195482 3883
+108	151979	3.7	1	148893 3086
+109	105682	3.7	1	101998 3684
+110	59633	3.7	1	58032 1601
+111	35031	3.7	1	33924 1107
+112	15488	3.7	1	14223 1265
+113	10695	3.7	1	9880 815
+114	12246	3.7	1	9388 2858
+115	8993	3.7	1	8574 419
+116	6006	3.7	1	5327 679
+117	9676	3.7	1	9043 633
+118	4948	3.7	1	3536 1412
+119	3930	3.7	1	2785 1145
+120	2090	3.7	1	1617 473
+121	2782	3.7	1	2068 714
+122	2047	3.7	1	1456 591
+123	7121	3.7	1	3202 3919
+124	1169	3.7	1	700 469
+125	1533	3.7	1	1031 502
+126	871	3.7	1	487 384
+127	1259	3.7	1	659 600
+128	871	3.7	1	217 654
+129	2000	3.7	1	1481 519
+130	3527	3.7	1	134 3393
+131	1417	3.7	1	430 987
+132	990	3.7	1	111 879
+133	1804	3.7	1	287 1517
+134	505	3.7	1	18 487
+135	307	3.7	1	123 184
+136	535	3.7	1	102 433
+137	856	3.7	1	25 831
+138	887	3.7	1	7 880
+139	251	3.7	1	12 239
+140	1337	3.7	1	21 1316
+141	876	3.7	1	53 823
+142	1935	3.7	1	11 1924
+143	501	3.7	1	25 476
+144	879	3.7	1	6 873
+145	139	3.7	1	1 138
+146	288	3.7	1	21 267
+147	755	3.7	1	3 752
+148	506	3.7	1	1 505
+149	260	3.7	1	37 223
+150	2169	3.7	1	1827 342
+
+RUN STATISTICS FOR INPUT FILE: DATA/ENDOGENOUS/NeuM3_R1_001.fastq.gz
+=============================================
+61429277 sequences processed in total
+The length threshold of paired-end sequences gets evaluated later on (in the validation step)
+
+Writing report to '/beegfs/scratch/ric.broccoli/kubacki.michal/MIRKO_DATA/Custom_pipeline/results/trimmed/NeuM3_R2_001.fastq.gz_trimming_report.txt'
+
+SUMMARISING RUN PARAMETERS
+==========================
+Input filename: DATA/ENDOGENOUS/NeuM3_R2_001.fastq.gz
+Trimming mode: paired-end
+Trim Galore version: 0.6.10
+Cutadapt version: 4.9
+Python version: could not detect
+Number of cores used for trimming: 16
+Quality Phred score cutoff: 20
+Quality encoding type selected: ASCII+33
+Adapter sequence: 'CTGTCTCTTATA' (Nextera Transposase sequence; auto-detected)
+Maximum trimming error rate: 0.1 (default)
+Minimum required adapter overlap (stringency): 1 bp
+Minimum required sequence length for both reads before a sequence pair gets removed: 20 bp
+Running FastQC on the data once trimming has completed
+Output file(s) will be GZIP compressed
+
+Cutadapt seems to be fairly up-to-date (version 4.9). Setting -j -j 16
+Writing final adapter and quality trimmed output to NeuM3_R2_001_trimmed.fq.gz
+
+
+  >>> Now performing quality (cutoff '-q 20') and adapter trimming in a single pass for the adapter sequence: 'CTGTCTCTTATA' from file DATA/ENDOGENOUS/NeuM3_R2_001.fastq.gz <<< 
+10000000 sequences processed
+20000000 sequences processed
+30000000 sequences processed
+40000000 sequences processed
+50000000 sequences processed
+60000000 sequences processed
+This is cutadapt 4.9 with Python 3.11.8
+Command line parameters: -j 16 -e 0.1 -q 20 -O 1 -a CTGTCTCTTATA DATA/ENDOGENOUS/NeuM3_R2_001.fastq.gz
+Processing single-end reads on 16 cores ...
+Finished in 203.435 s (3.312 µs/read; 18.12 M reads/minute).
+
+=== Summary ===
+
+Total reads processed:              61,429,277
+Reads with adapters:                37,067,776 (60.3%)
+Reads written (passing filters):    61,429,277 (100.0%)
+
+Total basepairs processed: 9,214,391,550 bp
+Quality-trimmed:              41,137,350 bp (0.4%)
+Total written (filtered):  7,517,878,635 bp (81.6%)
+
+=== Adapter 1 ===
+
+Sequence: CTGTCTCTTATA; Type: regular 3'; Length: 12; Trimmed: 37067776 times
+
+Minimum overlap: 1
+No. of allowed errors:
+1-9 bp: 0; 10-12 bp: 1
+
+Bases preceding removed adapters:
+  A: 13.0%
+  C: 41.3%
+  G: 25.7%
+  T: 19.9%
+  none/other: 0.0%
+
+Overview of removed sequences
+length	count	expect	max.err	error counts
+1	7855381	15357319.2	0	7855381
+2	2738023	3839329.8	0	2738023
+3	936604	959832.5	0	936604
+4	340191	239958.1	0	340191
+5	179974	59989.5	0	179974
+6	136501	14997.4	0	136501
+7	113871	3749.3	0	113871
+8	109144	937.3	0	109144
+9	130187	234.3	0	129154 1033
+10	121878	58.6	1	115826 6052
+11	159509	14.6	1	150186 9323
+12	158857	3.7	1	153051 5806
+13	189156	3.7	1	178444 10712
+14	172332	3.7	1	164388 7944
+15	165839	3.7	1	156574 9265
+16	140248	3.7	1	133072 7176
+17	119126	3.7	1	113597 5529
+18	102832	3.7	1	96984 5848
+19	108565	3.7	1	102337 6228
+20	116876	3.7	1	111733 5143
+21	140520	3.7	1	134427 6093
+22	169710	3.7	1	161747 7963
+23	205253	3.7	1	197981 7272
+24	211960	3.7	1	203762 8198
+25	208726	3.7	1	198392 10334
+26	164325	3.7	1	158560 5765
+27	133974	3.7	1	128240 5734
+28	112994	3.7	1	107466 5528
+29	102032	3.7	1	98047 3985
+30	121292	3.7	1	116324 4968
+31	136733	3.7	1	132006 4727
+32	175722	3.7	1	169934 5788
+33	219121	3.7	1	210486 8635
+34	239101	3.7	1	231976 7125
+35	229893	3.7	1	222738 7155
+36	202329	3.7	1	196120 6209
+37	174406	3.7	1	167604 6802
+38	131106	3.7	1	126347 4759
+39	117677	3.7	1	113001 4676
+40	113204	3.7	1	109101 4103
+41	151975	3.7	1	146758 5217
+42	178671	3.7	1	173299 5372
+43	246024	3.7	1	237634 8390
+44	273684	3.7	1	264730 8954
+45	307401	3.7	1	299366 8035
+46	266706	3.7	1	259016 7690
+47	213490	3.7	1	207369 6121
+48	165074	3.7	1	160062 5012
+49	136387	3.7	1	131938 4449
+50	141302	3.7	1	135180 6122
+51	132672	3.7	1	128695 3977
+52	210503	3.7	1	204060 6443
+53	279502	3.7	1	272368 7134
+54	273970	3.7	1	267011 6959
+55	348197	3.7	1	340392 7805
+56	328450	3.7	1	320324 8126
+57	278272	3.7	1	271986 6286
+58	204359	3.7	1	198798 5561
+59	155253	3.7	1	150804 4449
+60	130090	3.7	1	126370 3720
+61	140621	3.7	1	137043 3578
+62	189190	3.7	1	183241 5949
+63	280072	3.7	1	273031 7041
+64	412928	3.7	1	403771 9157
+65	644072	3.7	1	631967 12105
+66	427692	3.7	1	419485 8207
+67	238108	3.7	1	232924 5184
+68	144690	3.7	1	139764 4926
+69	169491	3.7	1	166083 3408
+70	128621	3.7	1	126067 2554
+71	124917	3.7	1	121750 3167
+72	154352	3.7	1	150954 3398
+73	244158	3.7	1	237320 6838
+74	387723	3.7	1	379818 7905
+75	542503	3.7	1	532159 10344
+76	611520	3.7	1	600722 10798
+77	535404	3.7	1	525745 9659
+78	379044	3.7	1	372410 6634
+79	245872	3.7	1	241122 4750
+80	156198	3.7	1	153345 2853
+81	141855	3.7	1	138804 3051
+82	142903	3.7	1	138700 4203
+83	236240	3.7	1	231265 4975
+84	366687	3.7	1	359991 6696
+85	589284	3.7	1	579139 10145
+86	755678	3.7	1	743221 12457
+87	730732	3.7	1	718842 11890
+88	559756	3.7	1	550799 8957
+89	340682	3.7	1	335093 5589
+90	204537	3.7	1	201166 3371
+91	125231	3.7	1	122631 2600
+92	115756	3.7	1	113223 2533
+93	173118	3.7	1	168697 4421
+94	281961	3.7	1	276759 5202
+95	451306	3.7	1	443943 7363
+96	620103	3.7	1	610264 9839
+97	662847	3.7	1	653200 9647
+98	538177	3.7	1	529672 8505
+99	362287	3.7	1	356097 6190
+100	199816	3.7	1	196196 3620
+101	106051	3.7	1	104290 1761
+102	74564	3.7	1	72890 1674
+103	88128	3.7	1	86328 1800
+104	130120	3.7	1	127195 2925
+105	188093	3.7	1	185038 3055
+106	212800	3.7	1	208947 3853
+107	204743	3.7	1	200892 3851
+108	155870	3.7	1	153047 2823
+109	108389	3.7	1	105287 3102
+110	60849	3.7	1	59434 1415
+111	35996	3.7	1	35009 987
+112	15889	3.7	1	14561 1328
+113	11045	3.7	1	10070 975
+114	12465	3.7	1	9519 2946
+115	9325	3.7	1	8712 613
+116	5796	3.7	1	5365 431
+117	10217	3.7	1	9254 963
+118	5455	3.7	1	3570 1885
+119	3746	3.7	1	2803 943
+120	2283	3.7	1	1644 639
+121	2737	3.7	1	2117 620
+122	1840	3.7	1	1416 424
+123	7069	3.7	1	3294 3775
+124	1298	3.7	1	684 614
+125	1446	3.7	1	1074 372
+126	1144	3.7	1	478 666
+127	1292	3.7	1	688 604
+128	519	3.7	1	215 304
+129	1866	3.7	1	1514 352
+130	3288	3.7	1	135 3153
+131	1569	3.7	1	442 1127
+132	1297	3.7	1	114 1183
+133	3033	3.7	1	301 2732
+134	286	3.7	1	17 269
+135	455	3.7	1	121 334
+136	643	3.7	1	43 600
+137	1153	3.7	1	23 1130
+138	1207	3.7	1	5 1202
+139	420	3.7	1	9 411
+140	1948	3.7	1	21 1927
+141	953	3.7	1	58 895
+142	1952	3.7	1	9 1943
+143	352	3.7	1	24 328
+144	895	3.7	1	1 894
+145	53	3.7	1	0 53
+146	135	3.7	1	18 117
+147	1036	3.7	1	2 1034
+148	507	3.7	1	0 507
+149	232	3.7	1	21 211
+150	2041	3.7	1	1878 163
+
+RUN STATISTICS FOR INPUT FILE: DATA/ENDOGENOUS/NeuM3_R2_001.fastq.gz
+=============================================
+61429277 sequences processed in total
+The length threshold of paired-end sequences gets evaluated later on (in the validation step)
+
+Validate paired-end files NeuM3_R1_001_trimmed.fq.gz and NeuM3_R2_001_trimmed.fq.gz
+file_1: NeuM3_R1_001_trimmed.fq.gz, file_2: NeuM3_R2_001_trimmed.fq.gz
+
+
+>>>>> Now validing the length of the 2 paired-end infiles: NeuM3_R1_001_trimmed.fq.gz and NeuM3_R2_001_trimmed.fq.gz <<<<<
+Writing validated paired-end Read 1 reads to NeuM3_R1_001_val_1.fq.gz
+Writing validated paired-end Read 2 reads to NeuM3_R2_001_val_2.fq.gz
+
+Total number of sequences analysed: 61429277
+
+Number of sequence pairs removed because at least one read was shorter than the length cutoff (20 bp): 64088 (0.10%)
+
+
+  >>> Now running FastQC on the validated data NeuM3_R1_001_val_1.fq.gz<<<
+
+application/gzip
+Started analysis of NeuM3_R1_001_val_1.fq.gz
+Approx 5% complete for NeuM3_R1_001_val_1.fq.gz
+Approx 10% complete for NeuM3_R1_001_val_1.fq.gz
+Approx 15% complete for NeuM3_R1_001_val_1.fq.gz
+Approx 20% complete for NeuM3_R1_001_val_1.fq.gz
+Approx 25% complete for NeuM3_R1_001_val_1.fq.gz
+Approx 30% complete for NeuM3_R1_001_val_1.fq.gz
+Approx 35% complete for NeuM3_R1_001_val_1.fq.gz
+Approx 40% complete for NeuM3_R1_001_val_1.fq.gz
+Approx 45% complete for NeuM3_R1_001_val_1.fq.gz
+Approx 50% complete for NeuM3_R1_001_val_1.fq.gz
+Approx 55% complete for NeuM3_R1_001_val_1.fq.gz
+Approx 60% complete for NeuM3_R1_001_val_1.fq.gz
+Approx 65% complete for NeuM3_R1_001_val_1.fq.gz
+Approx 70% complete for NeuM3_R1_001_val_1.fq.gz
+Approx 75% complete for NeuM3_R1_001_val_1.fq.gz
+Approx 80% complete for NeuM3_R1_001_val_1.fq.gz
+Approx 85% complete for NeuM3_R1_001_val_1.fq.gz
+Approx 90% complete for NeuM3_R1_001_val_1.fq.gz
+Approx 95% complete for NeuM3_R1_001_val_1.fq.gz
+Analysis complete for NeuM3_R1_001_val_1.fq.gz
+
+  >>> Now running FastQC on the validated data NeuM3_R2_001_val_2.fq.gz<<<
+
+application/gzip
+Started analysis of NeuM3_R2_001_val_2.fq.gz
+Approx 5% complete for NeuM3_R2_001_val_2.fq.gz
+Approx 10% complete for NeuM3_R2_001_val_2.fq.gz
+Approx 15% complete for NeuM3_R2_001_val_2.fq.gz
+Approx 20% complete for NeuM3_R2_001_val_2.fq.gz
+Approx 25% complete for NeuM3_R2_001_val_2.fq.gz
+Approx 30% complete for NeuM3_R2_001_val_2.fq.gz
+Approx 35% complete for NeuM3_R2_001_val_2.fq.gz
+Approx 40% complete for NeuM3_R2_001_val_2.fq.gz
+Approx 45% complete for NeuM3_R2_001_val_2.fq.gz
+Approx 50% complete for NeuM3_R2_001_val_2.fq.gz
+Approx 55% complete for NeuM3_R2_001_val_2.fq.gz
+Approx 60% complete for NeuM3_R2_001_val_2.fq.gz
+Approx 65% complete for NeuM3_R2_001_val_2.fq.gz
+Approx 70% complete for NeuM3_R2_001_val_2.fq.gz
+Approx 75% complete for NeuM3_R2_001_val_2.fq.gz
+Approx 80% complete for NeuM3_R2_001_val_2.fq.gz
+Approx 85% complete for NeuM3_R2_001_val_2.fq.gz
+Approx 90% complete for NeuM3_R2_001_val_2.fq.gz
+Approx 95% complete for NeuM3_R2_001_val_2.fq.gz
+Analysis complete for NeuM3_R2_001_val_2.fq.gz
+Deleting both intermediate output files NeuM3_R1_001_trimmed.fq.gz and NeuM3_R2_001_trimmed.fq.gz
+
+====================================================================================================
+

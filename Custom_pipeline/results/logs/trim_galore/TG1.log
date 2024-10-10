@@ -1,0 +1,528 @@
+Using an excessive number of cores has a diminishing return! It is recommended not to exceed 8 cores per trimming process (you asked for 16 cores). Please consider re-specifying
+Path to Cutadapt set as: 'cutadapt' (default)
+Cutadapt seems to be working fine (tested command 'cutadapt --version')
+Cutadapt version: 4.9
+Could not detect version of Python used by Cutadapt from the first line of Cutadapt (but found this: >>>#!/bin/sh<<<)
+Letting the (modified) Cutadapt deal with the Python version instead
+pigz 2.8
+Parallel gzip (pigz) detected. Proceeding with multicore (de)compression using 16 cores
+
+igzip command line interface 2.31.0
+igzip detected. Using igzip for decompressing
+
+No quality encoding type selected. Assuming that the data provided uses Sanger encoded Phred scores (default)
+
+Output will be written into the directory: /beegfs/scratch/ric.broccoli/kubacki.michal/MIRKO_DATA/Custom_pipeline/results/trimmed/
+
+
+AUTO-DETECTING ADAPTER TYPE
+===========================
+Attempting to auto-detect adapter type from the first 1 million sequences of the first file (>> DATA/POL2/TG1_R1_001.fastq.gz <<)
+
+Found perfect matches for the following adapter sequences:
+Adapter type	Count	Sequence	Sequences analysed	Percentage
+Nextera	894516	CTGTCTCTTATA	1000000	89.45
+Illumina	7	AGATCGGAAGAGC	1000000	0.00
+smallRNA	0	TGGAATTCTCGG	1000000	0.00
+Using Nextera adapter for trimming (count: 894516). Second best hit was Illumina (count: 7)
+
+Writing report to '/beegfs/scratch/ric.broccoli/kubacki.michal/MIRKO_DATA/Custom_pipeline/results/trimmed/TG1_R1_001.fastq.gz_trimming_report.txt'
+
+SUMMARISING RUN PARAMETERS
+==========================
+Input filename: DATA/POL2/TG1_R1_001.fastq.gz
+Trimming mode: paired-end
+Trim Galore version: 0.6.10
+Cutadapt version: 4.9
+Python version: could not detect
+Number of cores used for trimming: 16
+Quality Phred score cutoff: 20
+Quality encoding type selected: ASCII+33
+Adapter sequence: 'CTGTCTCTTATA' (Nextera Transposase sequence; auto-detected)
+Maximum trimming error rate: 0.1 (default)
+Minimum required adapter overlap (stringency): 1 bp
+Minimum required sequence length for both reads before a sequence pair gets removed: 20 bp
+Running FastQC on the data once trimming has completed
+Output file(s) will be GZIP compressed
+
+Cutadapt seems to be fairly up-to-date (version 4.9). Setting -j 16
+Writing final adapter and quality trimmed output to TG1_R1_001_trimmed.fq.gz
+
+
+  >>> Now performing quality (cutoff '-q 20') and adapter trimming in a single pass for the adapter sequence: 'CTGTCTCTTATA' from file DATA/POL2/TG1_R1_001.fastq.gz <<< 
+10000000 sequences processed
+20000000 sequences processed
+30000000 sequences processed
+40000000 sequences processed
+50000000 sequences processed
+60000000 sequences processed
+70000000 sequences processed
+80000000 sequences processed
+90000000 sequences processed
+100000000 sequences processed
+110000000 sequences processed
+120000000 sequences processed
+130000000 sequences processed
+This is cutadapt 4.9 with Python 3.11.8
+Command line parameters: -j 16 -e 0.1 -q 20 -O 1 -a CTGTCTCTTATA DATA/POL2/TG1_R1_001.fastq.gz
+Processing single-end reads on 16 cores ...
+Finished in 230.617 s (1.766 µs/read; 33.97 M reads/minute).
+
+=== Summary ===
+
+Total reads processed:             130,583,343
+Reads with adapters:               123,914,726 (94.9%)
+Reads written (passing filters):   130,583,343 (100.0%)
+
+Total basepairs processed: 19,587,501,450 bp
+Quality-trimmed:             140,511,790 bp (0.7%)
+Total written (filtered):  10,531,375,436 bp (53.8%)
+
+=== Adapter 1 ===
+
+Sequence: CTGTCTCTTATA; Type: regular 3'; Length: 12; Trimmed: 123914726 times
+
+Minimum overlap: 1
+No. of allowed errors:
+1-9 bp: 0; 10-12 bp: 1
+
+Bases preceding removed adapters:
+  A: 9.5%
+  C: 46.7%
+  G: 25.5%
+  T: 18.3%
+  none/other: 0.0%
+
+Overview of removed sequences
+length	count	expect	max.err	error counts
+1	2584029	32645835.8	0	2584029
+2	768827	8161458.9	0	768827
+3	410049	2040364.7	0	410049
+4	286688	510091.2	0	286688
+5	265812	127522.8	0	265812
+6	278082	31880.7	0	278082
+7	256489	7970.2	0	256489
+8	277387	1992.5	0	277387
+9	291419	498.1	0	291313 106
+10	282889	124.5	1	277488 5401
+11	308901	31.1	1	300068 8833
+12	297182	7.8	1	291239 5943
+13	327117	7.8	1	315901 11216
+14	319945	7.8	1	311783 8162
+15	349420	7.8	1	334826 14594
+16	405711	7.8	1	388556 17155
+17	292388	7.8	1	286295 6093
+18	386571	7.8	1	373012 13559
+19	374697	7.8	1	363644 11053
+20	351447	7.8	1	340349 11098
+21	501677	7.8	1	479600 22077
+22	310185	7.8	1	302470 7715
+23	433143	7.8	1	420428 12715
+24	368731	7.8	1	361517 7214
+25	429667	7.8	1	416605 13062
+26	440366	7.8	1	427193 13173
+27	492813	7.8	1	468629 24184
+28	462583	7.8	1	448738 13845
+29	568838	7.8	1	542133 26705
+30	428658	7.8	1	417669 10989
+31	524322	7.8	1	507148 17174
+32	488768	7.8	1	476959 11809
+33	533953	7.8	1	518311 15642
+34	557172	7.8	1	537593 19579
+35	561809	7.8	1	543410 18399
+36	587582	7.8	1	567790 19792
+37	617376	7.8	1	593954 23422
+38	591692	7.8	1	574440 17252
+39	584834	7.8	1	570152 14682
+40	658202	7.8	1	634332 23870
+41	654334	7.8	1	635459 18875
+42	710195	7.8	1	683271 26924
+43	771231	7.8	1	737721 33510
+44	1202471	7.8	1	1144207 58264
+45	617409	7.8	1	595660 21749
+46	1416189	7.8	1	1371597 44592
+47	322255	7.8	1	305670 16585
+48	1121898	7.8	1	1094566 27332
+49	1438834	7.8	1	1406970 31864
+50	1463507	7.8	1	1431891 31616
+51	677552	7.8	1	653891 23661
+52	848844	7.8	1	820341 28503
+53	570920	7.8	1	547110 23810
+54	793109	7.8	1	775188 17921
+55	546075	7.8	1	531697 14378
+56	598360	7.8	1	583779 14581
+57	786239	7.8	1	771316 14923
+58	892281	7.8	1	875860 16421
+59	997007	7.8	1	976206 20801
+60	997720	7.8	1	976614 21106
+61	1078300	7.8	1	1054451 23849
+62	1072799	7.8	1	1050115 22684
+63	1080193	7.8	1	1057570 22623
+64	1120856	7.8	1	1096338 24518
+65	1262454	7.8	1	1230562 31892
+66	1428671	7.8	1	1391902 36769
+67	1775873	7.8	1	1729929 45944
+68	2859534	7.8	1	2799226 60308
+69	3628534	7.8	1	3567806 60728
+70	2477950	7.8	1	2436803 41147
+71	1269162	7.8	1	1245605 23557
+72	652586	7.8	1	638511 14075
+73	349660	7.8	1	339205 10455
+74	213277	7.8	1	202672 10605
+75	313317	7.8	1	299710 13607
+76	652215	7.8	1	633737 18478
+77	1003093	7.8	1	980994 22099
+78	1306336	7.8	1	1280510 25826
+79	1495976	7.8	1	1467562 28414
+80	1639918	7.8	1	1611739 28179
+81	1741365	7.8	1	1709992 31373
+82	1809392	7.8	1	1780555 28837
+83	1823052	7.8	1	1794381 28671
+84	1864422	7.8	1	1836908 27514
+85	1859394	7.8	1	1831513 27881
+86	1925185	7.8	1	1895072 30113
+87	1907937	7.8	1	1878998 28939
+88	1979079	7.8	1	1949758 29321
+89	2078813	7.8	1	2047676 31137
+90	2166307	7.8	1	2133459 32848
+91	2295784	7.8	1	2258957 36827
+92	2355511	7.8	1	2315641 39870
+93	2378031	7.8	1	2338453 39578
+94	2385829	7.8	1	2346255 39574
+95	2300031	7.8	1	2255346 44685
+96	2311220	7.8	1	2262934 48286
+97	2211601	7.8	1	2165716 45885
+98	2183300	7.8	1	2137043 46257
+99	2200616	7.8	1	2152986 47630
+100	2226224	7.8	1	2178328 47896
+101	2248336	7.8	1	2199970 48366
+102	2250316	7.8	1	2203183 47133
+103	2212678	7.8	1	2167901 44777
+104	2130082	7.8	1	2088680 41402
+105	1867582	7.8	1	1830228 37354
+106	1617470	7.8	1	1585927 31543
+107	1294786	7.8	1	1272490 22296
+108	1067944	7.8	1	1051221 16723
+109	885636	7.8	1	871840 13796
+110	722282	7.8	1	711540 10742
+111	590151	7.8	1	581270 8881
+112	469356	7.8	1	462302 7054
+113	373646	7.8	1	367953 5693
+114	279957	7.8	1	275318 4639
+115	152820	7.8	1	150483 2337
+116	92223	7.8	1	90683 1540
+117	70729	7.8	1	69396 1333
+118	50872	7.8	1	49894 978
+119	35670	7.8	1	34333 1337
+120	26780	7.8	1	26111 669
+121	23566	7.8	1	22914 652
+122	17520	7.8	1	17026 494
+123	11340	7.8	1	10848 492
+124	10713	7.8	1	10309 404
+125	6324	7.8	1	5690 634
+126	6648	7.8	1	6046 602
+127	4037	7.8	1	3568 469
+128	3000	7.8	1	2774 226
+129	3039	7.8	1	2652 387
+130	1774	7.8	1	1510 264
+131	2126	7.8	1	1591 535
+132	845	7.8	1	639 206
+133	546	7.8	1	359 187
+134	635	7.8	1	293 342
+135	347	7.8	1	152 195
+136	444	7.8	1	170 274
+137	1494	7.8	1	208 1286
+138	345	7.8	1	113 232
+139	240	7.8	1	67 173
+140	296	7.8	1	88 208
+141	474	7.8	1	131 343
+142	1228	7.8	1	171 1057
+143	237	7.8	1	50 187
+144	235	7.8	1	132 103
+145	312	7.8	1	244 68
+146	1706	7.8	1	1568 138
+147	1698	7.8	1	589 1109
+148	400	7.8	1	74 326
+149	465	7.8	1	363 102
+150	5728	7.8	1	5332 396
+
+RUN STATISTICS FOR INPUT FILE: DATA/POL2/TG1_R1_001.fastq.gz
+=============================================
+130583343 sequences processed in total
+The length threshold of paired-end sequences gets evaluated later on (in the validation step)
+
+Writing report to '/beegfs/scratch/ric.broccoli/kubacki.michal/MIRKO_DATA/Custom_pipeline/results/trimmed/TG1_R2_001.fastq.gz_trimming_report.txt'
+
+SUMMARISING RUN PARAMETERS
+==========================
+Input filename: DATA/POL2/TG1_R2_001.fastq.gz
+Trimming mode: paired-end
+Trim Galore version: 0.6.10
+Cutadapt version: 4.9
+Python version: could not detect
+Number of cores used for trimming: 16
+Quality Phred score cutoff: 20
+Quality encoding type selected: ASCII+33
+Adapter sequence: 'CTGTCTCTTATA' (Nextera Transposase sequence; auto-detected)
+Maximum trimming error rate: 0.1 (default)
+Minimum required adapter overlap (stringency): 1 bp
+Minimum required sequence length for both reads before a sequence pair gets removed: 20 bp
+Running FastQC on the data once trimming has completed
+Output file(s) will be GZIP compressed
+
+Cutadapt seems to be fairly up-to-date (version 4.9). Setting -j -j 16
+Writing final adapter and quality trimmed output to TG1_R2_001_trimmed.fq.gz
+
+
+  >>> Now performing quality (cutoff '-q 20') and adapter trimming in a single pass for the adapter sequence: 'CTGTCTCTTATA' from file DATA/POL2/TG1_R2_001.fastq.gz <<< 
+10000000 sequences processed
+20000000 sequences processed
+30000000 sequences processed
+40000000 sequences processed
+50000000 sequences processed
+60000000 sequences processed
+70000000 sequences processed
+80000000 sequences processed
+90000000 sequences processed
+100000000 sequences processed
+110000000 sequences processed
+120000000 sequences processed
+130000000 sequences processed
+This is cutadapt 4.9 with Python 3.11.8
+Command line parameters: -j 16 -e 0.1 -q 20 -O 1 -a CTGTCTCTTATA DATA/POL2/TG1_R2_001.fastq.gz
+Processing single-end reads on 16 cores ...
+Finished in 303.541 s (2.324 µs/read; 25.81 M reads/minute).
+
+=== Summary ===
+
+Total reads processed:             130,583,343
+Reads with adapters:               123,377,954 (94.5%)
+Reads written (passing filters):   130,583,343 (100.0%)
+
+Total basepairs processed: 19,587,501,450 bp
+Quality-trimmed:              64,970,819 bp (0.3%)
+Total written (filtered):  10,572,899,522 bp (54.0%)
+
+=== Adapter 1 ===
+
+Sequence: CTGTCTCTTATA; Type: regular 3'; Length: 12; Trimmed: 123377954 times
+
+Minimum overlap: 1
+No. of allowed errors:
+1-9 bp: 0; 10-12 bp: 1
+
+Bases preceding removed adapters:
+  A: 9.4%
+  C: 47.0%
+  G: 25.5%
+  T: 18.1%
+  none/other: 0.0%
+
+Overview of removed sequences
+length	count	expect	max.err	error counts
+1	2645866	32645835.8	0	2645866
+2	773688	8161458.9	0	773688
+3	425736	2040364.7	0	425736
+4	283812	510091.2	0	283812
+5	263747	127522.8	0	263747
+6	268384	31880.7	0	268384
+7	260078	7970.2	0	260078
+8	273069	1992.5	0	273069
+9	291926	498.1	0	291854 72
+10	276160	124.5	1	271917 4243
+11	313376	31.1	1	303800 9576
+12	296900	7.8	1	291632 5268
+13	320823	7.8	1	311455 9368
+14	315405	7.8	1	309076 6329
+15	335721	7.8	1	325290 10431
+16	335726	7.8	1	327810 7916
+17	339266	7.8	1	331265 8001
+18	360808	7.8	1	350053 10755
+19	378956	7.8	1	365754 13202
+20	372923	7.8	1	364557 8366
+21	376057	7.8	1	367774 8283
+22	403384	7.8	1	390966 12418
+23	400924	7.8	1	392859 8065
+24	420168	7.8	1	409626 10542
+25	435075	7.8	1	422145 12930
+26	431592	7.8	1	423008 8584
+27	453950	7.8	1	443092 10858
+28	478169	7.8	1	461623 16546
+29	475041	7.8	1	463284 11757
+30	476465	7.8	1	464793 11672
+31	506049	7.8	1	490687 15362
+32	507424	7.8	1	495870 11554
+33	524778	7.8	1	511927 12851
+34	526202	7.8	1	514846 11356
+35	549011	7.8	1	534967 14044
+36	554899	7.8	1	542798 12101
+37	584243	7.8	1	567833 16410
+38	585883	7.8	1	571995 13888
+39	600572	7.8	1	586860 13712
+40	608384	7.8	1	595376 13008
+41	647452	7.8	1	632329 15123
+42	659395	7.8	1	644477 14918
+43	698468	7.8	1	679752 18716
+44	706390	7.8	1	685799 20591
+45	702355	7.8	1	687169 15186
+46	714705	7.8	1	701591 13114
+47	752167	7.8	1	734005 18162
+48	766431	7.8	1	749575 16856
+49	779304	7.8	1	763293 16011
+50	834788	7.8	1	812310 22478
+51	820786	7.8	1	801127 19659
+52	854188	7.8	1	835547 18641
+53	937198	7.8	1	916699 20499
+54	825946	7.8	1	808086 17860
+55	894134	7.8	1	877204 16930
+56	929921	7.8	1	909628 20293
+57	931602	7.8	1	913901 17701
+58	979119	7.8	1	958023 21096
+59	1045055	7.8	1	1020809 24246
+60	1022039	7.8	1	1003004 19035
+61	1079632	7.8	1	1058405 21227
+62	1177973	7.8	1	1148350 29623
+63	1158803	7.8	1	1133142 25661
+64	1173170	7.8	1	1147405 25765
+65	1324078	7.8	1	1293334 30744
+66	1422997	7.8	1	1396853 26144
+67	2040270	7.8	1	2018709 21561
+68	416611	7.8	1	407388 9223
+69	1072751	7.8	1	1058783 13968
+70	1293023	7.8	1	1276930 16093
+71	1347738	7.8	1	1330102 17636
+72	1387322	7.8	1	1369154 18168
+73	1407049	7.8	1	1388542 18507
+74	1445373	7.8	1	1426306 19067
+75	1469788	7.8	1	1449436 20352
+76	1548085	7.8	1	1525927 22158
+77	1527267	7.8	1	1505222 22045
+78	1594726	7.8	1	1571851 22875
+79	1650950	7.8	1	1627620 23330
+80	1729886	7.8	1	1706610 23276
+81	1798084	7.8	1	1773028 25056
+82	1846910	7.8	1	1821325 25585
+83	1847189	7.8	1	1822362 24827
+84	1882507	7.8	1	1858180 24327
+85	1870430	7.8	1	1846794 23636
+86	1934162	7.8	1	1908288 25874
+87	1912112	7.8	1	1888175 23937
+88	1980936	7.8	1	1954688 26248
+89	2077809	7.8	1	2050396 27413
+90	2163269	7.8	1	2135391 27878
+91	2291919	7.8	1	2261167 30752
+92	2351611	7.8	1	2317893 33718
+93	2372770	7.8	1	2338018 34752
+94	2380734	7.8	1	2346819 33915
+95	2293563	7.8	1	2261523 32040
+96	2304121	7.8	1	2270433 33688
+97	2204554	7.8	1	2173839 30715
+98	2175939	7.8	1	2144821 31118
+99	2192649	7.8	1	2160953 31696
+100	2218208	7.8	1	2189502 28706
+101	2239451	7.8	1	2211568 27883
+102	2241019	7.8	1	2214418 26601
+103	2203275	7.8	1	2175661 27614
+104	2119565	7.8	1	2093445 26120
+105	1858213	7.8	1	1835389 22824
+106	1609577	7.8	1	1589124 20453
+107	1289044	7.8	1	1272317 16727
+108	1063380	7.8	1	1049325 14055
+109	882432	7.8	1	870657 11775
+110	720250	7.8	1	710716 9534
+111	589203	7.8	1	581196 8007
+112	468881	7.8	1	462077 6804
+113	373899	7.8	1	368279 5620
+114	280857	7.8	1	276244 4613
+115	153226	7.8	1	150990 2236
+116	92576	7.8	1	91233 1343
+117	71190	7.8	1	70060 1130
+118	51105	7.8	1	50311 794
+119	35804	7.8	1	34583 1221
+120	26876	7.8	1	26272 604
+121	23930	7.8	1	23330 600
+122	17714	7.8	1	17301 413
+123	11363	7.8	1	10972 391
+124	10903	7.8	1	10541 362
+125	6374	7.8	1	5765 609
+126	6679	7.8	1	6178 501
+127	4094	7.8	1	3665 429
+128	3000	7.8	1	2827 173
+129	3076	7.8	1	2734 342
+130	1770	7.8	1	1527 243
+131	2106	7.8	1	1648 458
+132	950	7.8	1	644 306
+133	531	7.8	1	374 157
+134	622	7.8	1	315 307
+135	297	7.8	1	145 152
+136	327	7.8	1	156 171
+137	1716	7.8	1	219 1497
+138	344	7.8	1	97 247
+139	219	7.8	1	71 148
+140	277	7.8	1	76 201
+141	528	7.8	1	139 389
+142	1488	7.8	1	170 1318
+143	236	7.8	1	35 201
+144	211	7.8	1	107 104
+145	219	7.8	1	160 59
+146	1814	7.8	1	1705 109
+147	1747	7.8	1	599 1148
+148	406	7.8	1	57 349
+149	197	7.8	1	132 65
+150	5942	7.8	1	5814 128
+
+RUN STATISTICS FOR INPUT FILE: DATA/POL2/TG1_R2_001.fastq.gz
+=============================================
+130583343 sequences processed in total
+The length threshold of paired-end sequences gets evaluated later on (in the validation step)
+
+Validate paired-end files TG1_R1_001_trimmed.fq.gz and TG1_R2_001_trimmed.fq.gz
+file_1: TG1_R1_001_trimmed.fq.gz, file_2: TG1_R2_001_trimmed.fq.gz
+
+
+>>>>> Now validing the length of the 2 paired-end infiles: TG1_R1_001_trimmed.fq.gz and TG1_R2_001_trimmed.fq.gz <<<<<
+Writing validated paired-end Read 1 reads to TG1_R1_001_val_1.fq.gz
+Writing validated paired-end Read 2 reads to TG1_R2_001_val_2.fq.gz
+
+Total number of sequences analysed: 130583343
+
+Number of sequence pairs removed because at least one read was shorter than the length cutoff (20 bp): 51707 (0.04%)
+
+
+  >>> Now running FastQC on the validated data TG1_R1_001_val_1.fq.gz<<<
+
+application/gzip
+Started analysis of TG1_R1_001_val_1.fq.gz
+Approx 5% complete for TG1_R1_001_val_1.fq.gz
+Approx 10% complete for TG1_R1_001_val_1.fq.gz
+Approx 15% complete for TG1_R1_001_val_1.fq.gz
+Approx 20% complete for TG1_R1_001_val_1.fq.gz
+Approx 25% complete for TG1_R1_001_val_1.fq.gz
+Approx 30% complete for TG1_R1_001_val_1.fq.gz
+Approx 35% complete for TG1_R1_001_val_1.fq.gz
+Approx 40% complete for TG1_R1_001_val_1.fq.gz
+Approx 45% complete for TG1_R1_001_val_1.fq.gz
+Approx 50% complete for TG1_R1_001_val_1.fq.gz
+Approx 55% complete for TG1_R1_001_val_1.fq.gz
+Approx 60% complete for TG1_R1_001_val_1.fq.gz
+Approx 65% complete for TG1_R1_001_val_1.fq.gz
+Approx 70% complete for TG1_R1_001_val_1.fq.gz
+Approx 75% complete for TG1_R1_001_val_1.fq.gz
+Approx 80% complete for TG1_R1_001_val_1.fq.gz
+Approx 85% complete for TG1_R1_001_val_1.fq.gz
+Approx 90% complete for TG1_R1_001_val_1.fq.gz
+Approx 95% complete for TG1_R1_001_val_1.fq.gz
+Analysis complete for TG1_R1_001_val_1.fq.gz
+
+  >>> Now running FastQC on the validated data TG1_R2_001_val_2.fq.gz<<<
+
+application/gzip
+Started analysis of TG1_R2_001_val_2.fq.gz
+Approx 5% complete for TG1_R2_001_val_2.fq.gz
+Approx 10% complete for TG1_R2_001_val_2.fq.gz
+Approx 15% complete for TG1_R2_001_val_2.fq.gz
+Approx 20% complete for TG1_R2_001_val_2.fq.gz
+Approx 25% complete for TG1_R2_001_val_2.fq.gz
+Approx 30% complete for TG1_R2_001_val_2.fq.gz
+Approx 35% complete for TG1_R2_001_val_2.fq.gz
+Approx 40% complete for TG1_R2_001_val_2.fq.gz
