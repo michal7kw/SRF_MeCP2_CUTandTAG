@@ -17,7 +17,7 @@ Output will be written into the directory: /beegfs/scratch/ric.broccoli/kubacki.
 
 AUTO-DETECTING ADAPTER TYPE
 ===========================
-Attempting to auto-detect adapter type from the first 1 million sequences of the first file (>> ./DATA/EXOGENOUS/NeuV1_R1_001.fastq.gz <<)
+Attempting to auto-detect adapter type from the first 1 million sequences of the first file (>> DATA/EXOGENOUS/NeuV1_R1_001.fastq.gz <<)
 
 Found perfect matches for the following adapter sequences:
 Adapter type	Count	Sequence	Sequences analysed	Percentage
@@ -30,7 +30,7 @@ Writing report to '/beegfs/scratch/ric.broccoli/kubacki.michal/MIRKO_DATA/Custom
 
 SUMMARISING RUN PARAMETERS
 ==========================
-Input filename: ./DATA/EXOGENOUS/NeuV1_R1_001.fastq.gz
+Input filename: DATA/EXOGENOUS/NeuV1_R1_001.fastq.gz
 Trimming mode: paired-end
 Trim Galore version: 0.6.10
 Cutadapt version: 4.9
@@ -49,8 +49,484 @@ Cutadapt seems to be fairly up-to-date (version 4.9). Setting -j 16
 Writing final adapter and quality trimmed output to NeuV1_R1_001_trimmed.fq.gz
 
 
-  >>> Now performing quality (cutoff '-q 20') and adapter trimming in a single pass for the adapter sequence: 'CTGTCTCTTATA' from file ./DATA/EXOGENOUS/NeuV1_R1_001.fastq.gz <<< 
+  >>> Now performing quality (cutoff '-q 20') and adapter trimming in a single pass for the adapter sequence: 'CTGTCTCTTATA' from file DATA/EXOGENOUS/NeuV1_R1_001.fastq.gz <<< 
 10000000 sequences processed
 20000000 sequences processed
 30000000 sequences processed
 40000000 sequences processed
+50000000 sequences processed
+60000000 sequences processed
+70000000 sequences processed
+This is cutadapt 4.9 with Python 3.11.8
+Command line parameters: -j 16 -e 0.1 -q 20 -O 1 -a CTGTCTCTTATA DATA/EXOGENOUS/NeuV1_R1_001.fastq.gz
+Processing single-end reads on 16 cores ...
+Finished in 257.434 s (3.619 µs/read; 16.58 M reads/minute).
+
+=== Summary ===
+
+Total reads processed:              71,139,349
+Reads with adapters:                52,605,222 (73.9%)
+Reads written (passing filters):    71,139,349 (100.0%)
+
+Total basepairs processed: 10,670,902,350 bp
+Quality-trimmed:             100,480,092 bp (0.9%)
+Total written (filtered):  7,891,762,498 bp (74.0%)
+
+=== Adapter 1 ===
+
+Sequence: CTGTCTCTTATA; Type: regular 3'; Length: 12; Trimmed: 52605222 times
+
+Minimum overlap: 1
+No. of allowed errors:
+1-9 bp: 0; 10-12 bp: 1
+
+Bases preceding removed adapters:
+  A: 10.8%
+  C: 43.6%
+  G: 27.1%
+  T: 18.5%
+  none/other: 0.0%
+
+Overview of removed sequences
+length	count	expect	max.err	error counts
+1	6254049	17784837.2	0	6254049
+2	2233789	4446209.3	0	2233789
+3	892412	1111552.3	0	892412
+4	382629	277888.1	0	382629
+5	230471	69472.0	0	230471
+6	187937	17368.0	0	187937
+7	177040	4342.0	0	177040
+8	198284	1085.5	0	198284
+9	224181	271.4	0	223151 1030
+10	212633	67.8	1	199709 12924
+11	261504	17.0	1	241318 20186
+12	284848	4.2	1	266503 18345
+13	291859	4.2	1	270905 20954
+14	294309	4.2	1	274331 19978
+15	265643	4.2	1	246272 19371
+16	267473	4.2	1	248023 19450
+17	176615	4.2	1	164640 11975
+18	195099	4.2	1	182652 12447
+19	203094	4.2	1	190040 13054
+20	228725	4.2	1	213537 15188
+21	268751	4.2	1	248550 20201
+22	294582	4.2	1	279207 15375
+23	421622	4.2	1	397845 23777
+24	352249	4.2	1	335308 16941
+25	378355	4.2	1	358344 20011
+26	287283	4.2	1	271821 15462
+27	252127	4.2	1	235125 17002
+28	201733	4.2	1	190257 11476
+29	222716	4.2	1	206070 16646
+30	207289	4.2	1	196903 10386
+31	295281	4.2	1	276677 18604
+32	328999	4.2	1	312880 16119
+33	453016	4.2	1	427719 25297
+34	399185	4.2	1	378453 20732
+35	407300	4.2	1	388538 18762
+36	308673	4.2	1	296269 12404
+37	299949	4.2	1	284827 15122
+38	225306	4.2	1	214852 10454
+39	211010	4.2	1	199638 11372
+40	236930	4.2	1	221155 15775
+41	259169	4.2	1	244297 14872
+42	453049	4.2	1	418969 34080
+43	462415	4.2	1	441157 21258
+44	661392	4.2	1	623934 37458
+45	579732	4.2	1	560105 19627
+46	293937	4.2	1	280210 13727
+47	286523	4.2	1	274233 12290
+48	465883	4.2	1	444519 21364
+49	329624	4.2	1	313922 15702
+50	482399	4.2	1	463305 19094
+51	591978	4.2	1	568942 23036
+52	1086316	4.2	1	1057953 28363
+53	1050326	4.2	1	1026329 23997
+54	592338	4.2	1	572546 19792
+55	919756	4.2	1	896304 23452
+56	803044	4.2	1	784426 18618
+57	503234	4.2	1	489462 13772
+58	329599	4.2	1	319240 10359
+59	317254	4.2	1	307437 9817
+60	150458	4.2	1	144890 5568
+61	187721	4.2	1	180894 6827
+62	426040	4.2	1	414976 11064
+63	349610	4.2	1	339900 9710
+64	345029	4.2	1	334930 10099
+65	504917	4.2	1	491276 13641
+66	833334	4.2	1	816178 17156
+67	291740	4.2	1	283320 8420
+68	375788	4.2	1	366971 8817
+69	243731	4.2	1	236699 7032
+70	231629	4.2	1	224311 7318
+71	81981	4.2	1	77389 4592
+72	105555	4.2	1	100731 4824
+73	246909	4.2	1	238902 8007
+74	481994	4.2	1	470539 11455
+75	717022	4.2	1	702023 14999
+76	823021	4.2	1	806576 16445
+77	748871	4.2	1	733778 15093
+78	595618	4.2	1	583685 11933
+79	467409	4.2	1	457801 9608
+80	363144	4.2	1	355249 7895
+81	397016	4.2	1	388756 8260
+82	359125	4.2	1	350318 8807
+83	593912	4.2	1	581197 12715
+84	706260	4.2	1	690975 15285
+85	979365	4.2	1	958815 20550
+86	1099520	4.2	1	1077368 22152
+87	1028079	4.2	1	1007145 20934
+88	805306	4.2	1	789418 15888
+89	581855	4.2	1	569984 11871
+90	442320	4.2	1	433865 8455
+91	309271	4.2	1	302585 6686
+92	285084	4.2	1	279055 6029
+93	369977	4.2	1	361891 8086
+94	532757	4.2	1	522505 10252
+95	726787	4.2	1	713298 13489
+96	889205	4.2	1	873287 15918
+97	870698	4.2	1	854984 15714
+98	677140	4.2	1	664765 12375
+99	471537	4.2	1	462379 9158
+100	293684	4.2	1	287732 5952
+101	190824	4.2	1	186536 4288
+102	143805	4.2	1	140294 3511
+103	155812	4.2	1	152354 3458
+104	186092	4.2	1	181903 4189
+105	212799	4.2	1	208296 4503
+106	203673	4.2	1	199252 4421
+107	168343	4.2	1	164171 4172
+108	120611	4.2	1	117640 2971
+109	86308	4.2	1	83163 3145
+110	54944	4.2	1	53275 1669
+111	33043	4.2	1	31685 1358
+112	14558	4.2	1	13585 973
+113	10970	4.2	1	10067 903
+114	9130	4.2	1	7293 1837
+115	6330	4.2	1	5662 668
+116	3543	4.2	1	2950 593
+117	3876	4.2	1	3154 722
+118	2268	4.2	1	1366 902
+119	2326	4.2	1	1682 644
+120	1150	4.2	1	655 495
+121	1715	4.2	1	1203 512
+122	754	4.2	1	310 444
+123	2008	4.2	1	508 1500
+124	665	4.2	1	182 483
+125	604	4.2	1	214 390
+126	784	4.2	1	218 566
+127	583	4.2	1	154 429
+128	655	4.2	1	169 486
+129	676	4.2	1	209 467
+130	1518	4.2	1	193 1325
+131	684	4.2	1	146 538
+132	691	4.2	1	88 603
+133	1106	4.2	1	87 1019
+134	541	4.2	1	120 421
+135	443	4.2	1	76 367
+136	504	4.2	1	68 436
+137	567	4.2	1	51 516
+138	751	4.2	1	29 722
+139	483	4.2	1	41 442
+140	849	4.2	1	14 835
+141	631	4.2	1	65 566
+142	1602	4.2	1	8 1594
+143	331	4.2	1	4 327
+144	408	4.2	1	6 402
+145	155	4.2	1	1 154
+146	304	4.2	1	3 301
+147	731	4.2	1	10 721
+148	379	4.2	1	5 374
+149	192	4.2	1	0 192
+150	166	4.2	1	17 149
+
+RUN STATISTICS FOR INPUT FILE: DATA/EXOGENOUS/NeuV1_R1_001.fastq.gz
+=============================================
+71139349 sequences processed in total
+The length threshold of paired-end sequences gets evaluated later on (in the validation step)
+
+Writing report to '/beegfs/scratch/ric.broccoli/kubacki.michal/MIRKO_DATA/Custom_pipeline/results/trimmed/NeuV1_R2_001.fastq.gz_trimming_report.txt'
+
+SUMMARISING RUN PARAMETERS
+==========================
+Input filename: DATA/EXOGENOUS/NeuV1_R2_001.fastq.gz
+Trimming mode: paired-end
+Trim Galore version: 0.6.10
+Cutadapt version: 4.9
+Python version: could not detect
+Number of cores used for trimming: 16
+Quality Phred score cutoff: 20
+Quality encoding type selected: ASCII+33
+Adapter sequence: 'CTGTCTCTTATA' (Nextera Transposase sequence; auto-detected)
+Maximum trimming error rate: 0.1 (default)
+Minimum required adapter overlap (stringency): 1 bp
+Minimum required sequence length for both reads before a sequence pair gets removed: 20 bp
+Running FastQC on the data once trimming has completed
+Output file(s) will be GZIP compressed
+
+Cutadapt seems to be fairly up-to-date (version 4.9). Setting -j -j 16
+Writing final adapter and quality trimmed output to NeuV1_R2_001_trimmed.fq.gz
+
+
+  >>> Now performing quality (cutoff '-q 20') and adapter trimming in a single pass for the adapter sequence: 'CTGTCTCTTATA' from file DATA/EXOGENOUS/NeuV1_R2_001.fastq.gz <<< 
+10000000 sequences processed
+20000000 sequences processed
+30000000 sequences processed
+40000000 sequences processed
+50000000 sequences processed
+60000000 sequences processed
+70000000 sequences processed
+This is cutadapt 4.9 with Python 3.11.8
+Command line parameters: -j 16 -e 0.1 -q 20 -O 1 -a CTGTCTCTTATA DATA/EXOGENOUS/NeuV1_R2_001.fastq.gz
+Processing single-end reads on 16 cores ...
+Finished in 189.666 s (2.666 µs/read; 22.50 M reads/minute).
+
+=== Summary ===
+
+Total reads processed:              71,139,349
+Reads with adapters:                52,559,123 (73.9%)
+Reads written (passing filters):    71,139,349 (100.0%)
+
+Total basepairs processed: 10,670,902,350 bp
+Quality-trimmed:              53,295,127 bp (0.5%)
+Total written (filtered):  7,893,471,272 bp (74.0%)
+
+=== Adapter 1 ===
+
+Sequence: CTGTCTCTTATA; Type: regular 3'; Length: 12; Trimmed: 52559123 times
+
+Minimum overlap: 1
+No. of allowed errors:
+1-9 bp: 0; 10-12 bp: 1
+
+Bases preceding removed adapters:
+  A: 10.6%
+  C: 43.8%
+  G: 27.2%
+  T: 18.3%
+  none/other: 0.0%
+
+Overview of removed sequences
+length	count	expect	max.err	error counts
+1	6249519	17784837.2	0	6249519
+2	2248392	4446209.3	0	2248392
+3	880398	1111552.3	0	880398
+4	381410	277888.1	0	381410
+5	235577	69472.0	0	235577
+6	192215	17368.0	0	192215
+7	174269	4342.0	0	174269
+8	203617	1085.5	0	203617
+9	222493	271.4	0	221471 1022
+10	218658	67.8	1	208751 9907
+11	259347	17.0	1	246163 13184
+12	285461	4.2	1	273894 11567
+13	293833	4.2	1	281053 12780
+14	296950	4.2	1	284458 12492
+15	263478	4.2	1	252057 11421
+16	240659	4.2	1	229041 11618
+17	199216	4.2	1	191082 8134
+18	198087	4.2	1	189698 8389
+19	211145	4.2	1	201191 9954
+20	215399	4.2	1	207255 8144
+21	261443	4.2	1	250595 10848
+22	334919	4.2	1	321489 13430
+23	379969	4.2	1	368345 11624
+24	357499	4.2	1	344866 12633
+25	408977	4.2	1	393978 14999
+26	288571	4.2	1	279713 8858
+27	238420	4.2	1	229999 8421
+28	204273	4.2	1	195620 8653
+29	193617	4.2	1	187284 6333
+30	227562	4.2	1	219546 8016
+31	274432	4.2	1	265093 9339
+32	326491	4.2	1	317822 8669
+33	389574	4.2	1	377042 12532
+34	431540	4.2	1	419770 11770
+35	391298	4.2	1	380934 10364
+36	341739	4.2	1	332564 9175
+37	294512	4.2	1	285058 9454
+38	244036	4.2	1	236390 7646
+39	197651	4.2	1	191634 6017
+40	209228	4.2	1	202326 6902
+41	269402	4.2	1	260453 8949
+42	318233	4.2	1	309905 8328
+43	427413	4.2	1	414533 12880
+44	484598	4.2	1	471099 13499
+45	475224	4.2	1	463596 11628
+46	429779	4.2	1	418967 10812
+47	354161	4.2	1	344601 9560
+48	281523	4.2	1	272825 8698
+49	239168	4.2	1	230585 8583
+50	245287	4.2	1	235457 9830
+51	250675	4.2	1	244050 6625
+52	374489	4.2	1	363417 11072
+53	506497	4.2	1	493800 12697
+54	475185	4.2	1	463628 11557
+55	663974	4.2	1	648871 15103
+56	520780	4.2	1	509174 11606
+57	433499	4.2	1	424434 9065
+58	339506	4.2	1	331199 8307
+59	288131	4.2	1	280704 7427
+60	270259	4.2	1	263316 6943
+61	267103	4.2	1	260735 6368
+62	372244	4.2	1	362495 9749
+63	510806	4.2	1	499675 11131
+64	697300	4.2	1	683434 13866
+65	1070612	4.2	1	1052444 18168
+66	845847	4.2	1	831402 14445
+67	935395	4.2	1	921764 13631
+68	563781	4.2	1	553862 9919
+69	278176	4.2	1	271451 6725
+70	242196	4.2	1	236973 5223
+71	250306	4.2	1	244875 5431
+72	323201	4.2	1	316695 6506
+73	464270	4.2	1	454670 9600
+74	675319	4.2	1	662828 12491
+75	883317	4.2	1	868133 15184
+76	925059	4.2	1	909731 15328
+77	822561	4.2	1	808892 13669
+78	621094	4.2	1	610943 10151
+79	464439	4.2	1	456635 7804
+80	345631	4.2	1	339558 6073
+81	378784	4.2	1	372782 6002
+82	348578	4.2	1	342320 6258
+83	570352	4.2	1	561413 8939
+84	696542	4.2	1	685555 10987
+85	983128	4.2	1	968322 14806
+86	1066816	4.2	1	1051052 15764
+87	1018883	4.2	1	1004047 14836
+88	800438	4.2	1	789022 11416
+89	576074	4.2	1	567404 8670
+90	450379	4.2	1	443995 6384
+91	323540	4.2	1	318404 5136
+92	314270	4.2	1	309578 4692
+93	372447	4.2	1	366288 6159
+94	519387	4.2	1	511559 7828
+95	704666	4.2	1	694114 10552
+96	857533	4.2	1	845595 11938
+97	870011	4.2	1	858040 11971
+98	671406	4.2	1	661925 9481
+99	472591	4.2	1	465375 7216
+100	296099	4.2	1	291368 4731
+101	188259	4.2	1	184944 3315
+102	145487	4.2	1	142725 2762
+103	153106	4.2	1	150424 2682
+104	180735	4.2	1	177580 3155
+105	206038	4.2	1	202421 3617
+106	195904	4.2	1	192456 3448
+107	162039	4.2	1	158721 3318
+108	117200	4.2	1	114816 2384
+109	84469	4.2	1	81715 2754
+110	55240	4.2	1	53815 1425
+111	33006	4.2	1	31959 1047
+112	14637	4.2	1	13729 908
+113	10799	4.2	1	9994 805
+114	9036	4.2	1	7360 1676
+115	6382	4.2	1	5729 653
+116	3312	4.2	1	2868 444
+117	3750	4.2	1	3151 599
+118	2231	4.2	1	1331 900
+119	2311	4.2	1	1682 629
+120	1141	4.2	1	650 491
+121	1680	4.2	1	1197 483
+122	701	4.2	1	310 391
+123	1894	4.2	1	509 1385
+124	610	4.2	1	161 449
+125	734	4.2	1	227 507
+126	736	4.2	1	209 527
+127	570	4.2	1	160 410
+128	555	4.2	1	176 379
+129	666	4.2	1	205 461
+130	1284	4.2	1	196 1088
+131	704	4.2	1	144 560
+132	596	4.2	1	85 511
+133	1069	4.2	1	85 984
+134	438	4.2	1	116 322
+135	392	4.2	1	71 321
+136	376	4.2	1	58 318
+137	482	4.2	1	55 427
+138	724	4.2	1	28 696
+139	391	4.2	1	42 349
+140	810	4.2	1	11 799
+141	598	4.2	1	62 536
+142	1498	4.2	1	41 1457
+143	276	4.2	1	6 270
+144	392	4.2	1	2 390
+145	137	4.2	1	2 135
+146	192	4.2	1	1 191
+147	644	4.2	1	8 636
+148	314	4.2	1	2 312
+149	194	4.2	1	0 194
+150	146	4.2	1	17 129
+
+RUN STATISTICS FOR INPUT FILE: DATA/EXOGENOUS/NeuV1_R2_001.fastq.gz
+=============================================
+71139349 sequences processed in total
+The length threshold of paired-end sequences gets evaluated later on (in the validation step)
+
+Validate paired-end files NeuV1_R1_001_trimmed.fq.gz and NeuV1_R2_001_trimmed.fq.gz
+file_1: NeuV1_R1_001_trimmed.fq.gz, file_2: NeuV1_R2_001_trimmed.fq.gz
+
+
+>>>>> Now validing the length of the 2 paired-end infiles: NeuV1_R1_001_trimmed.fq.gz and NeuV1_R2_001_trimmed.fq.gz <<<<<
+Writing validated paired-end Read 1 reads to NeuV1_R1_001_val_1.fq.gz
+Writing validated paired-end Read 2 reads to NeuV1_R2_001_val_2.fq.gz
+
+Total number of sequences analysed: 71139349
+
+Number of sequence pairs removed because at least one read was shorter than the length cutoff (20 bp): 36657 (0.05%)
+
+
+  >>> Now running FastQC on the validated data NeuV1_R1_001_val_1.fq.gz<<<
+
+application/gzip
+Started analysis of NeuV1_R1_001_val_1.fq.gz
+Approx 5% complete for NeuV1_R1_001_val_1.fq.gz
+Approx 10% complete for NeuV1_R1_001_val_1.fq.gz
+Approx 15% complete for NeuV1_R1_001_val_1.fq.gz
+Approx 20% complete for NeuV1_R1_001_val_1.fq.gz
+Approx 25% complete for NeuV1_R1_001_val_1.fq.gz
+Approx 30% complete for NeuV1_R1_001_val_1.fq.gz
+Approx 35% complete for NeuV1_R1_001_val_1.fq.gz
+Approx 40% complete for NeuV1_R1_001_val_1.fq.gz
+Approx 45% complete for NeuV1_R1_001_val_1.fq.gz
+Approx 50% complete for NeuV1_R1_001_val_1.fq.gz
+Approx 55% complete for NeuV1_R1_001_val_1.fq.gz
+Approx 60% complete for NeuV1_R1_001_val_1.fq.gz
+Approx 65% complete for NeuV1_R1_001_val_1.fq.gz
+Approx 70% complete for NeuV1_R1_001_val_1.fq.gz
+Approx 75% complete for NeuV1_R1_001_val_1.fq.gz
+Approx 80% complete for NeuV1_R1_001_val_1.fq.gz
+Approx 85% complete for NeuV1_R1_001_val_1.fq.gz
+Approx 90% complete for NeuV1_R1_001_val_1.fq.gz
+Approx 95% complete for NeuV1_R1_001_val_1.fq.gz
+Analysis complete for NeuV1_R1_001_val_1.fq.gz
+
+  >>> Now running FastQC on the validated data NeuV1_R2_001_val_2.fq.gz<<<
+
+application/gzip
+Started analysis of NeuV1_R2_001_val_2.fq.gz
+Approx 5% complete for NeuV1_R2_001_val_2.fq.gz
+Approx 10% complete for NeuV1_R2_001_val_2.fq.gz
+Approx 15% complete for NeuV1_R2_001_val_2.fq.gz
+Approx 20% complete for NeuV1_R2_001_val_2.fq.gz
+Approx 25% complete for NeuV1_R2_001_val_2.fq.gz
+Approx 30% complete for NeuV1_R2_001_val_2.fq.gz
+Approx 35% complete for NeuV1_R2_001_val_2.fq.gz
+Approx 40% complete for NeuV1_R2_001_val_2.fq.gz
+Approx 45% complete for NeuV1_R2_001_val_2.fq.gz
+Approx 50% complete for NeuV1_R2_001_val_2.fq.gz
+Approx 55% complete for NeuV1_R2_001_val_2.fq.gz
+Approx 60% complete for NeuV1_R2_001_val_2.fq.gz
+Approx 65% complete for NeuV1_R2_001_val_2.fq.gz
+Approx 70% complete for NeuV1_R2_001_val_2.fq.gz
+Approx 75% complete for NeuV1_R2_001_val_2.fq.gz
+Approx 80% complete for NeuV1_R2_001_val_2.fq.gz
+Approx 85% complete for NeuV1_R2_001_val_2.fq.gz
+Approx 90% complete for NeuV1_R2_001_val_2.fq.gz
+Approx 95% complete for NeuV1_R2_001_val_2.fq.gz
+Analysis complete for NeuV1_R2_001_val_2.fq.gz
+Deleting both intermediate output files NeuV1_R1_001_trimmed.fq.gz and NeuV1_R2_001_trimmed.fq.gz
+
+====================================================================================================
+
