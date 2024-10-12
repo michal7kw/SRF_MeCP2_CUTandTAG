@@ -7,8 +7,8 @@
 #SBATCH --ntasks=128
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="/beegfs/scratch/ric.broccoli/kubacki.michal/logs/chipseq.err"
-#SBATCH --output="/beegfs/scratch/ric.broccoli/kubacki.michal/logs/chipseq.out"
+#SBATCH --error="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_ChipSeq/Custom_pipeline/logs/chipseq.err"
+#SBATCH --output="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_ChipSeq/Custom_pipeline/logs/chipseq.out"
 
 # Load the appropriate conda environment (if needed)
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate

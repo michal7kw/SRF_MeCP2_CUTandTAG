@@ -39,7 +39,7 @@ threads <- snakemake@threads
 register(MulticoreParam(workers = threads))
 
 # Read sample sheet
-samples <- read.csv(paste0(experiment, "_sample_sheet.csv"))
+samples <- read.csv(paste0("/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_ChipSeq/Custom_pipeline/DATA/", experiment, "_sample_sheet.csv"))
 
 # Create DiffBind object
 dba <- dba(sampleSheet=samples)

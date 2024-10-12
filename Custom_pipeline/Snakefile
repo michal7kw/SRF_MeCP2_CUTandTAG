@@ -20,7 +20,8 @@ ENDOGENOUS_SAMPLES = [f.split("_R1")[0] for f in os.listdir(ENDOGENOUS) if f.end
 POL2_SAMPLES = [f.split("_R1")[0] for f in os.listdir(POL2) if f.endswith("R1_001.fastq.gz")]
 
 # Combine all samples into a single list for easier iteration in rules
-ALL_SAMPLES = EXOGENOUS_SAMPLES + ENDOGENOUS_SAMPLES + POL2_SAMPLES
+# ALL_SAMPLES = EXOGENOUS_SAMPLES + ENDOGENOUS_SAMPLES + POL2_SAMPLES
+ALL_SAMPLES = ENDOGENOUS_SAMPLES
 
 # specifies all output files to be generated
 rule all:
@@ -84,6 +85,7 @@ rule trim_reads:
         "-o {OUTPUT}/trimmed {input.r1} {input.r2} &> {log}"
 
 # Rule to align trimmed reads to the reference genome using Bowtie2
+
 rule align:
     # takes trimmed R1 and R2 files from trim_reads rule
     input:
@@ -101,21 +103,39 @@ rule align:
         "samtools view -bS - | samtools sort -o {output.bam} -"
 
 # Rule to call peaks using MACS2
+# rule call_peaks:
+#     input:
+#         treatment = join(OUTPUT, "aligned", "{sample}.bam"),
+#         control = lambda wildcards: join(OUTPUT, "aligned", f"{config['control_samples'][get_experiment(wildcards.sample)]}.bam")
+#     output:
+#         peaks = join(OUTPUT, "peaks", "{sample}_peaks.narrowPeak")
+#     log:
+#         join(OUTPUT, "logs", "macs2", "{sample}.log")
+#     threads: 16
+#     params:
+#         genome_size = lambda wildcards, input: config['genome_size'] if config['genome_size'] in ['hs', 'mm', 'ce', 'dm'] else config['effective_genome_size']
+#     shell:
+#         "macs2 callpeak -t {input.treatment} -c {input.control} "
+#         "-f BAM -g {params.genome_size} -n {wildcards.sample} "
+#         "--outdir {OUTPUT}/peaks -p {config[macs2_pvalue]} &> {log}"
+
+# Rule to call peaks using MACS2 without control
 rule call_peaks:
-    # takes aligned bam file from align rule
     input:
-        treatment = join(OUTPUT, "aligned", "{sample}.bam"),
-        control = lambda wildcards: join(OUTPUT, "aligned", f"{config[get_experiment(wildcards.sample) + '_control']}.bam")
-    # outputs peaks in narrowPeak format
+        treatment = join(OUTPUT, "aligned", "{sample}.bam")
     output:
         peaks = join(OUTPUT, "peaks", "{sample}_peaks.narrowPeak")
     log:
         join(OUTPUT, "logs", "macs2", "{sample}.log")
     threads: 16
+    params:
+        # genome_size = lambda wildcards, input: config['genome_size'] if config['genome_size'] in ['hs', 'mm', 'ce', 'dm'] else config['effective_genome_size']
+        genome_size = lambda wildcards, input: config['effective_genome_size']
     shell:
-        "macs2 callpeak -t {input.treatment} -c {input.control} "
-        "-f BAM -g {config[genome_size]} -n {wildcards.sample} "
-        "--outdir {OUTPUT}/peaks -p {threads} &> {log}"
+        "macs2 callpeak -t {input.treatment} "
+        "-f BAM -g {params.genome_size} -n {wildcards.sample} "
+        "--outdir {OUTPUT}/peaks -p {config[macs2_pvalue]} &> {log}"
+
 
 # Rule to run MultiQC to aggregate QC reports
 # compiles all quality control metrics into a single report
@@ -148,6 +168,8 @@ rule differential_binding:
     log:
         join(OUTPUT, "logs", "diffbind", "{experiment}_diffbind.log")
     threads: 32
+    conda:
+        "r_env"
     script:
         "scripts/run_diffbind.R"
 

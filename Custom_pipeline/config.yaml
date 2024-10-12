@@ -1,5 +1,18 @@
-genome_index: /beegfs/scratch/ric.broccoli/kubacki.michal/MIRKO_DATA/mm10_bowtie2_index/mm10
+genome_index: /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_ChipSeq/mm10_bowtie2_index/mm10
+
 genome_size: mm
 EXOGENOUS_control: NSCv1
 ENDOGENOUS_control: IgM
 POL2_control: 2G1
+
+# Effective genome size for mouse (mm10)
+effective_genome_size: "1.87e9"
+
+# Control samples for each experiment type
+control_samples:
+  EXOGENOUS: "NSCv1"
+  ENDOGENOUS: "IgM"
+  POL2: "2G1"
+
+# MACS2 p-value threshold
+macs2_pvalue: 0.01
