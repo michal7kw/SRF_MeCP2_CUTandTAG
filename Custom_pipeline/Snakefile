@@ -20,8 +20,8 @@ ENDOGENOUS_SAMPLES = [f.split("_R1")[0] for f in os.listdir(ENDOGENOUS) if f.end
 POL2_SAMPLES = [f.split("_R1")[0] for f in os.listdir(POL2) if f.endswith("R1_001.fastq.gz")]
 
 # Combine all samples into a single list for easier iteration in rules
-# ALL_SAMPLES = EXOGENOUS_SAMPLES + ENDOGENOUS_SAMPLES + POL2_SAMPLES
-ALL_SAMPLES = EXOGENOUS_SAMPLES
+ALL_SAMPLES = EXOGENOUS_SAMPLES + ENDOGENOUS_SAMPLES + POL2_SAMPLES
+# ALL_SAMPLES = EXOGENOUS_SAMPLES
 
 # specifies all output files to be generated
 rule all:

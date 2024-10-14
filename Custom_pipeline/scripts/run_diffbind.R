@@ -47,16 +47,29 @@ dba <- dba(sampleSheet=samples)
 # Count reads with parallelization
 dba <- dba.count(dba, bParallel=TRUE)
 
+# Create a data frame with the number of peaks for each sample
+peaks_df <- data.frame(
+  Sample = names(dba$peaks),
+  Peaks = unlist(dba$peaks)
+)
+
+# Write the peaks data frame to a CSV file
+write.csv(peaks_df, snakemake@output[["results"]], row.names = FALSE)
+
+# Print number of peaks found for each sample (optional, for console output)
+print("Number of peaks found for each sample:")
+print(peaks_df)
+
 # Normalize
-dba <- dba.normalize(dba)
+# dba <- dba.normalize(dba)
 
-# Perform differential binding analysis
-# Adjust the contrast based on your experimental design
-dba <- dba.contrast(dba, categories=c("Condition", "Tissue"))
-dba <- dba.analyze(dba, bParallel=TRUE)
+# # Perform differential binding analysis
+# # Adjust the contrast based on your experimental design
+# dba <- dba.contrast(dba, categories=c("Condition", "Tissue"))
+# dba <- dba.analyze(dba, bParallel=TRUE)
 
-# Extract results
-res <- dba.report(dba)
+# # Extract results
+# res <- dba.report(dba)
 
-# Write results
-write_csv(res, snakemake@output[["results"]])
+# # Write results
+# write_csv(res, snakemake@output[["results"]])
