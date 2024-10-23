@@ -1,7 +1,0 @@
-SampleID,Tissue,Factor,Condition,Replicate,bamReads,Peaks,PeakCaller
-NeuV1,Neuron,Virus,Exogenous,1,results/aligned/NeuV1.bam,results/peaks/NeuV1_peaks.narrowPeak,narrow
-NeuV2,Neuron,Virus,Exogenous,2,results/aligned/NeuV2.bam,results/peaks/NeuV2_peaks.narrowPeak,narrow
-NeuV3,Neuron,Virus,Exogenous,3,results/aligned/NeuV3.bam,results/peaks/NeuV3_peaks.narrowPeak,narrow
-NSCv1,NSC,Virus,Exogenous,1,results/aligned/NSCv1.bam,results/peaks/NSCv1_peaks.narrowPeak,narrow
-NSCv2,NSC,Virus,Exogenous,2,results/aligned/NSCv2.bam,results/peaks/NSCv2_peaks.narrowPeak,narrow
-NSCv3,NSC,Virus,Exogenous,3,results/aligned/NSCv3.bam,results/peaks/NSCv3_peaks.narrowPeak,narrow
