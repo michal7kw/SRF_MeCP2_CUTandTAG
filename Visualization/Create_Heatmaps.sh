@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=Heatmaps
 #SBATCH --account=kubacki.michal
-#SBATCH --mem=32GB
+#SBATCH --mem=64GB
 #SBATCH --time=INFINITE
 #SBATCH --nodes=1
 #SBATCH --ntasks=8
@@ -14,7 +14,7 @@
 echo "Starting heatmap creation script..."
 
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate
-conda activate r_env
+conda activate jupyter_nb
 
 echo "Conda environment activated."
 

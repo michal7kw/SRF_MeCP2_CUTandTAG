@@ -45,7 +45,7 @@ rule all:
         join(OUTPUT, "multiqc", "multiqc_report.html"),
         # Differential binding results for each experiment type
         # These are CSV files containing the differential binding analysis results
-        expand(join(OUTPUT, "differential_binding", "{experiment}_differential_binding_results.csv"), experiment=["EXOGENOUS", "ENDOGENOUS", "POL2"])
+        # expand(join(OUTPUT, "differential_binding", "{experiment}_differential_binding_results.csv"), experiment=["EXOGENOUS", "ENDOGENOUS", "POL2"])
 
 # Rule to run FastQC on raw reads
 # performs quality control checks on the raw sequencing data
@@ -136,23 +136,23 @@ rule multiqc:
 
 # Rule to perform differential binding analysis using DiffBind
 # identifies differentially bound regions between conditions
-rule differential_binding:
-    # takes peaks and aligned bam files from call_peaks and align rules
-    input:
-        peaks = lambda wildcards: expand(join(OUTPUT, "peaks", "{sample}_peaks.narrowPeak"), 
-                                         sample=get_samples_for_experiment(wildcards.experiment)),
-        bams = lambda wildcards: expand(join(OUTPUT, "aligned", "{sample}.bam"), 
-                                        sample=get_samples_for_experiment(wildcards.experiment))
-    # outputs csv file with differential binding results
-    output:
-        results = join(OUTPUT, "differential_binding", "{experiment}_differential_binding_results.csv")
-    log:
-        join(OUTPUT, "logs", "diffbind", "{experiment}_diffbind.log")
-    threads: 32
-    conda:
-        "r_env"
-    script:
-        "scripts/run_diffbind.R"
+# rule differential_binding:
+#     # takes peaks and aligned bam files from call_peaks and align rules
+#     input:
+#         peaks = lambda wildcards: expand(join(OUTPUT, "peaks", "{sample}_peaks.narrowPeak"), 
+#                                          sample=get_samples_for_experiment(wildcards.experiment)),
+#         bams = lambda wildcards: expand(join(OUTPUT, "aligned", "{sample}.bam"), 
+#                                         sample=get_samples_for_experiment(wildcards.experiment))
+#     # outputs csv file with differential binding results
+#     output:
+#         results = join(OUTPUT, "differential_binding", "{experiment}_differential_binding_results.csv")
+#     log:
+#         join(OUTPUT, "logs", "diffbind", "{experiment}_diffbind.log")
+#     threads: 32
+#     conda:
+#         "r_env"
+#     script:
+#         "scripts/run_diffbind.R"
 
 # Helper function to determine the input directory for a given sample
 def get_input_dir(sample):

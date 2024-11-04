@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=Motif_Analysis
 #SBATCH --account=kubacki.michal
-#SBATCH --mem=32GB
+#SBATCH --mem=64GB
 #SBATCH --time=INFINITE
 #SBATCH --nodes=1
 #SBATCH --ntasks=8
@@ -12,7 +12,8 @@
 #SBATCH --output="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_ChipSeq/Visualization/logs/motif_analysis.out"
 
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate
-conda activate meme_env
+conda activate jupyter_nb
+
 
 # Define input directory
 INPUT_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_ChipSeq/custom_pipeline/results"

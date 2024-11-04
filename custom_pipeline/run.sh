@@ -1,14 +1,14 @@
 #!/bin/bash
-#SBATCH --job-name=chipseq
+#SBATCH --job-name=Snake_pipeline
 #SBATCH --account=kubacki.michal
-#SBATCH --mem=256GB
+#SBATCH --mem=128GB
 #SBATCH --time=INFINITE
-#SBATCH --nodes=4
-#SBATCH --ntasks=128
+#SBATCH --nodes=1
+#SBATCH --ntasks=32
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_ChipSeq/Custom_pipeline/logs/chipseq.err"
-#SBATCH --output="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_ChipSeq/Custom_pipeline/logs/chipseq.out"
+#SBATCH --error="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_ChipSeq/custom_pipeline/logs/Snake_pipeline.err"
+#SBATCH --output="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_ChipSeq/custom_pipeline/logs/Snake_pipeline.out"
 
 # Load the appropriate conda environment (if needed)
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate
@@ -17,7 +17,7 @@ conda activate jupyter_nb
 # Define the cluster submission command
 
 # Run Snakemake
-snakemake --unlock
+# snakemake --unlock
 snakemake --snakefile Snakefile --latency-wait 60 --configfile config.yaml --use-conda -p --printshellcmds --keep-going --rerun-incomplete
 # snakemake -n --snakefile Snakefile -p --verbose --configfile config.yaml
 
