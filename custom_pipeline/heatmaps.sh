@@ -4,7 +4,7 @@
 #SBATCH --mem=128GB
 #SBATCH --time=INFINITE
 #SBATCH --nodes=1
-#SBATCH --ntasks=32
+#SBATCH --ntasks=16
 #SBATCH --mail-type=ALL
 #SBATCH --exclusive
 #SBATCH --mail-user=kubacki.michal@hsr.it

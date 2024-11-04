@@ -168,7 +168,7 @@ if __name__ == "__main__":
     # Initialize and run analysis
     heatmap_generator = CutAndTagHeatmap(
         output_dir="results/heatmaps",
-        window_size=5000,  # 5kb window
+        window_size=10000,  # 10kb window
         bin_size=50       # 50bp bins
     )
     
