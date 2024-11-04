@@ -1,3 +1,1 @@
-
-
 ![alt text](pipeline.png)
