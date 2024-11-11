@@ -30,16 +30,24 @@ merge_peaks() {
     tissue=$2
     files=$3
     
+    # Set minimum replicate requirement
+    if [ "$tissue" = "Neuron" ] && [ "$condition" = "Endo" ]; then
+        min_replicates=2
+    else
+        min_replicates=3
+    fi
+    
     echo "Processing ${tissue} ${condition} peaks..."
     echo "Input files: $files"
+    echo "Minimum replicate requirement: ${min_replicates}"
     
     # Merge all replicates
     echo "Sorting peaks..."
     cat $files | sort -k1,1 -k2,2n > tmp_sorted.bed
     
-    # Merge overlapping peaks and require support from at least 2 replicates
-    echo "Merging overlapping peaks with minimum 2 replicate support..."
-    bedtools merge -i tmp_sorted.bed -c 1 -o count | awk '$4 >= 2' > consensus_peaks/${tissue}_${condition}_consensus.bed
+    # Merge overlapping peaks with dynamic replicate requirement
+    echo "Merging overlapping peaks with minimum ${min_replicates} replicate support..."
+    bedtools merge -i tmp_sorted.bed -c 1 -o count | awk -v min="$min_replicates" '$4 >= min' > consensus_peaks/${tissue}_${condition}_consensus.bed
     
     # Report number of peaks
     peak_count=$(wc -l < consensus_peaks/${tissue}_${condition}_consensus.bed)

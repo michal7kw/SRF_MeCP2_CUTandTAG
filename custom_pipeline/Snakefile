@@ -92,20 +92,31 @@ rule align:
         r2 = rules.trim_reads.output.r2
     # outputs aligned bam file
     output:
-        bam = join(OUTPUT, "aligned", "{sample}.bam")
+        bam = join(OUTPUT, "aligned", "{sample}.bam"),
+        bai = join(OUTPUT, "aligned", "{sample}.bam.bai")
     log:
         join(OUTPUT, "logs", "bowtie2", "{sample}.log")
-    threads: 32  # Bowtie2 can utilize multiple threads for faster alignment
+    threads: 32
     shell:
-        "bowtie2 -p {threads} -x {config[genome_index]} "
-        "-1 {input.r1} -2 {input.r2} 2> {log} | "
-        "samtools view -bS - | samtools sort -o {output.bam} -"
+        """
+        # Align reads
+        bowtie2 -p {threads} -x {config[genome_index]} \
+            -1 {input.r1} -2 {input.r2} 2> {log} | \
+        # Filter low quality alignments
+        samtools view -bS -q 30 - | \
+        # Sort by coordinate
+        samtools sort -o {output.bam} - && \
+        # Index BAM file
+        samtools index {output.bam}
+        """
 
 # Rule to call peaks using MACS2
 rule call_peaks:
     input:
         treatment = join(OUTPUT, "aligned", "{sample}.bam"),
-        control = join(OUTPUT, "aligned", "IgM.bam")
+        treatment_index = join(OUTPUT, "aligned", "{sample}.bam.bai"),
+        control = join(OUTPUT, "aligned", "IgM.bam"),
+        control_index = join(OUTPUT, "aligned", "IgM.bam.bai")
     output:
         peaks = join(OUTPUT, "peaks", "{sample}_peaks.narrowPeak")
     log:
@@ -114,9 +125,24 @@ rule call_peaks:
     params:
         genome_size = lambda wildcards, input: config['genome_size'] if config['genome_size'] in ['hs', 'mm', 'ce', 'dm'] else config['effective_genome_size']
     shell:
-        "macs2 callpeak -t {input.treatment} -c {input.control} "
-        "-f BAM -g {params.genome_size} -n {wildcards.sample} "
-        "--outdir {OUTPUT}/peaks -p {config[macs2_pvalue]} &> {log}"
+        """
+        # Validate input files
+        if [ ! -f {input.treatment} ] || [ ! -f {input.control} ]; then
+            echo "Error: Input BAM files missing" >&2
+            exit 1
+        fi
+
+        # Call peaks
+        macs2 callpeak \
+            -t {input.treatment} \
+            -c {input.control} \
+            -f {params.format} \
+            -g {params.genome_size} \
+            -n {wildcards.sample} \
+            --outdir {OUTPUT}/peaks \
+            -p {params.pvalue} \
+            2> {log}
+        """
 
 # Rule to run MultiQC to aggregate QC reports
 # compiles all quality control metrics into a single report
