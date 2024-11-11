@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from scipy import stats
+import statistics
 
 # Visualization
 import matplotlib.pyplot as plt
@@ -28,7 +29,7 @@ def get_peaks_with_cpg(peak_file, cpg_file, extend=300, coverage_threshold=20):
         coverage_threshold: Minimum percentage overlap required (default: 20%)
     
     Returns:
-        set: Peak coordinates that meet the CpG overlap criteria
+        dict: Peak coordinates that meet the CpG overlap criteria
     """
     print(f"\nProcessing {peak_file}")
     
@@ -77,7 +78,7 @@ def get_peaks_with_cpg(peak_file, cpg_file, extend=300, coverage_threshold=20):
     #     print(line)
     
     # Process overlaps and calculate coverage
-    peaks_with_cpg = set()
+    peaks_with_cpg = {}
     coverage_stats = []
     current_peak = {'id': None, 'overlaps': []}
     qualified_peaks = 0
@@ -107,7 +108,7 @@ def get_peaks_with_cpg(peak_file, cpg_file, extend=300, coverage_threshold=20):
                         total_peaks_with_overlap += 1
                         if max_coverage >= coverage_threshold:
                             coverage_stats.append(max_coverage)
-                            peaks_with_cpg.add(current_peak['id'])
+                            peaks_with_cpg[current_peak['id']] = max_coverage
                             qualified_peaks += 1
                     
                     current_peak = {'id': peak_id, 'overlaps': []}
@@ -139,7 +140,7 @@ def get_peaks_with_cpg(peak_file, cpg_file, extend=300, coverage_threshold=20):
                     total_peaks_with_overlap += 1
                     if max_coverage >= coverage_threshold:
                         coverage_stats.append(max_coverage)
-                        peaks_with_cpg.add(current_peak['id'])
+                        peaks_with_cpg[current_peak['id']] = max_coverage
                         qualified_peaks += 1
                 
                 current_peak = {'id': peak_id, 'overlaps': []}
@@ -150,7 +151,7 @@ def get_peaks_with_cpg(peak_file, cpg_file, extend=300, coverage_threshold=20):
         total_peaks_with_overlap += 1
         if max_coverage >= coverage_threshold:
             coverage_stats.append(max_coverage)
-            peaks_with_cpg.add(current_peak['id'])
+            peaks_with_cpg[current_peak['id']] = max_coverage
             qualified_peaks += 1
     
     # Print coverage statistics
@@ -158,7 +159,7 @@ def get_peaks_with_cpg(peak_file, cpg_file, extend=300, coverage_threshold=20):
         print(f"\nPeaks with any CpG overlap: {total_peaks_with_overlap}")
         print(f"Peaks meeting {coverage_threshold}% coverage threshold: {qualified_peaks}")
         print(f"Coverage range: {min(coverage_stats):.2f}% - {max(coverage_stats):.2f}%")
-        print(f"Mean coverage of qualified peaks: {sum(coverage_stats)/len(coverage_stats):.2f}%")
+        print(f"Mean coverage of qualified peaks: {statistics.mean(coverage_stats):.2f}%")
     else:
         print("\nNo peaks met the coverage criteria")
     
@@ -203,10 +204,10 @@ def get_genes_with_cpg_enrichment(peak_file, cpg_file, gtf_file, output_dir, cel
         # 3. Write CpG-overlapping peaks to temporary file
         temp_peaks = os.path.join(output_dir, "temp_cpg_peaks.bed")
         with open(temp_peaks, 'w') as f:
-            for peak in cpg_peaks:
+            for peak, coverage in cpg_peaks.items():
                 chrom, pos = peak.split(':')
                 start, end = pos.split('-')
-                f.write(f"{chrom}\t{start}\t{end}\n")
+                f.write(f"{chrom}\t{start}\t{end}\t{coverage}\n")
         
         # 4. Find overlaps between peaks and TSS regions
         result = subprocess.run(
@@ -218,7 +219,8 @@ def get_genes_with_cpg_enrichment(peak_file, cpg_file, gtf_file, output_dir, cel
         gene_data = defaultdict(lambda: {
             'peaks': set(),
             'total_peak_coverage': 0,
-            'distance_to_tss': []
+            'distance_to_tss': [],
+            'peak_coverages': []
         })
         
         for line in result.stdout.strip().split('\n'):
@@ -226,11 +228,13 @@ def get_genes_with_cpg_enrichment(peak_file, cpg_file, gtf_file, output_dir, cel
                 continue
             
             fields = line.split('\t')
+            # print(f"fields: {fields}")
             gene_name = fields[3]
             tss_pos = int(fields[1]) + extend_tss
             peak_start = int(fields[5])
             peak_end = int(fields[6])
             peak_id = f"{fields[4]}:{fields[5]}-{fields[6]}"
+            peak_coverage = float(fields[7])
             
             peak_center = (peak_start + peak_end) // 2
             distance = abs(peak_center - tss_pos)
@@ -238,6 +242,7 @@ def get_genes_with_cpg_enrichment(peak_file, cpg_file, gtf_file, output_dir, cel
             gene_data[gene_name]['peaks'].add(peak_id)
             gene_data[gene_name]['total_peak_coverage'] += int(fields[-1])
             gene_data[gene_name]['distance_to_tss'].append(distance)
+            gene_data[gene_name]['peak_coverages'].append(peak_coverage)
         
         # 6. Create summary DataFrame
         summary_data = []
@@ -249,6 +254,7 @@ def get_genes_with_cpg_enrichment(peak_file, cpg_file, gtf_file, output_dir, cel
                     'total_coverage': data['total_peak_coverage'],
                     'avg_peak_size': data['total_peak_coverage'] / len(data['peaks']),
                     'min_distance_to_tss': min(data['distance_to_tss']),
+                    'mean_cpg_coverage': statistics.mean(data['peak_coverages']),
                     'peaks': ','.join(data['peaks'])
                 })
         
@@ -334,7 +340,7 @@ def create_comparison_summary(results, output_dir):
 
 def load_and_process_data(results_dir):
     """
-    Load and process data with additional CpG coverage calculations.
+    Load and process data with CpG coverage calculations.
     """
     cell_types = ['NSC', 'Neuron']
     conditions = ['Exo', 'Endo']
@@ -346,9 +352,6 @@ def load_and_process_data(results_dir):
             file_path = os.path.join(results_dir, f"{cell_type}_{condition}_cpg_genes.tsv")
             if os.path.exists(file_path):
                 df = pd.read_csv(file_path, sep='\t')
-                # Calculate CpG coverage percentage
-                if 'total_coverage' in df.columns:
-                    df['cpg_coverage_percent'] = (df['total_coverage'] / df['total_coverage'].max()) * 100
                 data[cell_type][condition] = df
             else:
                 print(f"Warning: Missing file {file_path}")
@@ -369,9 +372,9 @@ def compare_endo_cpg_coverage(data):
     
     # Plot 1: Coverage Distribution
     plt.subplot(1, 2, 1)
-    sns.kdeplot(data=npc_endo['cpg_coverage_percent'], label='NPCs', color='blue')
-    sns.kdeplot(data=neuron_endo['cpg_coverage_percent'], label='Neurons', color='red')
-    plt.xlabel('CpG Coverage (%)')
+    sns.kdeplot(data=npc_endo['mean_cpg_coverage'], label='NSCs', color='blue')
+    sns.kdeplot(data=neuron_endo['mean_cpg_coverage'], label='Neurons', color='red')
+    plt.xlabel('Mean CpG Coverage (%)')
     plt.ylabel('Density')
     plt.title('Endo MeCP2 CpG Coverage Distribution')
     plt.legend()
@@ -379,8 +382,8 @@ def compare_endo_cpg_coverage(data):
     # Plot 2: Box Plot
     plt.subplot(1, 2, 2)
     plot_data = pd.concat([
-        pd.DataFrame({'Cell Type': 'NPCs', 'Coverage': npc_endo['cpg_coverage_percent']}),
-        pd.DataFrame({'Cell Type': 'Neurons', 'Coverage': neuron_endo['cpg_coverage_percent']})
+        pd.DataFrame({'Cell Type': 'NSCs', 'Coverage': npc_endo['mean_cpg_coverage']}),
+        pd.DataFrame({'Cell Type': 'Neurons', 'Coverage': neuron_endo['mean_cpg_coverage']})
     ])
     sns.boxplot(data=plot_data, x='Cell Type', y='Coverage')
     plt.title('CpG Coverage Comparison')
@@ -388,9 +391,9 @@ def compare_endo_cpg_coverage(data):
     plt.tight_layout()
     plt.show()
     
-    # Statistical comparison using the correct function name
-    stat_result = stats.mannwhitneyu(npc_endo['cpg_coverage_percent'],
-                                   neuron_endo['cpg_coverage_percent'],
+    # Statistical comparison
+    stat_result = stats.mannwhitneyu(npc_endo['mean_cpg_coverage'],
+                                   neuron_endo['mean_cpg_coverage'],
                                    alternative='two-sided')
     
     # Display statistical results
@@ -398,10 +401,10 @@ def compare_endo_cpg_coverage(data):
     print(f"Statistic: {stat_result.statistic}")
     print(f"p-value: {stat_result.pvalue}")
     print("\nSummary Statistics:")
-    print(f"NPCs mean coverage: {npc_endo['cpg_coverage_percent'].mean():.2f}%")
-    print(f"Neurons mean coverage: {neuron_endo['cpg_coverage_percent'].mean():.2f}%")
-    print(f"NPCs median coverage: {npc_endo['cpg_coverage_percent'].median():.2f}%")
-    print(f"Neurons median coverage: {neuron_endo['cpg_coverage_percent'].median():.2f}%")
+    print(f"NSCs mean coverage: {npc_endo['mean_cpg_coverage'].mean():.2f}%")
+    print(f"Neurons mean coverage: {neuron_endo['mean_cpg_coverage'].mean():.2f}%")
+    print(f"NSCs median coverage: {npc_endo['mean_cpg_coverage'].median():.2f}%")
+    print(f"Neurons median coverage: {neuron_endo['mean_cpg_coverage'].median():.2f}%")
 
     # Create identical plots for Exo comparison
     npc_exo = data['NSC']['Exo']
@@ -411,9 +414,9 @@ def compare_endo_cpg_coverage(data):
     
     # Plot 1: Coverage Distribution for Exo
     plt.subplot(1, 2, 1)
-    sns.kdeplot(data=npc_exo['cpg_coverage_percent'], label='NPCs', color='blue')
-    sns.kdeplot(data=neuron_exo['cpg_coverage_percent'], label='Neurons', color='red')
-    plt.xlabel('CpG Coverage (%)')
+    sns.kdeplot(data=npc_exo['mean_cpg_coverage'], label='NPCs', color='blue')
+    sns.kdeplot(data=neuron_exo['mean_cpg_coverage'], label='Neurons', color='red')
+    plt.xlabel('Mean CpG Coverage (%)')
     plt.ylabel('Density')
     plt.title('Exo MeCP2 CpG Coverage Distribution')
     plt.legend()
@@ -421,8 +424,8 @@ def compare_endo_cpg_coverage(data):
     # Plot 2: Box Plot for Exo
     plt.subplot(1, 2, 2)
     plot_data = pd.concat([
-        pd.DataFrame({'Cell Type': 'NPCs', 'Coverage': npc_exo['cpg_coverage_percent']}),
-        pd.DataFrame({'Cell Type': 'Neurons', 'Coverage': neuron_exo['cpg_coverage_percent']})
+        pd.DataFrame({'Cell Type': 'NPCs', 'Coverage': npc_exo['mean_cpg_coverage']}),
+        pd.DataFrame({'Cell Type': 'Neurons', 'Coverage': neuron_exo['mean_cpg_coverage']})
     ])
     sns.boxplot(data=plot_data, x='Cell Type', y='Coverage')
     plt.title('CpG Coverage Comparison')
@@ -431,8 +434,8 @@ def compare_endo_cpg_coverage(data):
     plt.show()
     
     # Statistical comparison for Exo
-    stat_result_exo = stats.mannwhitneyu(npc_exo['cpg_coverage_percent'],
-                                       neuron_exo['cpg_coverage_percent'],
+    stat_result_exo = stats.mannwhitneyu(npc_exo['mean_cpg_coverage'],
+                                       neuron_exo['mean_cpg_coverage'],
                                        alternative='two-sided')
     
     # Display statistical results for Exo
@@ -440,10 +443,10 @@ def compare_endo_cpg_coverage(data):
     print(f"Statistic: {stat_result_exo.statistic}")
     print(f"p-value: {stat_result_exo.pvalue}")
     print("\nSummary Statistics:")
-    print(f"NPCs mean coverage: {npc_exo['cpg_coverage_percent'].mean():.2f}%")
-    print(f"Neurons mean coverage: {neuron_exo['cpg_coverage_percent'].mean():.2f}%")
-    print(f"NPCs median coverage: {npc_exo['cpg_coverage_percent'].median():.2f}%")
-    print(f"Neurons median coverage: {neuron_exo['cpg_coverage_percent'].median():.2f}%")
+    print(f"NPCs mean coverage: {npc_exo['mean_cpg_coverage'].mean():.2f}%")
+    print(f"Neurons mean coverage: {neuron_exo['mean_cpg_coverage'].mean():.2f}%")
+    print(f"NPCs median coverage: {npc_exo['mean_cpg_coverage'].median():.2f}%")
+    print(f"Neurons median coverage: {neuron_exo['mean_cpg_coverage'].median():.2f}%")
 
 def analyze_common_cpg_targets(data):
     """
@@ -531,8 +534,8 @@ def analyze_exo_vs_endo_enrichment(data):
                          on='gene_name', 
                          suffixes=('_exo', '_endo'))
         
-        # Calculate enrichment ratio
-        merged['enrichment_ratio'] = merged['total_coverage_exo'] / merged['total_coverage_endo']
+        # Calculate enrichment ratio using mean_cpg_coverage
+        merged['enrichment_ratio'] = merged['mean_cpg_coverage_exo'] / merged['mean_cpg_coverage_endo']
         
         # Filter for significantly enriched genes (log2 fold change >= 0.5)
         merged['log2_enrichment'] = np.log2(merged['enrichment_ratio'])
@@ -543,9 +546,12 @@ def analyze_exo_vs_endo_enrichment(data):
         output_file = f"results/enriched_genes_{cell_type}.tsv"
         enriched.to_csv(output_file, sep='\t', index=False)
         
-        # Display enriched genes
-        # print(f"\nTop enriched genes in {cell_type}:")
-        # display(enriched.head())
+        # Optional: Print summary statistics
+        print(f"\n{cell_type} Enrichment Summary:")
+        print(f"Total genes analyzed: {len(merged)}")
+        print(f"Enriched genes: {len(enriched)}")
+        print(f"Mean enrichment ratio: {merged['enrichment_ratio'].mean():.2f}")
+        print(f"Median enrichment ratio: {merged['enrichment_ratio'].median():.2f}")
     
     # Find common enriched genes
     common_enriched = set(enriched_genes['NSC']['gene_name']).intersection(
@@ -563,7 +569,7 @@ def generate_comprehensive_analysis(results_dir):
     data = load_and_process_data(results_dir)
     
     # Generate all analyses
-    compare_endo_cpg_coverage(data)
+    # compare_endo_cpg_coverage(data)
     analyze_common_cpg_targets(data)
     analyze_exo_vs_endo_enrichment(data)
 
@@ -766,3 +772,94 @@ def generate_all_visualizations(results_dir):
     plot_peak_size_distribution(data)
     
     print("All visualizations have been displayed")
+
+
+def compare_exo_endo_coverage(data):
+    """
+    Compare CpG islands coverage between Exo and Endo MeCP2 within each cell type.
+    """
+    # Compare in NSCs
+    nsc_exo = data['NSC']['Exo']
+    nsc_endo = data['NSC']['Endo']
+    
+    # Create comparison plots for NSCs
+    plt.figure(figsize=(12, 6))
+    
+    # Plot 1: Coverage Distribution for NSCs
+    plt.subplot(1, 2, 1)
+    sns.kdeplot(data=nsc_exo['mean_cpg_coverage'], label='Exo', color='blue')
+    sns.kdeplot(data=nsc_endo['mean_cpg_coverage'], label='Endo', color='red')
+    plt.xlabel('Mean CpG Coverage (%)')
+    plt.ylabel('Density')
+    plt.title('NSC MeCP2 CpG Coverage Distribution')
+    plt.legend()
+    
+    # Plot 2: Box Plot for NSCs
+    plt.subplot(1, 2, 2)
+    plot_data = pd.concat([
+        pd.DataFrame({'Type': 'Exo', 'Coverage': nsc_exo['mean_cpg_coverage']}),
+        pd.DataFrame({'Type': 'Endo', 'Coverage': nsc_endo['mean_cpg_coverage']})
+    ])
+    sns.boxplot(data=plot_data, x='Type', y='Coverage')
+    plt.title('NSC CpG Coverage Comparison')
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # Statistical comparison for NSCs
+    stat_result_nsc = stats.mannwhitneyu(nsc_exo['mean_cpg_coverage'],
+                                        nsc_endo['mean_cpg_coverage'],
+                                        alternative='two-sided')
+    
+    # Display statistical results for NSCs
+    print("NSC Exo vs Endo Mann-Whitney U test results:")
+    print(f"Statistic: {stat_result_nsc.statistic}")
+    print(f"p-value: {stat_result_nsc.pvalue}")
+    print("\nNSC Summary Statistics:")
+    print(f"Exo mean coverage: {nsc_exo['mean_cpg_coverage'].mean():.2f}%")
+    print(f"Endo mean coverage: {nsc_endo['mean_cpg_coverage'].mean():.2f}%")
+    print(f"Exo median coverage: {nsc_exo['mean_cpg_coverage'].median():.2f}%")
+    print(f"Endo median coverage: {nsc_endo['mean_cpg_coverage'].median():.2f}%")
+
+    # Compare in Neurons
+    neuron_exo = data['Neuron']['Exo']
+    neuron_endo = data['Neuron']['Endo']
+    
+    # Create comparison plots for Neurons
+    plt.figure(figsize=(12, 6))
+    
+    # Plot 1: Coverage Distribution for Neurons
+    plt.subplot(1, 2, 1)
+    sns.kdeplot(data=neuron_exo['mean_cpg_coverage'], label='Exo', color='blue')
+    sns.kdeplot(data=neuron_endo['mean_cpg_coverage'], label='Endo', color='red')
+    plt.xlabel('Mean CpG Coverage (%)')
+    plt.ylabel('Density')
+    plt.title('Neuron MeCP2 CpG Coverage Distribution')
+    plt.legend()
+    
+    # Plot 2: Box Plot for Neurons
+    plt.subplot(1, 2, 2)
+    plot_data = pd.concat([
+        pd.DataFrame({'Type': 'Exo', 'Coverage': neuron_exo['mean_cpg_coverage']}),
+        pd.DataFrame({'Type': 'Endo', 'Coverage': neuron_endo['mean_cpg_coverage']})
+    ])
+    sns.boxplot(data=plot_data, x='Type', y='Coverage')
+    plt.title('Neuron CpG Coverage Comparison')
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # Statistical comparison for Neurons
+    stat_result_neuron = stats.mannwhitneyu(neuron_exo['mean_cpg_coverage'],
+                                          neuron_endo['mean_cpg_coverage'],
+                                          alternative='two-sided')
+    
+    # Display statistical results for Neurons
+    print("\nNeuron Exo vs Endo Mann-Whitney U test results:")
+    print(f"Statistic: {stat_result_neuron.statistic}")
+    print(f"p-value: {stat_result_neuron.pvalue}")
+    print("\nNeuron Summary Statistics:")
+    print(f"Exo mean coverage: {neuron_exo['mean_cpg_coverage'].mean():.2f}%")
+    print(f"Endo mean coverage: {neuron_endo['mean_cpg_coverage'].mean():.2f}%")
+    print(f"Exo median coverage: {neuron_exo['mean_cpg_coverage'].median():.2f}%")
+    print(f"Endo median coverage: {neuron_endo['mean_cpg_coverage'].median():.2f}%")
