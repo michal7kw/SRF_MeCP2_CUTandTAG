@@ -684,7 +684,7 @@ def create_venn_diagrams_percentages(data):
         
         # Create Venn diagram with percentages relative to exo sample
         venn2([exo_genes, endo_genes],
-              set_labels=('Exogenous', 'Endogenous'),
+              set_labels=('', ''),
               set_colors=colors[cell_type], alpha=0.5,
               subset_label_formatter=lambda x: f'{(x/total_exo_genes)*100:.1f}%' if total_exo_genes > 0 else '0%')
         
@@ -693,6 +693,42 @@ def create_venn_diagrams_percentages(data):
         
         plt.tight_layout()
         plt.show()
+
+
+def create_venn_diagrams_endo_comparison(data):
+    """
+    Create Venn diagram showing overlap between NSCs and Neurons for Endogenous MeCP2.
+    """
+    plt.figure(figsize=(8, 8))
+    
+    # Get Endogenous genes for each cell type
+    nsc_endo = set(data['NSC']['Endo']['gene_name']) if not data['NSC']['Endo'].empty else set()
+    neuron_endo = set(data['Neuron']['Endo']['gene_name']) if not data['Neuron']['Endo'].empty else set()
+    
+    # Calculate total number of genes across both sets
+    total_genes = len(nsc_endo.union(neuron_endo))
+    
+    # Create Venn diagram with percentages relative to total genes
+    venn2([nsc_endo, neuron_endo],
+          set_labels=('', ''),
+          set_colors=['#bcdae6', '#efb3b1'], alpha=0.8,
+          subset_label_formatter=lambda x: f'{(x/total_genes)*100:.1f}%' if total_genes > 0 else '0%')
+    
+    # Add title
+    plt.title('Endogenous MeCP2 Gene Overlap\n(% of Total Genes)')
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # Print statistics
+    common_genes = nsc_endo.intersection(neuron_endo)
+    nsc_specific = nsc_endo - neuron_endo
+    neuron_specific = neuron_endo - nsc_endo
+    
+    print("\nEndogenous MeCP2 Binding Statistics:")
+    print(f"NSC-specific genes: {len(nsc_specific)} ({len(nsc_specific)/total_genes*100:.1f}% of total genes)")
+    print(f"Neuron-specific genes: {len(neuron_specific)} ({len(neuron_specific)/total_genes*100:.1f}% of total genes)")
+    print(f"Common genes: {len(common_genes)} ({len(common_genes)/total_genes*100:.1f}% of total genes)")
 
 def plot_top_genes_heatmap(data, n_top=50):
     """
