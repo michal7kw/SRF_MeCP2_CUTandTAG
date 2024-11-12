@@ -337,7 +337,6 @@ def create_comparison_summary(results, output_dir):
                     for gene in sorted(common_genes):
                         cf.write(f"{gene}\n")
 
-
 def load_and_process_data(results_dir):
     """
     Load and process data with CpG coverage calculations.
@@ -573,7 +572,6 @@ def generate_comprehensive_analysis(results_dir):
     analyze_common_cpg_targets(data)
     analyze_exo_vs_endo_enrichment(data)
 
-
 def load_data(results_dir):
     """
     Load all result files into a dictionary of DataFrames.
@@ -772,7 +770,6 @@ def generate_all_visualizations(results_dir):
     plot_peak_size_distribution(data)
     
     print("All visualizations have been displayed")
-
 
 def compare_exo_endo_coverage(data):
     """
