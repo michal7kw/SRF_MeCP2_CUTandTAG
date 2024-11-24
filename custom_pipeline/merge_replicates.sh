@@ -8,14 +8,14 @@
 #SBATCH --mail-type=ALL
 #SBATCH --exclusive
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_ChipSeq/custom_pipeline/logs/merge_replicates.err"
-#SBATCH --output="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_ChipSeq/custom_pipeline/logs/merge_replicates.out"
+#SBATCH --error="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/custom_pipeline/logs/merge_replicates.err"
+#SBATCH --output="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/custom_pipeline/logs/merge_replicates.out"
 
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate
 conda activate jupyter_nb
 
 # Set working directory
-cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_ChipSeq/custom_pipeline/results
+cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/custom_pipeline/results
 
 
 # Create output directories

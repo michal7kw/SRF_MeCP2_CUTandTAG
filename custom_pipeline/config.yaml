@@ -1,7 +1,7 @@
-genome_index: /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_ChipSeq/mm10_bowtie2_index/mm10
+genome_index: /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/mm10_bowtie2_index/mm10
 
 genome_size: mm
-EXOGENOUS_control: NSCv1
+EXOGENOUS_control: IgM
 ENDOGENOUS_control: IgM
 POL2_control: 2G1
 
@@ -10,9 +10,31 @@ effective_genome_size: "1.87e9"
 
 # Control samples for each experiment type
 control_samples:
-  EXOGENOUS: "NSCv1"
+  EXOGENOUS: "IgM"
   ENDOGENOUS: "IgM"
   POL2: "2G1"
 
-# MACS2 p-value threshold
-macs2_pvalue: 0.01
+# MACS2 parameters for CUT&Tag
+macs2_params:
+  pvalue: "1e-5"
+  format: "BAMPE"
+  nomodel: true
+  shift: -75
+  extsize: 150
+  keep_dup: "all"
+  min_length: 100
+  max_length: 1000
+
+# Alignment parameters
+bowtie2_params:
+  min_quality: 30
+  max_fragment_length: 1000
+  min_fragment_length: 100
+
+# Trim Galore parameters
+trim_params:
+  quality: 20
+  min_length: 20
+  stringency: 3
+  clip_r1: 0
+  clip_r2: 0

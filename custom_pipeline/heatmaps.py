@@ -173,4 +173,4 @@ if __name__ == "__main__":
     )
     
     # Generate heatmap using genome GTF file
-    heatmap_generator.generate_heatmap(genome_gtf="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_ChipSeq/gencode.vM10.annotation.gtf")
+    heatmap_generator.generate_heatmap(genome_gtf="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/gencode.vM10.annotation.gtf")

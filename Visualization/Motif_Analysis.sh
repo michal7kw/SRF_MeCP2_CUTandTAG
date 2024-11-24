@@ -8,18 +8,18 @@
 #SBATCH --mail-type=ALL
 #SBATCH --exclusive
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_ChipSeq/Visualization/logs/motif_analysis.err"
-#SBATCH --output="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_ChipSeq/Visualization/logs/motif_analysis.out"
+#SBATCH --error="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/Visualization/logs/motif_analysis.err"
+#SBATCH --output="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/Visualization/logs/motif_analysis.out"
 
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate
 conda activate jupyter_nb
 
 
 # Define input directory
-INPUT_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_ChipSeq/custom_pipeline/results"
+INPUT_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/custom_pipeline/results"
 
 # Define output directory
-OUTPUT_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_ChipSeq/Visualization/output"
+OUTPUT_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/Visualization/output"
 
 # Create output directory if it doesn't exist
 mkdir -p $OUTPUT_DIR
