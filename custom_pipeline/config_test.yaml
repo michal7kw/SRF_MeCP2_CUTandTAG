@@ -1,18 +1,18 @@
+# Basic parameters
 genome_index: /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/mm10_bowtie2_index/mm10
-
 genome_size: mm
-EXOGENOUS_control: IgM
-ENDOGENOUS_control: IgM
-
-# Effective genome size for mouse (mm10)
 effective_genome_size: "1.87e9"
 
-# Control samples for each experiment type
+# Control samples definition
+EXOGENOUS_control: "IgM"
+ENDOGENOUS_control: "IgM"
+
+# Control samples
 control_samples:
   EXOGENOUS: "IgM"
   ENDOGENOUS: "IgM"
 
-# MACS2 parameters for CUT&Tag
+# MACS2 parameters
 macs2_params:
   pvalue: "1e-10"
   format: "BAMPE"

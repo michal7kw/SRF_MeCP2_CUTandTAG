@@ -32,60 +32,100 @@ OUTPUT = "results"
 # Get sample names from input directories
 EXOGENOUS_SAMPLES = [f.split("_R1")[0] for f in os.listdir(EXOGENOUS) if f.endswith("R1_001.fastq.gz")]
 ENDOGENOUS_SAMPLES = [f.split("_R1")[0] for f in os.listdir(ENDOGENOUS) if f.endswith("R1_001.fastq.gz")]
-# POL2_SAMPLES = [f.split("_R1")[0] for f in os.listdir(POL2) if f.endswith("R1_001.fastq.gz")]
 
-# Combine all samples into a single list for easier iteration in rules
-ALL_SAMPLES = EXOGENOUS_SAMPLES + ENDOGENOUS_SAMPLES # + POL2_SAMPLES
-# ALL_SAMPLES = EXOGENOUS_SAMPLES
+# Define control samples
+CONTROL_SAMPLES = {
+    "EXOGENOUS": config["EXOGENOUS_control"],  # Should be "IgM"
+    "ENDOGENOUS": config["ENDOGENOUS_control"]  # Should be "IgM"
+}
+
+# Function to get input directory for a sample
+def get_input_dir(sample):
+    # For IgM (control), always use ENDOGENOUS directory
+    if sample == "IgM":
+        return ENDOGENOUS
+    # For other samples, check their respective directories
+    elif sample in EXOGENOUS_SAMPLES:
+        return EXOGENOUS
+    elif sample in ENDOGENOUS_SAMPLES:
+        return ENDOGENOUS
+    else:
+        raise ValueError(f"Sample {sample} not found in either EXOGENOUS or ENDOGENOUS directories")
+
+# Function to get experiment type for a sample
+def get_experiment(sample):
+    if sample in EXOGENOUS_SAMPLES:
+        return "EXOGENOUS"
+    elif sample in ENDOGENOUS_SAMPLES:
+        return "ENDOGENOUS"
+    elif sample == "IgM":  # Control sample can be used for both
+        return "CONTROL"
+    else:
+        raise ValueError(f"Unknown sample: {sample}")
+
+# Override if a specific sample is specified for testing
+if config.get("sample"):
+    sample = config["sample"]
+    # Check if sample exists (including IgM in ENDOGENOUS)
+    if sample in ENDOGENOUS_SAMPLES or sample in EXOGENOUS_SAMPLES or (sample == "IgM" and "IgM_R1_001.fastq.gz" in os.listdir(ENDOGENOUS)):
+        ALL_SAMPLES = [sample]
+        print(f"Running in test mode with sample: {sample}")
+        print(f"Sample found in: {get_input_dir(sample)}")
+        if sample == "IgM":
+            print("IgM is being used as control for both ENDOGENOUS and EXOGENOUS experiments")
+    else:
+        raise ValueError(f"Test sample {sample} not found in data directories")
+else:
+    ALL_SAMPLES = list(set(EXOGENOUS_SAMPLES + ENDOGENOUS_SAMPLES))  # Use set to avoid duplicates
+    print(f"Running in full mode with {len(ALL_SAMPLES)} samples")
 
 # specifies all output files to be generated
 rule all:
     input:
-        # FastQC output for all samples (R1 and R2)
-        # These are HTML reports containing quality control metrics for raw reads
+        # Basic processing (always included)
         expand(join(OUTPUT, "fastqc", "{sample}_R1_001_fastqc.html"), sample=ALL_SAMPLES),
         expand(join(OUTPUT, "fastqc", "{sample}_R2_001_fastqc.html"), sample=ALL_SAMPLES),
-        # Trimmed fastq files for all samples (R1 and R2)
-        # These are the quality and adapter trimmed reads
         expand(join(OUTPUT, "trimmed", "{sample}_R1_001_val_1.fq.gz"), sample=ALL_SAMPLES),
         expand(join(OUTPUT, "trimmed", "{sample}_R2_001_val_2.fq.gz"), sample=ALL_SAMPLES),
-        # Aligned BAM files for all samples
-        # These contain the reads aligned to the reference genome
         expand(join(OUTPUT, "aligned", "{sample}.bam"), sample=ALL_SAMPLES),
-        # Called peaks for all samples
-        # These are the identified binding sites in narrowPeak format
         expand(join(OUTPUT, "peaks", "{sample}_peaks.narrowPeak"), sample=ALL_SAMPLES),
-        # MultiQC report
-        # This is a compiled report of all QC metrics across all samples
-        join(OUTPUT, "multiqc", "multiqc_report.html"),
-        # Differential binding results for each experiment type
-        # These are CSV files containing the differential binding analysis results
-        # expand(join(OUTPUT, "differential_binding", "{experiment}_differential_binding_results.csv"), experiment=["EXOGENOUS", "ENDOGENOUS", "POL2"])
-        # Fragment size analysis
-        expand(join(OUTPUT, "fragment_sizes", "{sample}_fragment_sizes.pdf"), sample=ALL_SAMPLES),
-        expand(join(OUTPUT, "fragment_sizes", "{sample}_fragment_sizes.txt"), sample=ALL_SAMPLES)
+        expand(join(OUTPUT, "qc", "{sample}.frip_score.txt"), sample=ALL_SAMPLES),
+        expand(join(OUTPUT, "qc", "{sample}.tss_enrichment.txt"), sample=ALL_SAMPLES),
+        expand(join(OUTPUT, "bigwig", "{sample}.bw"), sample=ALL_SAMPLES),
+        expand(join(OUTPUT, "plots", "{sample}_heatmap.pdf"), sample=ALL_SAMPLES),
+        expand(join(OUTPUT, "plots", "{sample}_metagene.pdf"), sample=ALL_SAMPLES),
+        
+        # Multi-sample analyses (only included when not in test mode)
+        [] if config.get("sample") else [
+            join(OUTPUT, "peak_analysis", "peak_reproducibility.txt"),
+            join(OUTPUT, "peak_analysis", "peak_annotation.txt"),
+            join(OUTPUT, "multiqc", "multiqc_report.html")
+        ]
 
 # Rule to run FastQC on raw reads
 # performs quality control checks on the raw sequencing data
 rule fastqc:
     # takes R1 and R2 files from input directory and runs
     input:
-        r1 = lambda wildcards: join(get_input_dir(wildcards.sample), f"{wildcards.sample}_R1_001.fastq.gz"),
-        r2 = lambda wildcards: join(get_input_dir(wildcards.sample), f"{wildcards.sample}_R2_001.fastq.gz")
+        r1 = lambda wildcards: os.path.join(get_input_dir(wildcards.sample), 
+                                          f"{wildcards.sample}_R1_001.fastq.gz"),
+        r2 = lambda wildcards: os.path.join(get_input_dir(wildcards.sample), 
+                                          f"{wildcards.sample}_R2_001.fastq.gz")
     # outputs html and zip files with quality metrics
     output:
-        html1 = join(OUTPUT, "fastqc", "{sample}_R1_001_fastqc.html"),
-        html2 = join(OUTPUT, "fastqc", "{sample}_R2_001_fastqc.html"),
-        zip1 = join(OUTPUT, "fastqc", "{sample}_R1_001_fastqc.zip"),
-        zip2 = join(OUTPUT, "fastqc", "{sample}_R2_001_fastqc.zip")
+        html_r1 = join(OUTPUT, "fastqc", "{sample}_R1_001_fastqc.html"),
+        html_r2 = join(OUTPUT, "fastqc", "{sample}_R2_001_fastqc.html"),
+        zip_r1 = join(OUTPUT, "fastqc", "{sample}_R1_001_fastqc.zip"),
+        zip_r2 = join(OUTPUT, "fastqc", "{sample}_R2_001_fastqc.zip")
     log:
         join(OUTPUT, "logs", "fastqc", "{sample}.log")
-    threads: 4
-    resources:
-        mem_mb=16000,
-        time="2:00:00"
+    threads: 2
+    envmodules:
+        "fastqc/0.11.9"
     shell:
-        "fastqc -t {threads} -o {OUTPUT}/fastqc {input.r1} {input.r2} &> {log}"
+        """
+        fastqc {input.r1} {input.r2} -o $(dirname {output.html_r1}) -t {threads} 2> {log}
+        """
 
 # Rule to trim reads using Trim Galore
 rule trim_reads:
@@ -172,9 +212,9 @@ rule call_peaks:
         treatment = join(OUTPUT, "aligned", "{sample}.bam"),
         treatment_index = join(OUTPUT, "aligned", "{sample}.bam.bai"),
         control = lambda wildcards: join(OUTPUT, "aligned", 
-                  f"{config['control_samples'][get_experiment(wildcards.sample)]}.bam"),
+                  f"{CONTROL_SAMPLES[get_experiment(wildcards.sample)]}.bam"),
         control_index = lambda wildcards: join(OUTPUT, "aligned", 
-                       f"{config['control_samples'][get_experiment(wildcards.sample)]}.bam.bai")
+                       f"{CONTROL_SAMPLES[get_experiment(wildcards.sample)]}.bam.bai")
     output:
         peaks = join(OUTPUT, "peaks", "{sample}_peaks.narrowPeak")
     log:
@@ -326,3 +366,165 @@ rule extended_analysis:
         join(OUTPUT, "logs", "extended_analysis", "extended_analysis.log")
     script:
         "scripts/extended_analysis.R"
+
+rule cross_correlation:
+    input:
+        bam = rules.align.output.sorted_bam
+    output:
+        plot = join(OUTPUT, "qc", "{sample}.crosscorr.pdf"),
+        metrics = join(OUTPUT, "qc", "{sample}.crosscorr.txt")
+    script:
+        "scripts/cross_correlation.R"
+
+rule calculate_frip:
+    input:
+        bam = rules.align.output.sorted_bam,
+        peaks = rules.call_peaks.output.peaks
+    output:
+        frip = join(OUTPUT, "qc", "{sample}.frip_score.txt")
+    script:
+        "scripts/calculate_frip.R"
+
+rule generate_md5:
+    input:
+        fastq = lambda wildcards: join(get_input_dir(wildcards.sample), 
+                                     f"{wildcards.sample}_R{wildcards.read}_001.fastq.gz")
+    output:
+        md5 = join(OUTPUT, "md5", "{sample}_R{read}_001.md5")
+    shell:
+        "md5sum {input.fastq} > {output.md5}"
+
+rule generate_report:
+    input:
+        qc_metrics = expand(join(OUTPUT, "qc", "{sample}.{metric}.txt"),
+                          sample=ALL_SAMPLES,
+                          metric=["frip_score", "tss_enrichment"]),
+        peak_metrics = join(OUTPUT, "peak_analysis", "peak_reproducibility.txt")
+    output:
+        report = join(OUTPUT, "report", "pipeline_report.html")
+    script:
+        "scripts/generate_report.R"
+
+# Add rule for bigwig generation
+rule make_bigwig:
+    input:
+        bam = join(OUTPUT, "aligned", "{sample}.bam"),
+        bai = join(OUTPUT, "aligned", "{sample}.bam.bai")
+    output:
+        bw = join(OUTPUT, "bigwig", "{sample}.bw")
+    params:
+        bin_size = config["visualization"]["bigwig"]["bin_size"],
+        smooth_length = config["visualization"]["bigwig"]["smooth_length"]
+    log:
+        join(OUTPUT, "logs", "bigwig", "{sample}.log")
+    threads: 4
+    envmodules:
+        "deeptools/3.5.1"
+    shell:
+        """
+        bamCoverage --bam {input.bam} \
+            --outFileName {output.bw} \
+            --binSize {params.bin_size} \
+            --smoothLength {params.smooth_length} \
+            --normalizeUsing RPKM \
+            --numberOfProcessors {threads} \
+            2> {log}
+        """
+
+# Add rule for TSS enrichment
+rule tss_enrichment:
+    input:
+        bam = join(OUTPUT, "aligned", "{sample}.bam"),
+        bai = join(OUTPUT, "aligned", "{sample}.bam.bai")
+    output:
+        score = join(OUTPUT, "qc", "{sample}.tss_enrichment.txt")
+    params:
+        gtf = config["tss_analysis"]["genome_gtf"],
+        upstream = config["tss_analysis"]["upstream"],
+        downstream = config["tss_analysis"]["downstream"]
+    log:
+        join(OUTPUT, "logs", "tss_enrichment", "{sample}.log")
+    envmodules:
+        "R/4.1.0"
+    script:
+        "scripts/calculate_tss_enrichment.R"
+
+# Add rule for metagene plot
+rule metagene_plot:
+    input:
+        bw = join(OUTPUT, "bigwig", "{sample}.bw"),
+        peaks = join(OUTPUT, "peaks", "{sample}_peaks.narrowPeak")
+    output:
+        plot = join(OUTPUT, "plots", "{sample}_metagene.pdf")
+    params:
+        upstream = config["tss_analysis"]["upstream"],
+        downstream = config["tss_analysis"]["downstream"]
+    log:
+        join(OUTPUT, "logs", "plots", "{sample}_metagene.log")
+    envmodules:
+        "R/4.1.0"
+    script:
+        "scripts/plot_metagene.R"
+
+# Add rule for heatmap
+rule heatmap_plot:
+    input:
+        bw = join(OUTPUT, "bigwig", "{sample}.bw"),
+        peaks = join(OUTPUT, "peaks", "{sample}_peaks.narrowPeak")
+    output:
+        plot = join(OUTPUT, "plots", "{sample}_heatmap.pdf")
+    params:
+        window_size = config["visualization"]["heatmap"]["window_size"],
+        bin_size = config["visualization"]["heatmap"]["bin_size"]
+    log:
+        join(OUTPUT, "logs", "plots", "{sample}_heatmap.log")
+    envmodules:
+        "R/4.1.0"
+    script:
+        "scripts/plot_heatmap.R"
+
+# Rule to analyze peak reproducibility
+rule analyze_peak_reproducibility:
+    input:
+        peaks = expand(join(OUTPUT, "peaks", "{sample}_peaks.narrowPeak"), sample=ALL_SAMPLES)
+    output:
+        txt = join(OUTPUT, "peak_analysis", "peak_reproducibility.txt")
+    log:
+        join(OUTPUT, "logs", "peak_analysis", "reproducibility.log")
+    threads: 4
+    resources:
+        mem_mb=8000,
+        time="1:00:00"
+    envmodules:
+        "R/4.1.0"
+    shell:
+        """
+        Rscript scripts/analyze_reproducibility.R \
+            --peaks {input.peaks} \
+            --output {output.txt} \
+            2> {log}
+        """
+
+# Rule to annotate peaks
+rule annotate_peaks:
+    input:
+        peaks = expand(join(OUTPUT, "peaks", "{sample}_peaks.narrowPeak"), sample=ALL_SAMPLES)
+    output:
+        txt = join(OUTPUT, "peak_analysis", "peak_annotation.txt")
+    log:
+        join(OUTPUT, "logs", "peak_analysis", "annotation.log")
+    threads: 4
+    resources:
+        mem_mb=8000,
+        time="1:00:00"
+    envmodules:
+        "R/4.1.0"
+    shell:
+        """
+        Rscript scripts/annotate_peaks.R \
+            --peaks {input.peaks} \
+            --output {output.txt} \
+            --genome {config[genome_gtf]} \
+            2> {log}
+        """
+
