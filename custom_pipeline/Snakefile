@@ -26,4 +26,303 @@ localrules: all, multiqc
 EXOGENOUS = "DATA/EXOGENOUS"
 ENDOGENOUS = "DATA/ENDOGENOUS"
 
-# rest of your existing code...
+# main output directory where all results will be stored
+OUTPUT = "results"
+
+# Get sample names from input directories
+EXOGENOUS_SAMPLES = [f.split("_R1")[0] for f in os.listdir(EXOGENOUS) if f.endswith("R1_001.fastq.gz")]
+ENDOGENOUS_SAMPLES = [f.split("_R1")[0] for f in os.listdir(ENDOGENOUS) if f.endswith("R1_001.fastq.gz")]
+# POL2_SAMPLES = [f.split("_R1")[0] for f in os.listdir(POL2) if f.endswith("R1_001.fastq.gz")]
+
+# Combine all samples into a single list for easier iteration in rules
+ALL_SAMPLES = EXOGENOUS_SAMPLES + ENDOGENOUS_SAMPLES # + POL2_SAMPLES
+# ALL_SAMPLES = EXOGENOUS_SAMPLES
+
+# specifies all output files to be generated
+rule all:
+    input:
+        # FastQC output for all samples (R1 and R2)
+        # These are HTML reports containing quality control metrics for raw reads
+        expand(join(OUTPUT, "fastqc", "{sample}_R1_001_fastqc.html"), sample=ALL_SAMPLES),
+        expand(join(OUTPUT, "fastqc", "{sample}_R2_001_fastqc.html"), sample=ALL_SAMPLES),
+        # Trimmed fastq files for all samples (R1 and R2)
+        # These are the quality and adapter trimmed reads
+        expand(join(OUTPUT, "trimmed", "{sample}_R1_001_val_1.fq.gz"), sample=ALL_SAMPLES),
+        expand(join(OUTPUT, "trimmed", "{sample}_R2_001_val_2.fq.gz"), sample=ALL_SAMPLES),
+        # Aligned BAM files for all samples
+        # These contain the reads aligned to the reference genome
+        expand(join(OUTPUT, "aligned", "{sample}.bam"), sample=ALL_SAMPLES),
+        # Called peaks for all samples
+        # These are the identified binding sites in narrowPeak format
+        expand(join(OUTPUT, "peaks", "{sample}_peaks.narrowPeak"), sample=ALL_SAMPLES),
+        # MultiQC report
+        # This is a compiled report of all QC metrics across all samples
+        join(OUTPUT, "multiqc", "multiqc_report.html"),
+        # Differential binding results for each experiment type
+        # These are CSV files containing the differential binding analysis results
+        # expand(join(OUTPUT, "differential_binding", "{experiment}_differential_binding_results.csv"), experiment=["EXOGENOUS", "ENDOGENOUS", "POL2"])
+        # Fragment size analysis
+        expand(join(OUTPUT, "fragment_sizes", "{sample}_fragment_sizes.pdf"), sample=ALL_SAMPLES),
+        expand(join(OUTPUT, "fragment_sizes", "{sample}_fragment_sizes.txt"), sample=ALL_SAMPLES)
+
+# Rule to run FastQC on raw reads
+# performs quality control checks on the raw sequencing data
+rule fastqc:
+    # takes R1 and R2 files from input directory and runs
+    input:
+        r1 = lambda wildcards: join(get_input_dir(wildcards.sample), f"{wildcards.sample}_R1_001.fastq.gz"),
+        r2 = lambda wildcards: join(get_input_dir(wildcards.sample), f"{wildcards.sample}_R2_001.fastq.gz")
+    # outputs html and zip files with quality metrics
+    output:
+        html1 = join(OUTPUT, "fastqc", "{sample}_R1_001_fastqc.html"),
+        html2 = join(OUTPUT, "fastqc", "{sample}_R2_001_fastqc.html"),
+        zip1 = join(OUTPUT, "fastqc", "{sample}_R1_001_fastqc.zip"),
+        zip2 = join(OUTPUT, "fastqc", "{sample}_R2_001_fastqc.zip")
+    log:
+        join(OUTPUT, "logs", "fastqc", "{sample}.log")
+    threads: 4
+    resources:
+        mem_mb=16000,
+        time="2:00:00"
+    shell:
+        "fastqc -t {threads} -o {OUTPUT}/fastqc {input.r1} {input.r2} &> {log}"
+
+# Rule to trim reads using Trim Galore
+rule trim_reads:
+    input:
+        r1 = lambda wildcards: join(get_input_dir(wildcards.sample), f"{wildcards.sample}_R1_001.fastq.gz"),
+        r2 = lambda wildcards: join(get_input_dir(wildcards.sample), f"{wildcards.sample}_R2_001.fastq.gz")
+    output:
+        r1 = join(OUTPUT, "trimmed", "{sample}_R1_001_val_1.fq.gz"),
+        r2 = join(OUTPUT, "trimmed", "{sample}_R2_001_val_2.fq.gz")
+    log:
+        join(OUTPUT, "logs", "trim_galore", "{sample}.log")
+    threads: 16
+    resources:
+        mem_mb=32000,
+        time="6:00:00"
+    envmodules:
+        "trimgalore/0.6.6",
+        "fastqc/0.11.9"
+    shell:
+        """
+        mkdir -p {OUTPUT}/trimmed
+        trim_galore --paired --gzip --fastqc --cores {threads} \
+            --output_dir {OUTPUT}/trimmed \
+            {input.r1} {input.r2} &> {log}
+        """
+
+# Rule to align trimmed reads
+rule align:
+    input:
+        r1 = rules.trim_reads.output.r1,
+        r2 = rules.trim_reads.output.r2
+    output:
+        bam = temp(join(OUTPUT, "aligned", "{sample}.unsorted.bam")),
+        sorted_bam = join(OUTPUT, "aligned", "{sample}.bam"),
+        bai = join(OUTPUT, "aligned", "{sample}.bam.bai")
+    log:
+        join(OUTPUT, "logs", "bowtie2", "{sample}.log")
+    threads: 32
+    resources:
+        mem_mb=96000,
+        time="8:00:00"
+    params:
+        max_fragment = config["bowtie2_params"]["max_fragment_length"],
+        sort_memory = "2G",
+        tmp_dir = "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/custom_pipeline/tmp"
+    envmodules:
+        "bowtie2/2.4.2",
+        "samtools/1.13"
+    shell:
+        """
+        # Create temporary directory for this job
+        TEMP_DIR=$(mktemp -d -p {params.tmp_dir})
+        
+        # Align reads with optimized parameters
+        bowtie2 \
+            -p {threads} \
+            -x {config[genome_index]} \
+            -1 {input.r1} -2 {input.r2} \
+            --local --very-sensitive-local \
+            --no-mixed --no-discordant \
+            --maxins {params.max_fragment} \
+            --mm \
+            2> {log} | \
+        samtools view -@ {threads} -bS -q 30 - > {output.bam}
+
+        # Sort BAM file using multiple threads and temporary directory
+        samtools sort \
+            -@ {threads} \
+            -m {params.sort_memory} \
+            -T $TEMP_DIR/{wildcards.sample} \
+            -o {output.sorted_bam} \
+            {output.bam}
+
+        # Index BAM file
+        samtools index -@ {threads} {output.sorted_bam}
+        
+        # Cleanup
+        rm -rf $TEMP_DIR
+        """
+
+# Rule to call peaks using MACS2
+rule call_peaks:
+    input:
+        treatment = join(OUTPUT, "aligned", "{sample}.bam"),
+        treatment_index = join(OUTPUT, "aligned", "{sample}.bam.bai"),
+        control = lambda wildcards: join(OUTPUT, "aligned", 
+                  f"{config['control_samples'][get_experiment(wildcards.sample)]}.bam"),
+        control_index = lambda wildcards: join(OUTPUT, "aligned", 
+                       f"{config['control_samples'][get_experiment(wildcards.sample)]}.bam.bai")
+    output:
+        peaks = join(OUTPUT, "peaks", "{sample}_peaks.narrowPeak")
+    log:
+        join(OUTPUT, "logs", "macs2", "{sample}.log")
+    threads: 16
+    resources:
+        mem_mb=32000,
+        time="4:00:00"
+    params:
+        genome_size = config['effective_genome_size'],
+        format = config['macs2_params']['format'],
+        pvalue = config['macs2_params']['pvalue'],
+        outdir = lambda wildcards, output: os.path.dirname(output.peaks)
+    envmodules:
+        "macs2/2.2.7.1"
+    shell:
+        """
+        macs2 callpeak \
+            -t {input.treatment} \
+            -c {input.control} \
+            -f {params.format} \
+            -g {params.genome_size} \
+            -n {wildcards.sample} \
+            --outdir {params.outdir} \
+            -p {params.pvalue} \
+            --nomodel \
+            --shift {config[macs2_params][shift]} \
+            --extsize {config[macs2_params][extsize]} \
+            --keep-dup {config[macs2_params][keep_dup]} \
+            2> {log}
+        """
+
+# Rule to run MultiQC to aggregate QC reports
+# compiles all quality control metrics into a single report
+rule multiqc:
+    # takes all fastqc and aligned bam files from previous rules
+    input:
+        expand(join(OUTPUT, "fastqc", "{sample}_R1_001_fastqc.html"), sample=ALL_SAMPLES),
+        expand(join(OUTPUT, "fastqc", "{sample}_R2_001_fastqc.html"), sample=ALL_SAMPLES),
+        expand(join(OUTPUT, "aligned", "{sample}.bam"), sample=ALL_SAMPLES)
+    # outputs multiqc report
+    output:
+        report = join(OUTPUT, "multiqc", "multiqc_report.html")
+    log:
+        join(OUTPUT, "logs", "multiqc", "multiqc.log")
+    shell:
+        "multiqc {OUTPUT} -o {OUTPUT}/multiqc &> {log}"
+
+# Rule to perform differential binding analysis using DiffBind
+# identifies differentially bound regions between conditions
+# rule differential_binding:
+#     # takes peaks and aligned bam files from call_peaks and align rules
+#     input:
+#         peaks = lambda wildcards: expand(join(OUTPUT, "peaks", "{sample}_peaks.narrowPeak"), 
+#                                          sample=get_samples_for_experiment(wildcards.experiment)),
+#         bams = lambda wildcards: expand(join(OUTPUT, "aligned", "{sample}.bam"), 
+#                                         sample=get_samples_for_experiment(wildcards.experiment))
+#     # outputs csv file with differential binding results
+#     output:
+#         results = join(OUTPUT, "differential_binding", "{experiment}_differential_binding_results.csv")
+#     log:
+#         join(OUTPUT, "logs", "diffbind", "{experiment}_diffbind.log")
+#     threads: 32
+#     conda:
+#         "r_env"
+#     script:
+#         "scripts/run_diffbind.R"
+
+# Helper function to determine the input directory for a given sample
+def get_input_dir(sample):
+    # checks which experiment the sample belongs to and returns the corresponding input directory
+    if sample in EXOGENOUS_SAMPLES:
+        return "DATA/EXOGENOUS"
+    elif sample in ENDOGENOUS_SAMPLES:
+        return "DATA/ENDOGENOUS"
+    elif sample in POL2_SAMPLES:
+        return "DATA/POL2"
+    else:
+        raise ValueError(f"Unknown sample: {sample}")
+
+# Helper function to determine the experiment type for a given sample
+def get_experiment(sample):
+    # checks which experiment the sample belongs to and returns the corresponding experiment name
+    if sample in EXOGENOUS_SAMPLES:
+        return "EXOGENOUS"
+    elif sample in ENDOGENOUS_SAMPLES:
+        return "ENDOGENOUS"
+    elif sample in POL2_SAMPLES:
+        return "POL2"
+    else:
+        raise ValueError(f"Unknown sample: {sample}")
+
+# Helper function to get samples for a specific experiment type
+def get_samples_for_experiment(experiment):
+    # checks which experiment the sample belongs to and returns the corresponding experiment name
+    if experiment == "EXOGENOUS":
+        return EXOGENOUS_SAMPLES
+    elif experiment == "ENDOGENOUS":
+        return ENDOGENOUS_SAMPLES
+    elif experiment == "POL2":
+        return POL2_SAMPLES
+    else:
+        raise ValueError(f"Unknown experiment: {experiment}")
+
+# Add localrules for non-computational steps
+localrules: all, multiqc
+
+# Add rule to analyze fragment sizes
+rule fragment_sizes:
+    input:
+        bam = join(OUTPUT, "aligned", "{sample}.bam"),
+        bai = join(OUTPUT, "aligned", "{sample}.bam.bai")
+    output:
+        pdf = join(OUTPUT, "fragment_sizes", "{sample}_fragment_sizes.pdf"),
+        txt = join(OUTPUT, "fragment_sizes", "{sample}_fragment_sizes.txt")
+    log:
+        join(OUTPUT, "logs", "fragment_sizes", "{sample}.log")
+    threads: 16
+    resources:
+        mem_mb=16000,
+        time="1:00:00"
+    envmodules:
+        "samtools/1.13",
+        "R/4.1.0"
+    shell:
+        """
+        # Calculate fragment sizes
+        samtools view {input.bam} | \
+        awk '{{if ($9 > 0) print $9}}' > {output.txt}
+
+        # Plot fragment size distribution
+        Rscript -e '
+        pdf("{output.pdf}")
+        data <- read.table("{output.txt}")
+        hist(data$V1, breaks=100, main="{wildcards.sample} Fragment Size Distribution",
+             xlab="Fragment Size", ylab="Count")
+        dev.off()
+        ' 2> {log}
+        """
+
+# Rule to perform extended analysis
+rule extended_analysis:
+    input:
+        peaks = expand(join(OUTPUT, "peaks", "{sample}_peaks.narrowPeak"), sample=ALL_SAMPLES),
+        bams = expand(join(OUTPUT, "aligned", "{sample}.bam"), sample=ALL_SAMPLES)
+    output:
+        report = join(OUTPUT, "extended_analysis", "analysis_report.html")
+    log:
+        join(OUTPUT, "logs", "extended_analysis", "extended_analysis.log")
+    script:
+        "scripts/extended_analysis.R"

@@ -3,7 +3,6 @@ genome_index: /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/mm10_bow
 genome_size: mm
 EXOGENOUS_control: IgM
 ENDOGENOUS_control: IgM
-POL2_control: 2G1
 
 # Effective genome size for mouse (mm10)
 effective_genome_size: "1.87e9"
@@ -12,7 +11,6 @@ effective_genome_size: "1.87e9"
 control_samples:
   EXOGENOUS: "IgM"
   ENDOGENOUS: "IgM"
-  POL2: "2G1"
 
 # MACS2 parameters for CUT&Tag
 macs2_params:

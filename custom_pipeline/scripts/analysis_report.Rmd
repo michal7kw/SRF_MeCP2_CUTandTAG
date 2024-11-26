@@ -1,0 +1,13 @@
+---
+title: "Cut&Tag Analysis Report"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: cosmo
+params:
+  peak_annotations: NULL
+  chromatin_states: NULL
+  enrichment_results: NULL
+--- 
