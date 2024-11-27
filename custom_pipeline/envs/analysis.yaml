@@ -1,1 +1,14 @@
- 
+name: analysis
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.8
+  - pandas
+  - numpy
+  - scipy
+  - matplotlib
+  - seaborn
+  - pybedtools
+  - pysam
+  - bedtools 

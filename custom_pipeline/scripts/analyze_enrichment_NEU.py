@@ -16,7 +16,7 @@ def load_data():
     
     # Load peak data for exogenous and endogenous samples
     exo_samples = ['NeuV1', 'NeuV2', 'NeuV3']
-    endo_samples = ['NeuM1', 'NeuM2', 'NeuM3']
+    endo_samples = ['NeuM2', 'NeuM3']
     
     peaks_exo = {}
     peaks_endo = {}
