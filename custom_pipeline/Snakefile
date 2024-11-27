@@ -12,11 +12,11 @@ configfile: "config.yaml"
 
 # Define resource configurations
 resource_config = {
-    "fastqc": {"mem_mb": 8000, "ntasks": 2, "runtime": 120},      # 2 hours
-    "trim_reads": {"mem_mb": 16000, "ntasks": 8, "runtime": 360}, # 6 hours
-    "align": {"mem_mb": 32000, "ntasks": 16, "runtime": 720},     # 12 hours
-    "call_peaks": {"mem_mb": 16000, "ntasks": 8, "runtime": 480}, # 8 hours
-    "fragment_sizes": {"mem_mb": 8000, "ntasks": 4, "runtime": 60} # 1 hour
+    "fastqc": {"mem_mb": 8000, "ntasks": 4, "runtime": 120},      # 2 hours
+    "trim_reads": {"mem_mb": 16000, "ntasks": 16, "runtime": 360}, # 6 hours
+    "align": {"mem_mb": 32000, "ntasks": 32, "runtime": 720},     # 12 hours
+    "call_peaks": {"mem_mb": 16000, "ntasks": 16, "runtime": 480}, # 8 hours
+    "fragment_sizes": {"mem_mb": 8000, "ntasks": 8, "runtime": 60} # 1 hour
 }
 
 # Define local rules
@@ -246,6 +246,21 @@ rule call_peaks:
             --keep-dup {config[macs2_params][keep_dup]} \
             2> {log}
         """
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # Rule to run MultiQC to aggregate QC reports
 # compiles all quality control metrics into a single report
@@ -527,4 +542,22 @@ rule annotate_peaks:
             --genome {config[genome_gtf]} \
             2> {log}
         """
+
+# rule analyze_peak_enrichment:
+#     input:
+#         dea = "DATA/DEA_NSC.csv",
+#         peaks = expand("results/peaks/{sample}_peaks.narrowPeak", 
+#                       sample=ALL_SAMPLES)
+#     output:
+#         enrichment_plots = "results/enrichment_analysis.pdf",
+#         enrichment_signal = "results/enrichment_signal_ratio.csv",
+#         enrichment_count = "results/enrichment_peak_count.csv",
+#         enrichment_combined = "results/enrichment_combined_score.csv",
+#         enrichment_stats = "results/enrichment_statistical.csv"
+#     log:
+#         "logs/enrichment/peak_enrichment.log"
+#     conda:
+#         "envs/analysis.yaml"
+#     script:
+#         "scripts/analyze_enrichment.py"
 

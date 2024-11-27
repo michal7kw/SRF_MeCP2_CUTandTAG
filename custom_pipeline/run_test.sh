@@ -11,19 +11,8 @@
 #SBATCH --error="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/custom_pipeline/logs/Snake_test.err"
 #SBATCH --output="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/custom_pipeline/logs/Snake_test.out"
 
-# Initialize module system first
-# source /etc/profile.d/modules.sh
-
 # Activate environment
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate /beegfs/scratch/ric.broccoli/kubacki.michal/conda_envs/jupyter_nb
-
-# Then load modules
-# module load trimgalore/0.6.6
-# module load fastqc/0.11.9
-# module load bowtie2/2.4.2
-# module load samtools/1.13
-# module load macs2/2.2.7.1
-# module load R/4.1.0
 
 # Set directories
 export TMPDIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/custom_pipeline/tmp"
@@ -41,12 +30,11 @@ mkdir -p results/{fastqc,trimmed,aligned,peaks,multiqc,fragment_sizes,extended_a
 rm -rf "$TMPDIR"/*
 rm -rf ~/.cache/snakemake/*
 
-# Unlock if needed
+
 snakemake --unlock
 
 # Run Snakemake for a single sample
-# Replace SAMPLE_NAME with your actual sample name
-SAMPLE="IgM"  # Replace this with actual sample name
+SAMPLE="IgM"
 
 snakemake \
     --snakefile Snakefile \
@@ -68,5 +56,3 @@ snakemake \
     --use-envmodules \
     --config sample=IgM \
     2>&1 | tee "logs/snakemake_test_$(date +%Y%m%d_%H%M%S).log"
-
-# Note: The -n flag at the end is for dry-run. Remove it to actually run the pipeline 

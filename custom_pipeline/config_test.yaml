@@ -48,7 +48,7 @@ blacklist:
 tss_analysis:
   upstream: 2000
   downstream: 2000
-  genome_gtf: "gencode.vM25.annotation.gtf"
+  genome_gtf: "gencode.vM10.annotation.gtf"
 
 # Add QC thresholds
 qc_thresholds:

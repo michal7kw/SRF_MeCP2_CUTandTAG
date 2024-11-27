@@ -14,14 +14,6 @@
 # Activate the jupyter_nb environment first
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate /beegfs/scratch/ric.broccoli/kubacki.michal/conda_envs/jupyter_nb
 
-# # Then load required modules
-# module load trimgalore/0.6.6
-# module load fastqc/0.11.9
-# module load bowtie2/2.4.2
-# module load samtools/1.13
-# module load macs2/2.2.7.1
-# module load R/4.1.0
-
 # Set temporary directories
 export TMPDIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/custom_pipeline/tmp"
 export XDG_CACHE_HOME="/beegfs/scratch/ric.broccoli/kubacki.michal/cache"
@@ -44,6 +36,9 @@ source /opt/common/tools/ric.cosr/miniconda3/bin/activate /beegfs/scratch/ric.br
 # Unlock the working directory if needed
 snakemake --unlock
 
+# Set the ALL_SAMPLES variable
+ALL_SAMPLES=($(ls DATA/EXOGENOUS DATA/ENDOGENOUS | grep '_R1_001.fastq.gz' | sed 's/_R1_001.fastq.gz//'))
+
 # Run Snakemake with environment activation for each job
 snakemake \
     --snakefile Snakefile \
@@ -63,6 +58,7 @@ snakemake \
     --keep-going \
     --rerun-incomplete \
     --use-envmodules \
+    $(for sample in ${ALL_SAMPLES[@]}; do echo "results/peaks/${sample}_peaks.narrowPeak"; done) \
     2>&1 | tee "logs/snakemake_$(date +%Y%m%d_%H%M%S).log"
 
 # Create summary of run
