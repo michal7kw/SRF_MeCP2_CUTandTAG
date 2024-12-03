@@ -1,0 +1,21 @@
+name: snakemake
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.11
+  - snakemake=7.32.4
+  - pyopenssl=23.2.0
+  - openssl=3.1.4
+  - boto3=1.28.44
+  - urllib3=1.26.18
+  - smart_open=6.4.0
+  - macs2=2.2.7.1
+  - bowtie2=2.4.2
+  - samtools=1.13
+  - fastqc=0.11.9
+  - trim-galore=0.6.6
+  - multiqc=1.14
+  - deeptools=3.5.1
+  - r-base=4.1.0 

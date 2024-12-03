@@ -12,7 +12,7 @@
 #SBATCH --output="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/custom_pipeline/logs/Snake_pipeline.out"
 
 # Activate the jupyter_nb environment first
-source /opt/common/tools/ric.cosr/miniconda3/bin/activate /beegfs/scratch/ric.broccoli/kubacki.michal/conda_envs/jupyter_nb
+source /opt/common/tools/ric.cosr/miniconda3/bin/activate /beegfs/scratch/ric.broccoli/kubacki.michal/conda_envs/snakemake
 
 # Set temporary directories
 export TMPDIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/custom_pipeline/tmp"
@@ -26,12 +26,9 @@ mkdir -p "$SNAKEMAKE_PERSISTENT_CACHE" && chmod 755 "$SNAKEMAKE_PERSISTENT_CACHE
 mkdir -p logs/slurm && chmod 755 logs/slurm
 mkdir -p results/{fastqc,trimmed,aligned,peaks,multiqc,fragment_sizes,extended_analysis,qc,plots,peak_analysis} && chmod -R 755 results
 
-# Clean up temporary files
-rm -rf "$TMPDIR"/*
-rm -rf ~/.cache/snakemake/*
-
-# Activate the jupyter_nb environment
-source /opt/common/tools/ric.cosr/miniconda3/bin/activate /beegfs/scratch/ric.broccoli/kubacki.michal/conda_envs/jupyter_nb
+# # Clean up temporary files
+# rm -rf "$TMPDIR"/*
+# rm -rf ~/.cache/snakemake/*
 
 # Unlock the working directory if needed
 snakemake --unlock
@@ -39,7 +36,7 @@ snakemake --unlock
 # Set the ALL_SAMPLES variable
 ALL_SAMPLES=($(ls DATA/EXOGENOUS DATA/ENDOGENOUS | grep '_R1_001.fastq.gz' | sed 's/_R1_001.fastq.gz//'))
 
-# Run Snakemake with environment activation for each job
+# Run snakemake with forcerun for peak calling only
 snakemake \
     --snakefile Snakefile \
     --configfile config.yaml \
@@ -58,11 +55,14 @@ snakemake \
     --keep-going \
     --rerun-incomplete \
     --use-envmodules \
-    $(for sample in ${ALL_SAMPLES[@]}; do echo "results/peaks/${sample}_peaks.narrowPeak"; done) \
-    2>&1 | tee "logs/snakemake_$(date +%Y%m%d_%H%M%S).log"
+    --resources skip_fastqc=1 skip_trim=1 skip_align=1 \
+    --until call_peaks \
+    --forcerun call_peaks \
+    all \
+    2>&1 | tee "logs/snakemake_peaks_rerun.log"
 
 # Create summary of run
-snakemake --summary > "logs/workflow_summary_$(date +%Y%m%d_%H%M%S).txt"
+snakemake --summary > "logs/workflow_summary.txt"
 
 # Cleanup on exit
 trap 'rm -rf "$TMPDIR"/*' EXIT

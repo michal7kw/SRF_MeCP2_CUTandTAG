@@ -14,17 +14,9 @@ control_samples:
 
 # MACS2 parameters for CUT&Tag
 macs2_params:
-  pvalue: "1e-10"
   format: "BAMPE"
-  nomodel: true
-  shift: -100
-  extsize: 200
-  keep_dup: "1"
-  min_length: 150
-  max_length: 1000
-  broad: false
-  broad_cutoff: "1e-5"
-  call_summits: true
+  qvalue: "0.05"
+  keep_dup: "all"
 
 # Alignment parameters
 bowtie2_params:

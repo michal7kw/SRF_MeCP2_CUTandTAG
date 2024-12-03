@@ -3,6 +3,7 @@
 import os
 from os.path import join
 from snakemake.utils import min_version
+import re
 
 # Set minimum snakemake version
 min_version("6.0")
@@ -33,11 +34,13 @@ OUTPUT = "results"
 EXOGENOUS_SAMPLES = [f.split("_R1")[0] for f in os.listdir(EXOGENOUS) if f.endswith("R1_001.fastq.gz")]
 ENDOGENOUS_SAMPLES = [f.split("_R1")[0] for f in os.listdir(ENDOGENOUS) if f.endswith("R1_001.fastq.gz")]
 
-# Define control samples
-CONTROL_SAMPLES = {
-    "EXOGENOUS": config["EXOGENOUS_control"],  # Should be "IgM"
-    "ENDOGENOUS": config["ENDOGENOUS_control"]  # Should be "IgM"
-}
+# Make sure IgM is in ENDOGENOUS_SAMPLES if it's not already there
+if "IgM" not in ENDOGENOUS_SAMPLES and "IgM_R1_001.fastq.gz" in os.listdir(ENDOGENOUS):
+    ENDOGENOUS_SAMPLES.append("IgM")
+
+# Define ALL_SAMPLES
+ALL_SAMPLES = list(set(EXOGENOUS_SAMPLES + ENDOGENOUS_SAMPLES))
+print(f"Running in full mode with {len(ALL_SAMPLES)} samples")
 
 # Function to get input directory for a sample
 def get_input_dir(sample):
@@ -50,7 +53,7 @@ def get_input_dir(sample):
     elif sample in ENDOGENOUS_SAMPLES:
         return ENDOGENOUS
     else:
-        raise ValueError(f"Sample {sample} not found in either EXOGENOUS or ENDOGENOUS directories")
+        raise ValueError(f"Unknown sample: {sample}")
 
 # Function to get experiment type for a sample
 def get_experiment(sample):
@@ -63,22 +66,6 @@ def get_experiment(sample):
     else:
         raise ValueError(f"Unknown sample: {sample}")
 
-# Override if a specific sample is specified for testing
-if config.get("sample"):
-    sample = config["sample"]
-    # Check if sample exists (including IgM in ENDOGENOUS)
-    if sample in ENDOGENOUS_SAMPLES or sample in EXOGENOUS_SAMPLES or (sample == "IgM" and "IgM_R1_001.fastq.gz" in os.listdir(ENDOGENOUS)):
-        ALL_SAMPLES = [sample]
-        print(f"Running in test mode with sample: {sample}")
-        print(f"Sample found in: {get_input_dir(sample)}")
-        if sample == "IgM":
-            print("IgM is being used as control for both ENDOGENOUS and EXOGENOUS experiments")
-    else:
-        raise ValueError(f"Test sample {sample} not found in data directories")
-else:
-    ALL_SAMPLES = list(set(EXOGENOUS_SAMPLES + ENDOGENOUS_SAMPLES))  # Use set to avoid duplicates
-    print(f"Running in full mode with {len(ALL_SAMPLES)} samples")
-
 # specifies all output files to be generated
 rule all:
     input:
@@ -88,30 +75,17 @@ rule all:
         expand(join(OUTPUT, "trimmed", "{sample}_R1_001_val_1.fq.gz"), sample=ALL_SAMPLES),
         expand(join(OUTPUT, "trimmed", "{sample}_R2_001_val_2.fq.gz"), sample=ALL_SAMPLES),
         expand(join(OUTPUT, "aligned", "{sample}.bam"), sample=ALL_SAMPLES),
-        expand(join(OUTPUT, "peaks", "{sample}_peaks.narrowPeak"), sample=ALL_SAMPLES),
-        expand(join(OUTPUT, "qc", "{sample}.frip_score.txt"), sample=ALL_SAMPLES),
-        expand(join(OUTPUT, "qc", "{sample}.tss_enrichment.txt"), sample=ALL_SAMPLES),
-        expand(join(OUTPUT, "bigwig", "{sample}.bw"), sample=ALL_SAMPLES),
-        expand(join(OUTPUT, "plots", "{sample}_heatmap.pdf"), sample=ALL_SAMPLES),
-        expand(join(OUTPUT, "plots", "{sample}_metagene.pdf"), sample=ALL_SAMPLES),
-        
-        # Multi-sample analyses (only included when not in test mode)
-        [] if config.get("sample") else [
-            join(OUTPUT, "peak_analysis", "peak_reproducibility.txt"),
-            join(OUTPUT, "peak_analysis", "peak_annotation.txt"),
-            join(OUTPUT, "multiqc", "multiqc_report.html")
-        ]
+        expand(join(OUTPUT, "aligned", "{sample}.bam.bai"), sample=ALL_SAMPLES),
+        expand(join(OUTPUT, "peaks", "{sample}_peaks.narrowPeak"), sample=ALL_SAMPLES)
 
 # Rule to run FastQC on raw reads
 # performs quality control checks on the raw sequencing data
 rule fastqc:
-    # takes R1 and R2 files from input directory and runs
     input:
         r1 = lambda wildcards: os.path.join(get_input_dir(wildcards.sample), 
                                           f"{wildcards.sample}_R1_001.fastq.gz"),
         r2 = lambda wildcards: os.path.join(get_input_dir(wildcards.sample), 
                                           f"{wildcards.sample}_R2_001.fastq.gz")
-    # outputs html and zip files with quality metrics
     output:
         html_r1 = join(OUTPUT, "fastqc", "{sample}_R1_001_fastqc.html"),
         html_r2 = join(OUTPUT, "fastqc", "{sample}_R2_001_fastqc.html"),
@@ -120,18 +94,26 @@ rule fastqc:
     log:
         join(OUTPUT, "logs", "fastqc", "{sample}.log")
     threads: 2
+    resources:
+        skip=lambda w, attempt: resources.get("skip_fastqc", 0)
     envmodules:
         "fastqc/0.11.9"
     shell:
         """
-        fastqc {input.r1} {input.r2} -o $(dirname {output.html_r1}) -t {threads} 2> {log}
+        if [ "{resources.skip}" = "1" ]; then
+            touch {output.html_r1} {output.html_r2} {output.zip_r1} {output.zip_r2}
+        else
+            fastqc {input.r1} {input.r2} -o $(dirname {output.html_r1}) -t {threads} 2> {log}
+        fi
         """
 
 # Rule to trim reads using Trim Galore
 rule trim_reads:
     input:
-        r1 = lambda wildcards: join(get_input_dir(wildcards.sample), f"{wildcards.sample}_R1_001.fastq.gz"),
-        r2 = lambda wildcards: join(get_input_dir(wildcards.sample), f"{wildcards.sample}_R2_001.fastq.gz")
+        r1 = lambda wildcards: os.path.join(get_input_dir(wildcards.sample), 
+                                          f"{wildcards.sample}_R1_001.fastq.gz"),
+        r2 = lambda wildcards: os.path.join(get_input_dir(wildcards.sample), 
+                                          f"{wildcards.sample}_R2_001.fastq.gz")
     output:
         r1 = join(OUTPUT, "trimmed", "{sample}_R1_001_val_1.fq.gz"),
         r2 = join(OUTPUT, "trimmed", "{sample}_R2_001_val_2.fq.gz")
@@ -140,16 +122,21 @@ rule trim_reads:
     threads: 16
     resources:
         mem_mb=32000,
-        time="6:00:00"
+        time="6:00:00",
+        skip=lambda w, attempt: resources.get("skip_trim", 0)
     envmodules:
         "trimgalore/0.6.6",
         "fastqc/0.11.9"
     shell:
         """
-        mkdir -p {OUTPUT}/trimmed
-        trim_galore --paired --gzip --fastqc --cores {threads} \
-            --output_dir {OUTPUT}/trimmed \
-            {input.r1} {input.r2} &> {log}
+        if [ "{resources.skip}" = "1" ]; then
+            touch {output.r1} {output.r2}
+        else
+            mkdir -p {OUTPUT}/trimmed
+            trim_galore --paired --gzip --fastqc --cores {threads} \
+                --output_dir {OUTPUT}/trimmed \
+                {input.r1} {input.r2} &> {log}
+        fi
         """
 
 # Rule to align trimmed reads
@@ -166,7 +153,8 @@ rule align:
     threads: 32
     resources:
         mem_mb=96000,
-        time="8:00:00"
+        time="8:00:00",
+        skip=lambda w, attempt: resources.get("skip_align", 0)
     params:
         max_fragment = config["bowtie2_params"]["max_fragment_length"],
         sort_memory = "2G",
@@ -176,34 +164,40 @@ rule align:
         "samtools/1.13"
     shell:
         """
-        # Create temporary directory for this job
-        TEMP_DIR=$(mktemp -d -p {params.tmp_dir})
-        
-        # Align reads with optimized parameters
-        bowtie2 \
-            -p {threads} \
-            -x {config[genome_index]} \
-            -1 {input.r1} -2 {input.r2} \
-            --local --very-sensitive-local \
-            --no-mixed --no-discordant \
-            --maxins {params.max_fragment} \
-            --mm \
-            2> {log} | \
-        samtools view -@ {threads} -bS -q 30 - > {output.bam}
+        if [ "{resources.skip}" = "1" ]; then
+            touch {output.bam}
+            touch {output.sorted_bam}
+            touch {output.bai}
+        else
+            # Create temporary directory for this job
+            TEMP_DIR=$(mktemp -d -p {params.tmp_dir})
+            
+            # Align reads with optimized parameters
+            bowtie2 \
+                -p {threads} \
+                -x {config[genome_index]} \
+                -1 {input.r1} -2 {input.r2} \
+                --local --very-sensitive-local \
+                --no-mixed --no-discordant \
+                --maxins {params.max_fragment} \
+                --mm \
+                2> {log} | \
+            samtools view -@ {threads} -bS -q 30 - > {output.bam}
 
-        # Sort BAM file using multiple threads and temporary directory
-        samtools sort \
-            -@ {threads} \
-            -m {params.sort_memory} \
-            -T $TEMP_DIR/{wildcards.sample} \
-            -o {output.sorted_bam} \
-            {output.bam}
+            # Sort BAM file using multiple threads and temporary directory
+            samtools sort \
+                -@ {threads} \
+                -m {params.sort_memory} \
+                -T $TEMP_DIR/{wildcards.sample} \
+                -o {output.sorted_bam} \
+                {output.bam}
 
-        # Index BAM file
-        samtools index -@ {threads} {output.sorted_bam}
-        
-        # Cleanup
-        rm -rf $TEMP_DIR
+            # Index BAM file
+            samtools index -@ {threads} {output.sorted_bam}
+            
+            # Cleanup
+            rm -rf $TEMP_DIR
+        fi
         """
 
 # Rule to call peaks using MACS2
@@ -211,10 +205,8 @@ rule call_peaks:
     input:
         treatment = join(OUTPUT, "aligned", "{sample}.bam"),
         treatment_index = join(OUTPUT, "aligned", "{sample}.bam.bai"),
-        control = lambda wildcards: join(OUTPUT, "aligned", 
-                  f"{CONTROL_SAMPLES[get_experiment(wildcards.sample)]}.bam"),
-        control_index = lambda wildcards: join(OUTPUT, "aligned", 
-                       f"{CONTROL_SAMPLES[get_experiment(wildcards.sample)]}.bam.bai")
+        control = lambda wildcards: [] if wildcards.sample == "IgM" else join(OUTPUT, "aligned", "IgM.bam"),
+        control_index = lambda wildcards: [] if wildcards.sample == "IgM" else join(OUTPUT, "aligned", "IgM.bam.bai")
     output:
         peaks = join(OUTPUT, "peaks", "{sample}_peaks.narrowPeak")
     log:
@@ -225,42 +217,28 @@ rule call_peaks:
         time="4:00:00"
     params:
         genome_size = config['effective_genome_size'],
-        format = config['macs2_params']['format'],
-        pvalue = config['macs2_params']['pvalue'],
-        outdir = lambda wildcards, output: os.path.dirname(output.peaks)
+        format = "BAMPE",
+        qvalue = "0.05",
+        outdir = lambda wildcards, output: os.path.dirname(output.peaks),
+        control_param = lambda wildcards, input: "" if wildcards.sample == "IgM" else f"-c {input.control}"
     envmodules:
         "macs2/2.2.7.1"
     shell:
         """
+        mkdir -p {params.outdir}
         macs2 callpeak \
             -t {input.treatment} \
-            -c {input.control} \
+            {params.control_param} \
             -f {params.format} \
             -g {params.genome_size} \
             -n {wildcards.sample} \
             --outdir {params.outdir} \
-            -p {params.pvalue} \
+            -q {params.qvalue} \
             --nomodel \
-            --shift {config[macs2_params][shift]} \
-            --extsize {config[macs2_params][extsize]} \
-            --keep-dup {config[macs2_params][keep_dup]} \
+            --keep-dup all \
+            --call-summits \
             2> {log}
         """
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 # Rule to run MultiQC to aggregate QC reports
 # compiles all quality control metrics into a single report
@@ -277,62 +255,6 @@ rule multiqc:
         join(OUTPUT, "logs", "multiqc", "multiqc.log")
     shell:
         "multiqc {OUTPUT} -o {OUTPUT}/multiqc &> {log}"
-
-# Rule to perform differential binding analysis using DiffBind
-# identifies differentially bound regions between conditions
-# rule differential_binding:
-#     # takes peaks and aligned bam files from call_peaks and align rules
-#     input:
-#         peaks = lambda wildcards: expand(join(OUTPUT, "peaks", "{sample}_peaks.narrowPeak"), 
-#                                          sample=get_samples_for_experiment(wildcards.experiment)),
-#         bams = lambda wildcards: expand(join(OUTPUT, "aligned", "{sample}.bam"), 
-#                                         sample=get_samples_for_experiment(wildcards.experiment))
-#     # outputs csv file with differential binding results
-#     output:
-#         results = join(OUTPUT, "differential_binding", "{experiment}_differential_binding_results.csv")
-#     log:
-#         join(OUTPUT, "logs", "diffbind", "{experiment}_diffbind.log")
-#     threads: 32
-#     conda:
-#         "r_env"
-#     script:
-#         "scripts/run_diffbind.R"
-
-# Helper function to determine the input directory for a given sample
-def get_input_dir(sample):
-    # checks which experiment the sample belongs to and returns the corresponding input directory
-    if sample in EXOGENOUS_SAMPLES:
-        return "DATA/EXOGENOUS"
-    elif sample in ENDOGENOUS_SAMPLES:
-        return "DATA/ENDOGENOUS"
-    elif sample in POL2_SAMPLES:
-        return "DATA/POL2"
-    else:
-        raise ValueError(f"Unknown sample: {sample}")
-
-# Helper function to determine the experiment type for a given sample
-def get_experiment(sample):
-    # checks which experiment the sample belongs to and returns the corresponding experiment name
-    if sample in EXOGENOUS_SAMPLES:
-        return "EXOGENOUS"
-    elif sample in ENDOGENOUS_SAMPLES:
-        return "ENDOGENOUS"
-    elif sample in POL2_SAMPLES:
-        return "POL2"
-    else:
-        raise ValueError(f"Unknown sample: {sample}")
-
-# Helper function to get samples for a specific experiment type
-def get_samples_for_experiment(experiment):
-    # checks which experiment the sample belongs to and returns the corresponding experiment name
-    if experiment == "EXOGENOUS":
-        return EXOGENOUS_SAMPLES
-    elif experiment == "ENDOGENOUS":
-        return ENDOGENOUS_SAMPLES
-    elif experiment == "POL2":
-        return POL2_SAMPLES
-    else:
-        raise ValueError(f"Unknown experiment: {experiment}")
 
 # Add localrules for non-computational steps
 localrules: all, multiqc
@@ -560,4 +482,20 @@ rule annotate_peaks:
 #         "envs/analysis.yaml"
 #     script:
 #         "scripts/analyze_enrichment.py"
+
+# Add wildcard constraints
+wildcard_constraints:
+    sample="|".join([re.escape(x) for x in (EXOGENOUS_SAMPLES + ENDOGENOUS_SAMPLES + ["IgM"])]),
+    frr="[12]"  # Assuming frr can only be 1 or 2
+
+# Add this function to the top section with the other helper functions
+def get_samples_for_experiment(experiment):
+    if experiment == "EXOGENOUS":
+        return EXOGENOUS_SAMPLES
+    elif experiment == "ENDOGENOUS":
+        return ENDOGENOUS_SAMPLES
+    elif experiment == "CONTROL":
+        return ["IgM"]
+    else:
+        raise ValueError(f"Unknown experiment: {experiment}")
 
