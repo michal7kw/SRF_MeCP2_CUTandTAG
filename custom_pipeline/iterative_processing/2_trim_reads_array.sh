@@ -8,31 +8,32 @@
 #SBATCH --ntasks-per-node=16
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/trim_%A_%a.err"
-#SBATCH --output="logs/trim_%A_%a.out"
-#SBATCH --array=0-11%4
+#SBATCH --error="logs/trim_%a.err"
+#SBATCH --output="logs/trim_%a.out"
+#SBATCH --array=0-11
 
 # Set working directory
-cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/custom_pipeline
+cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/custom_pipeline/iterative_processing
+source /opt/common/tools/ric.cosr/miniconda3/bin/activate /beegfs/scratch/ric.broccoli/kubacki.michal/conda_envs/snakemake
 
 # Source modules
-source /etc/profile.d/modules.sh
-module load trimgalore/0.6.6
-module load fastqc/0.11.9
+# source /etc/profile.d/modules.sh
+# module load trimgalore/0.6.6
+# module load fastqc/0.11.9
 
 # Get sample names (same as in fastqc script)
-EXOGENOUS_SAMPLES=($(ls DATA/EXOGENOUS/*_R1_001.fastq.gz | xargs -n 1 basename | sed 's/_R1_001.fastq.gz//'))
-ENDOGENOUS_SAMPLES=($(ls DATA/ENDOGENOUS/*_R1_001.fastq.gz | xargs -n 1 basename | sed 's/_R1_001.fastq.gz//'))
+EXOGENOUS_SAMPLES=($(ls ../DATA/EXOGENOUS/*_R1_001.fastq.gz | xargs -n 1 basename | sed 's/_R1_001.fastq.gz//'))
+ENDOGENOUS_SAMPLES=($(ls ../DATA/ENDOGENOUS/*_R1_001.fastq.gz | xargs -n 1 basename | sed 's/_R1_001.fastq.gz//'))
 ALL_SAMPLES=("${EXOGENOUS_SAMPLES[@]}" "${ENDOGENOUS_SAMPLES[@]}")
 
 # Get current sample
 SAMPLE=${ALL_SAMPLES[$SLURM_ARRAY_TASK_ID]}
 
 # Determine input directory
-if [[ -f "DATA/EXOGENOUS/${SAMPLE}_R1_001.fastq.gz" ]]; then
-    INPUT_DIR="DATA/EXOGENOUS"
+if [[ -f "../DATA/EXOGENOUS/${SAMPLE}_R1_001.fastq.gz" ]]; then
+    INPUT_DIR="../DATA/EXOGENOUS"
 else
-    INPUT_DIR="DATA/ENDOGENOUS"
+    INPUT_DIR="../DATA/ENDOGENOUS"
 fi
 
 # Create output directory

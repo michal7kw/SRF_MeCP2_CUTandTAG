@@ -66,7 +66,7 @@ if [ ! -f "$CONTROL_BAM" ]; then
 fi
 
 # Default values
-GENOME_SIZE="hs"
+GENOME_SIZE="mm"
 QVALUE="0.01"
 FORMAT="BAMPE"
 BROAD="--broad"

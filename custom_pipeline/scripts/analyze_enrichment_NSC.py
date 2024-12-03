@@ -303,11 +303,26 @@ def analyze_enrichment(dea, peaks_exo, peaks_endo, gene_annotations, name_to_inf
                     dea_info = dea[dea['gene_std'] == gene].iloc[0]
                     
                     if not np.isnan(score):
+                        # Create peak coordinate strings
+                        exo_coords = []
+                        if not exo_peaks.empty:
+                            exo_coords = [f"{row['chr']}:{row['start']}-{row['end']}" 
+                                        for _, row in exo_peaks.iterrows()]
+                        
+                        endo_coords = []
+                        if not endo_peaks.empty:
+                            endo_coords = [f"{row['chr']}:{row['start']}-{row['end']}" 
+                                         for _, row in endo_peaks.iterrows()]
+                        
                         enrichment_scores.append({
                             'gene': gene,
                             'enrichment_score': score,
                             'log2FoldChange': dea_info['log2FoldChange'],
-                            'padj': dea_info['padj']
+                            'padj': dea_info['padj'],
+                            'exo_peaks': ';'.join(exo_coords) if exo_coords else 'None',
+                            'endo_peaks': ';'.join(endo_coords) if endo_coords else 'None',
+                            'num_exo_peaks': len(exo_coords),
+                            'num_endo_peaks': len(endo_coords)
                         })
                 
             except Exception as e:
