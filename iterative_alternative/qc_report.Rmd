@@ -1,0 +1,74 @@
+---
+title: "CUT&TAG Quality Control Report"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    theme: cosmo
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(knitr)
+```
+
+## Overview
+
+This report provides quality control metrics for CUT&TAG sequencing data analysis. The metrics include fragment size distributions and Fraction of Reads in Peaks (FRiP) scores for all samples.
+
+## Fragment Size Distribution
+
+The fragment size distribution plot shows the size distribution of sequenced fragments for each sample. In CUT&TAG data, we typically expect to see:
+
+- A sharp peak around 150bp representing mono-nucleosomal fragments
+- Possible smaller peaks at multiples of ~150bp representing di- and tri-nucleosomal fragments
+
+```{r fragment-sizes, fig.width=10, fig.height=6}
+# Read the saved fragment size distribution plot
+knitr::include_graphics("fragment_size_dist.pdf")
+```
+
+## Fraction of Reads in Peaks (FRiP)
+
+The FRiP score indicates the percentage of reads that fall within called peaks. This metric helps assess the signal-to-noise ratio of the experiments. Higher FRiP scores generally indicate better quality data.
+
+```{r frip-scores, fig.width=10, fig.height=6}
+# Read the saved FRiP scores plot
+knitr::include_graphics("frip_scores.pdf")
+```
+
+## Summary Statistics
+
+```{r summary-stats}
+# Read and display FRiP scores as a table
+frip_scores <- lapply(all_samples, read_frip) %>%
+    bind_rows() %>%
+    mutate(
+        total_reads = V3,
+        reads_in_peaks = V2,
+        frip_percentage = frip
+    ) %>%
+    select(sample = sample, total_reads, reads_in_peaks, frip_percentage)
+
+knitr::kable(frip_scores, 
+             col.names = c("Sample", "Total Reads", "Reads in Peaks", "FRiP %"),
+             digits = 2)
+```
+
+## Methods
+
+The quality control metrics were generated using the following steps:
+
+1. Fragment size distributions were calculated from properly paired reads in BAM files
+2. FRiP scores were calculated by counting the number of reads overlapping with called peaks
+3. Plots were generated using ggplot2 in R
+
+## Session Information
+
+```{r session-info}
+sessionInfo()
+```
