@@ -17,7 +17,8 @@ BASE_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_al
 cd $BASE_DIR || exit 1
 
 # Create required directories
-mkdir -p results_alternative/peaks/macs2/{broad,narrow} results_alternative/peaks || exit 1
+mkdir -p results_alternative/peaks
+mkdir -p results_alternative/peaks/broad
 
 # Activate conda environment
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate /beegfs/scratch/ric.broccoli/kubacki.michal/conda_envs/snakemake
@@ -81,7 +82,7 @@ macs2 callpeak \
     -t "$INPUT_BAM" \
     -c "$CONTROL_BAM" \
     -n "${SAMPLE}_broad" \
-    --outdir "results_alternative/peaks/macs2/broad" \
+    --outdir "results_alternative/peaks/broad" \
     -g mm \
     -f BAMPE \
     --broad \
@@ -95,7 +96,7 @@ macs2 callpeak \
     -t "$INPUT_BAM" \
     -c "$CONTROL_BAM" \
     -n "${SAMPLE}_narrow" \
-    --outdir "results_alternative/peaks/macs2/narrow" \
+    --outdir "results_alternative/peaks" \
     -g mm \
     -f BAMPE \
     -q 0.05 \
@@ -109,12 +110,12 @@ fi
 echo "Finished processing $SAMPLE"
 
 # Verify output was created
-if [ ! -f "results_alternative/peaks/macs2/broad/${SAMPLE}_broad_peaks.broadPeak" ]; then
+if [ ! -f "results_alternative/peaks/broad/${SAMPLE}_peaks.broadPeak" ]; then
     echo "Error: Output file not created for sample $SAMPLE (broad)"
     exit 1
 fi
 
-if [ ! -f "results_alternative/peaks/macs2/narrow/${SAMPLE}_narrow_peaks.narrowPeak" ]; then
+if [ ! -f "results_alternative/peaks/${SAMPLE}_narrow_peaks.narrowPeak" ]; then
     echo "Error: Output file not created for sample $SAMPLE (narrow)"
     exit 1
 fi

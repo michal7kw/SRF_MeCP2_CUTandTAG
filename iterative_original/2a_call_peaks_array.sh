@@ -72,7 +72,6 @@ fi
 GENOME_SIZE="mm"
 QVALUE="0.05"
 FORMAT="BAMPE"
-BROAD="--broad"
 
 # Create output directory if it doesn't exist
 mkdir -p "$OUTPUT_DIR"
@@ -100,44 +99,96 @@ fi
 # Run MACS2
 echo "Running MACS2 for $SAMPLE..."
 
+# First run: Narrow peaks
+echo "Calling narrow peaks..."
 echo "Command: macs2 callpeak \\"
 echo "    -t $CURRENT_BAM \\"
 echo "    $CONTROL_PARAM \\"
 echo "    -f $FORMAT \\"
 echo "    -g $GENOME_SIZE \\"
-echo "    -n $SAMPLE \\"
+echo "    -n ${SAMPLE} \\"
 echo "    --outdir $OUTPUT_DIR \\"
 echo "    -q $QVALUE \\"
 echo "    --nomodel \\"
-echo "    $BROAD"
+echo "    --keep-dup auto \\"
+echo "    --nolambda \\"
+echo "    --bdg"
 
 macs2 callpeak \
     -t "$CURRENT_BAM" \
     $CONTROL_PARAM \
     -f "$FORMAT" \
     -g "$GENOME_SIZE" \
-    -n "$SAMPLE" \
+    -n "${SAMPLE}" \
     --outdir "$OUTPUT_DIR" \
     -q "$QVALUE" \
     --nomodel \
     --keep-dup auto \
-    --broad \
-    --broad-cutoff 0.05 \
     --nolambda \
     --bdg \
-    2>&1 | tee "$OUTPUT_DIR/${SAMPLE}_macs2.log"
-    
+    2>&1 | tee "$OUTPUT_DIR/${SAMPLE}_macs2_narrow.log"
+
 if [ $? -ne 0 ]; then
-    echo "Error: MACS2 failed for sample $SAMPLE"
+    echo "Error: MACS2 narrow peak calling failed for sample $SAMPLE"
+    exit 1
+fi
+
+# Second run: Broad peaks
+echo "Calling broad peaks..."
+echo "Command: macs2 callpeak \\"
+echo "    -t $CURRENT_BAM \\"
+echo "    $CONTROL_PARAM \\"
+echo "    -f $FORMAT \\"
+echo "    -g $GENOME_SIZE \\"
+echo "    -n ${SAMPLE}_broad \\"
+echo "    --outdir $OUTPUT_DIR \\"
+echo "    -q $QVALUE \\"
+echo "    --nomodel \\"
+echo "    --broad \\"
+echo "    --broad-cutoff 0.05 \\"
+echo "    --keep-dup auto \\"
+echo "    --nolambda \\"
+echo "    --bdg"
+
+macs2 callpeak \
+    -t "$CURRENT_BAM" \
+    $CONTROL_PARAM \
+    -f "$FORMAT" \
+    -g "$GENOME_SIZE" \
+    -n "${SAMPLE}_broad" \
+    --outdir "$OUTPUT_DIR" \
+    -q "$QVALUE" \
+    --nomodel \
+    --broad \
+    --broad-cutoff 0.05 \
+    --keep-dup auto \
+    --nolambda \
+    --bdg \
+    2>&1 | tee "$OUTPUT_DIR/${SAMPLE}_macs2_broad.log"
+
+if [ $? -ne 0 ]; then
+    echo "Error: MACS2 broad peak calling failed for sample $SAMPLE"
     exit 1
 fi
 
 echo "Finished processing $SAMPLE"
 
-# Verify output was created
-if [ ! -f "$OUTPUT_DIR/${SAMPLE}_peaks.broadPeak" ]; then
-    echo "Error: Output file not created for sample $SAMPLE"
+# Verify outputs were created
+if [ ! -f "$OUTPUT_DIR/${SAMPLE}_peaks.narrowPeak" ]; then
+    echo "Error: Narrow peak file not created for sample $SAMPLE"
     exit 1
 fi
+
+if [ ! -f "$OUTPUT_DIR/${SAMPLE}_broad_peaks.broadPeak" ]; then
+    echo "Error: Broad peak file not created for sample $SAMPLE"
+    exit 1
+fi
+
+# Rename broad peak files to match original naming
+mv "$OUTPUT_DIR/${SAMPLE}_broad_peaks.broadPeak" "$OUTPUT_DIR/${SAMPLE}_peaks.broadPeak"
+mv "$OUTPUT_DIR/${SAMPLE}_broad_peaks.gappedPeak" "$OUTPUT_DIR/${SAMPLE}_peaks.gappedPeak"
+mv "$OUTPUT_DIR/${SAMPLE}_broad_peaks.xls" "$OUTPUT_DIR/${SAMPLE}_peaks.xls"
+mv "$OUTPUT_DIR/${SAMPLE}_broad_treat_pileup.bdg" "$OUTPUT_DIR/${SAMPLE}_treat_pileup.bdg"
+mv "$OUTPUT_DIR/${SAMPLE}_broad_control_lambda.bdg" "$OUTPUT_DIR/${SAMPLE}_control_lambda.bdg"
 
 echo "Peak calling completed for sample $SAMPLE"
