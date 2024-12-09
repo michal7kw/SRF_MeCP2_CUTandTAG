@@ -12,85 +12,94 @@
 #SBATCH --output="logs/peaks_%a.out"
 #SBATCH --array=0-9  # Excluding IgM controls
 
-# Set working directory
-cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative
+# Set base directory and create required directories
+BASE_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative"
+cd $BASE_DIR || exit 1
+
+# Load conda environment
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate /beegfs/scratch/ric.broccoli/kubacki.michal/conda_envs/snakemake
 
-# Path to SEACR script
-SEACR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/SEACR-master/SEACR_1.3.sh"
+# Create directories
+mkdir -p results/peaks/seacr/{auc,no_control} results/bedgraph results/peaks || exit 1
 
-# Create output directories
-mkdir -p results/peaks/seacr
-mkdir -p results/bedgraph
+# Configuration
+SEACR="$BASE_DIR/SEACR-master/SEACR_1.3.sh"
+TIMEOUT=3600  # 1 hour timeout
 
-# Add this near the top of the script, after the cd command
-FORCE_REPROCESS=true  # Set to true to force reprocessing of all files
+# Convert SEACR output to narrowPeak format
+seacr_to_narrowpeak() {
+    awk 'BEGIN{OFS="\t"} {print $1, $2, $3, "peak_"NR, $4, ".", $4, -1, -1, -1}' "$1" > "$2"
+}
 
-# First, process IgM control if it hasn't been done yet
-if [ ! -f "results/bedgraph/IgM.bedgraph" ] || [ "$FORCE_REPROCESS" = true ]; then
+# Process IgM control
+if [ ! -f "results/bedgraph/IgM.bedgraph" ]; then
     echo "Processing IgM control..."
     bedtools genomecov -bg -ibam results/aligned/IgM.bam > results/bedgraph/IgM.bedgraph
 fi
 
-# Get sample names (excluding IgM)
-EXOGENOUS_SAMPLES=($(ls ../DATA/EXOGENOUS/*_R1_001.fastq.gz | xargs -n 1 basename | sed 's/_R1_001.fastq.gz//'))
-ENDOGENOUS_SAMPLES=($(ls ../DATA/ENDOGENOUS/*_R1_001.fastq.gz | xargs -n 1 basename | sed 's/_R1_001.fastq.gz//' | grep -v "IgM"))
-ALL_SAMPLES=("${EXOGENOUS_SAMPLES[@]}" "${ENDOGENOUS_SAMPLES[@]}")
+# Get sample names and current sample
+SAMPLES=($(ls ../DATA/{EXOGENOUS,ENDOGENOUS}/*_R1_001.fastq.gz | xargs -n 1 basename | sed 's/_R1_001.fastq.gz//' | grep -v "IgM"))
+SAMPLE=${SAMPLES[$SLURM_ARRAY_TASK_ID]}
 
-# Get current sample
-SAMPLE=${ALL_SAMPLES[$SLURM_ARRAY_TASK_ID]}
-
-# Convert BAM to bedgraph if not already done
-if [ ! -f "results/bedgraph/${SAMPLE}.bedgraph" ] || [ "$FORCE_REPROCESS" = true ]; then
-    echo "Processing ${SAMPLE}..."
-    bedtools genomecov -bg -ibam results/aligned/${SAMPLE}.bam > results/bedgraph/${SAMPLE}.bedgraph
+# Create bedgraph if needed
+if [ ! -f "results/bedgraph/${SAMPLE}.bedgraph" ]; then
+    echo "Creating bedgraph for ${SAMPLE}..."
+    bedtools genomecov -bg -ibam "results/aligned/${SAMPLE}.bam" > "results/bedgraph/${SAMPLE}.bedgraph"
 fi
 
-# Function to convert SEACR output to narrowPeak format
-seacr_to_narrowpeak() {
-    input=$1
-    output=$2
-    # Convert SEACR output to narrowPeak format
-    # narrowPeak format: chr start end name score strand signalValue pValue qValue peak
-    awk 'BEGIN{OFS="\t"} {print $1, $2, $3, "peak_"NR, $4, ".", $4, -1, -1, -1}' "$input" > "$output"
-}
+# Create temporary directory
+TEMP_DIR=$(mktemp -d -p results/peaks/seacr/auc)
+trap 'rm -rf "$TEMP_DIR"' EXIT
 
-# Run SEACR peak calling with IgM control
-# SEACR arguments:
-# 1. Target data bedgraph file
-# 2. IgM control bedgraph file
-# 3. "non" - no normalization between target and control
-# 4. "stringent" - more stringent threshold for peak calling
-# 5. Output prefix for results
-echo "Calling peaks for ${SAMPLE} with IgM control..."
-bash $SEACR \
-    results/bedgraph/${SAMPLE}.bedgraph \
-    results/bedgraph/IgM.bedgraph \
+# Copy SEACR files to temp directory
+cp -r SEACR-master/* "$TEMP_DIR/"
+cd "$TEMP_DIR" || exit 1
+
+# Run SEACR with IgM control
+echo "Running SEACR with IgM control for ${SAMPLE}..."
+timeout $TIMEOUT ./SEACR_1.3.sh \
+    "$BASE_DIR/results/bedgraph/${SAMPLE}.bedgraph" \
+    "$BASE_DIR/results/bedgraph/IgM.bedgraph" \
     non \
     stringent \
-    results/peaks/seacr/${SAMPLE}
+    "$BASE_DIR/results/peaks/seacr/${SAMPLE}"
 
-# Convert to narrowPeak
-seacr_to_narrowpeak "results/peaks/seacr/${SAMPLE}.stringent.bed" "results/peaks/seacr/${SAMPLE}.stringent.narrowPeak"
+if [ $? -eq 0 ]; then
+    # Convert to narrowPeak if successful
+    seacr_to_narrowpeak \
+        "$BASE_DIR/results/peaks/seacr/${SAMPLE}.stringent.bed" \
+        "$BASE_DIR/results/peaks/seacr/${SAMPLE}.stringent.narrowPeak"
+    
+    # Copy to final location
+    cp "$BASE_DIR/results/peaks/seacr/${SAMPLE}.stringent.narrowPeak" \
+       "$BASE_DIR/results/peaks/${SAMPLE}_peaks.narrowPeak"
+else
+    echo "Error: SEACR failed for ${SAMPLE} with IgM control"
+    exit 1
+fi
 
-# Also run without control (top 1% of peaks)
-# SEACR arguments:
-# 1. Target data bedgraph file  
-# 2. "0.01" - threshold representing top 1% of peaks
-# 3. "non" - no normalization (not applicable without control)
-# 4. "stringent" - more stringent threshold for peak calling
-# 5. Output prefix for results
-echo "Calling peaks for ${SAMPLE} without control..."
-bash $SEACR \
-    results/bedgraph/${SAMPLE}.bedgraph \
-    0.01 \
+# Run SEACR without control
+echo "Running SEACR without control for ${SAMPLE}..."
+timeout $TIMEOUT ./SEACR_1.3.sh \
+    "$BASE_DIR/results/bedgraph/${SAMPLE}.bedgraph" \
+    0.05 \
     non \
     stringent \
-    results/peaks/seacr/${SAMPLE}_no_control
+    "$BASE_DIR/results/peaks/seacr/${SAMPLE}_no_control"
 
-# Convert to narrowPeak
-seacr_to_narrowpeak "results/peaks/seacr/${SAMPLE}_no_control.stringent.bed" "results/peaks/seacr/${SAMPLE}_no_control.stringent.narrowPeak"
+if [ $? -eq 0 ]; then
+    # Convert to narrowPeak if successful
+    seacr_to_narrowpeak \
+        "$BASE_DIR/results/peaks/seacr/${SAMPLE}_no_control.stringent.bed" \
+        "$BASE_DIR/results/peaks/seacr/${SAMPLE}_no_control.stringent.narrowPeak"
+    
+    # Move to no_control directory
+    mv "$BASE_DIR/results/peaks/seacr/${SAMPLE}_no_control.stringent."* \
+       "$BASE_DIR/results/peaks/seacr/no_control/"
+else
+    echo "Error: SEACR failed for ${SAMPLE} without control"
+    exit 1
+fi
 
-# Move .auc files to the desired directory
-mv *.auc* results/peaks/seacr/auc/
-mv *.txt* results/peaks/seacr/auc/
+# Move AUC files to final location
+mv *.auc.bed "$BASE_DIR/results/peaks/seacr/auc/" 2>/dev/null || true

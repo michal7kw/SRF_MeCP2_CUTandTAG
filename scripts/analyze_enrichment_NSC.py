@@ -6,9 +6,8 @@ import seaborn as sns
 import pybedtools
 import os
 import pysam
+import time
 
-# Define genome-wide constants
-GENOME_SIZE = 2.7e9  # Mouse genome size
 PROMOTER_WINDOW = 2000  # Define promoter region as ±2kb from TSS
 
 # Set working directory
@@ -30,53 +29,117 @@ def calculate_sequencing_depth(bam_file):
         return bam.count()
 
 def load_data():
-    # Load DEA results
-    dea_nsc = pd.read_csv("../DATA/DEA_NSC.csv")
-    print("\nDEA file columns:", dea_nsc.columns.tolist())
-    
-    # Verify required columns exist
-    required_columns = ['gene', 'log2FoldChange', 'padj']
-    missing_columns = [col for col in required_columns if col not in dea_nsc.columns]
-    if missing_columns:
-        raise ValueError(f"Missing required columns in DEA file: {missing_columns}")
-    
-    # Load peak data and calculate sequencing depths
-    exo_samples = ['NSCv1', 'NSCv2', 'NSCv3']
-    endo_samples = ['NSCM1', 'NSCM2', 'NSCM3']
-    
-    peaks_exo = {}
-    peaks_endo = {}
-    depths_exo = {}
-    depths_endo = {}
-    
-    # Load exogenous samples and their depths
-    for sample in exo_samples:
-        peaks_exo[sample] = pd.read_csv(f"results/peaks/{sample}_peaks.narrowPeak", 
-                                      sep='\t', header=None,
-                                      names=['chr', 'start', 'end', 'name', 'score', 
-                                            'strand', 'signalValue', 'pValue', 
-                                            'qValue', 'peak'])
-        # Calculate sequencing depth
-        depths_exo[sample] = calculate_sequencing_depth(f"results/aligned/{sample}.bam")
-        # Normalize signal values by sequencing depth
-        peaks_exo[sample]['signalValue'] = peaks_exo[sample]['signalValue'] * (1e6 / depths_exo[sample])
-    
-    # Load endogenous samples and their depths
-    for sample in endo_samples:
-        peaks_endo[sample] = pd.read_csv(f"results/peaks/{sample}_peaks.narrowPeak",
-                                       sep='\t', header=None,
-                                       names=['chr', 'start', 'end', 'name', 'score',
-                                            'strand', 'signalValue', 'pValue',
-                                            'qValue', 'peak'])
-        # Calculate sequencing depth
-        depths_endo[sample] = calculate_sequencing_depth(f"results/aligned/{sample}.bam")
-        # Normalize signal values by sequencing depth
-        peaks_endo[sample]['signalValue'] = peaks_endo[sample]['signalValue'] * (1e6 / depths_endo[sample])
-    
-    # Load gene annotations
-    gene_annotations, name_to_info = load_gene_annotations()
-    
-    return dea_nsc, peaks_exo, peaks_endo, gene_annotations, name_to_info
+    try:
+        # Load DEA results
+        dea_nsc = pd.read_csv("../DATA/DEA_NSC.csv")
+        print("\nDEA file columns:", dea_nsc.columns.tolist())
+        
+        # Add timeout for file operations
+        def load_with_timeout(filepath, timeout=30):
+            """Load file with timeout"""
+            start_time = time.time()
+            while not os.path.exists(filepath):
+                if time.time() - start_time > timeout:
+                    print(f"Timeout waiting for file: {filepath}")
+                    return None
+                time.sleep(1)
+            return filepath
+
+        def validate_peak_file(df, sample_name):
+            """Validate peak file contents"""
+            if df.empty:
+                print(f"Warning: Empty peak file for {sample_name}")
+                return df
+            
+            required_cols = ['chr', 'start', 'end', 'signalValue']
+            missing_cols = [col for col in required_cols if col not in df.columns]
+            if missing_cols:
+                print(f"Warning: Missing columns in {sample_name} peak file: {missing_cols}")
+                return pd.DataFrame()
+            
+            # Check for invalid values
+            if (df['end'] <= df['start']).any():
+                print(f"Warning: Invalid peak coordinates in {sample_name}")
+                df = df[df['end'] > df['start']]
+            
+            if (df['signalValue'] < 0).any():
+                print(f"Warning: Negative signal values in {sample_name}")
+                df = df[df['signalValue'] >= 0]
+            
+            return df
+
+        def load_peak_file(filepath, sample_name):
+            """Load and validate peak file with enhanced error handling"""
+            if not os.path.exists(filepath):
+                print(f"Warning: Peak file not found: {filepath}")
+                return pd.DataFrame()
+            
+            try:
+                df = pd.read_csv(filepath, sep='\t', header=None,
+                               names=['chr', 'start', 'end', 'name', 'score',
+                                     'strand', 'signalValue', 'pValue',
+                                     'qValue', 'peak'])
+                return validate_peak_file(df, sample_name)
+            except Exception as e:
+                print(f"Error loading peak file {filepath}: {str(e)}")
+                return pd.DataFrame()
+
+        def calculate_sequencing_depth_safe(bam_file):
+            """Calculate sequencing depth with error handling"""
+            try:
+                if not os.path.exists(bam_file):
+                    print(f"Warning: BAM file not found: {bam_file}")
+                    return 1
+                
+                with pysam.AlignmentFile(bam_file, "rb") as bam:
+                    if not bam.check_index():
+                        print(f"Warning: BAM index missing for {bam_file}")
+                        return 1
+                    return max(bam.count(), 1)  # Ensure non-zero return
+            except Exception as e:
+                print(f"Error calculating depth for {bam_file}: {str(e)}")
+                return 1
+
+        # Load samples with enhanced error handling
+        exo_samples = ['NSCv1', 'NSCv2', 'NSCv3']
+        endo_samples = ['NSCM1', 'NSCM2', 'NSCM3']
+        
+        peaks_exo = {}
+        peaks_endo = {}
+        depths_exo = {}
+        depths_endo = {}
+        
+        # Load exogenous samples
+        for sample in exo_samples:
+            peak_file = f"results/peaks/{sample}_peaks.narrowPeak"
+            peaks_exo[sample] = load_peak_file(peak_file, sample)
+            depths_exo[sample] = calculate_sequencing_depth_safe(f"results/aligned/{sample}.bam")
+            
+            if not peaks_exo[sample].empty:
+                peaks_exo[sample]['signalValue'] = peaks_exo[sample]['signalValue'].clip(lower=0) * (1e6 / depths_exo[sample])
+        
+        # Load endogenous samples
+        for sample in endo_samples:
+            peak_file = f"results/peaks/{sample}_peaks.narrowPeak"
+            peaks_endo[sample] = load_peak_file(peak_file, sample)
+            depths_endo[sample] = calculate_sequencing_depth_safe(f"results/aligned/{sample}.bam")
+            
+            if not peaks_endo[sample].empty:
+                peaks_endo[sample]['signalValue'] = peaks_endo[sample]['signalValue'].clip(lower=0) * (1e6 / depths_endo[sample])
+        
+        # Validate we have usable data
+        if all(df.empty for df in peaks_exo.values()) or all(df.empty for df in peaks_endo.values()):
+            print("Warning: No valid peak data found for analysis")
+            raise ValueError("Insufficient peak data for analysis")
+
+        # Load gene annotations
+        gene_annotations, name_to_info = load_gene_annotations()
+        
+        return dea_nsc, peaks_exo, peaks_endo, gene_annotations, name_to_info
+        
+    except Exception as e:
+        print(f"Error in load_data: {str(e)}")
+        raise
 
 def standardize_gene_name(gene_name):
     """Standardize gene names to match between DEA and GTF"""
@@ -501,23 +564,34 @@ def plot_width_vs_enrichment(results, peaks_exo, peaks_endo, gene_annotations, n
         if not exo_peaks.empty and not endo_peaks.empty:
             mean_width_exo = (exo_peaks['end'] - exo_peaks['start']).mean()
             mean_width_endo = (endo_peaks['end'] - endo_peaks['start']).mean()
-            width_ratios[gene] = mean_width_exo / mean_width_endo
+            if mean_width_endo > 0:  # Prevent division by zero
+                width_ratios[gene] = mean_width_exo / mean_width_endo
     
     # Create scatter plots
     for i, method in enumerate(['width_weighted', 'coverage_score', 'area_integration']):
         plt.subplot(1, 3, i+1)
         
-        x = [width_ratios[gene] for gene in results[method]['gene'] if gene in width_ratios]
-        y = [score for gene, score in zip(results[method]['gene'], 
-                                        results[method]['enrichment_score']) 
-             if gene in width_ratios]
+        # Get data points and filter out invalid values
+        data_points = [(width_ratios[gene], score) 
+                      for gene, score in zip(results[method]['gene'], results[method]['enrichment_score'])
+                      if gene in width_ratios and score > 0 and width_ratios[gene] > 0]
         
-        plt.scatter(x, y, alpha=0.5)
-        plt.xlabel('Peak Width Ratio (Exo/Endo)')
-        plt.ylabel(f'{method} Enrichment Score')
-        plt.title(f'{method} vs Width Ratio')
-        plt.yscale('log')
-        plt.xscale('log')
+        if data_points:  # Only plot if we have valid data points
+            x, y = zip(*data_points)
+            
+            plt.scatter(x, y, alpha=0.5)
+            plt.xlabel('Peak Width Ratio (Exo/Endo)')
+            plt.ylabel(f'{method} Enrichment Score')
+            plt.title(f'{method} vs Width Ratio\n(n={len(x)} genes)')
+            
+            try:
+                plt.yscale('log')
+                plt.xscale('log')
+            except ValueError:
+                # Fallback to linear scale if log scale fails
+                plt.yscale('linear')
+                plt.xscale('linear')
+                print(f"Warning: Could not use log scale for {method}, using linear scale instead")
     
     plt.tight_layout()
     plt.savefig('results/width_vs_enrichment_NSC.pdf')

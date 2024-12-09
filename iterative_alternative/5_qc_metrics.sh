@@ -13,15 +13,8 @@
 #SBATCH --array=0-11
 
 # Set working directory
-cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/custom_pipeline/iterative_processing
+cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate /beegfs/scratch/ric.broccoli/kubacki.michal/conda_envs/snakemake
-
-# Source modules
-# source /etc/profile.d/modules.sh
-# module load samtools/1.13
-# module load bedtools/2.29.1
-# module load R/4.1.0
-# module load deeptools/3.5.1
 
 # Get sample names
 EXOGENOUS_SAMPLES=($(ls ../DATA/EXOGENOUS/*_R1_001.fastq.gz | xargs -n 1 basename | sed 's/_R1_001.fastq.gz//'))

@@ -135,19 +135,10 @@ rule trim_reads:
                 --gzip \
                 --fastqc \
                 --cores {threads} \
+                --nextera \
                 --output_dir {params.output_dir} \
                 {input.r1} {input.r2} \
                 2> {log}
-
-            # Rename output files to match expected names
-            mv {params.output_dir}/{wildcards.sample}_R1_001_trimmed.fq.gz {output.r1}
-            mv {params.output_dir}/{wildcards.sample}_R2_001_trimmed.fq.gz {output.r2}
-
-            # Verify the output files exist and are not empty
-            if [ ! -s {output.r1} ] || [ ! -s {output.r2} ]; then
-                echo "Error: Trimmed output files are empty or missing" >> {log}
-                exit 1
-            fi
         fi
         """
 
@@ -157,7 +148,7 @@ rule align:
         r1 = rules.trim_reads.output.r1,
         r2 = rules.trim_reads.output.r2
     output:
-        bam = temp(join(OUTPUT, "aligned", "{sample}.unsorted.bam")),
+        temp_bam = temp(join(OUTPUT, "aligned", "{sample}.unsorted.bam")),
         sorted_bam = join(OUTPUT, "aligned", "{sample}.bam"),
         bai = join(OUTPUT, "aligned", "{sample}.bam.bai")
     log:
@@ -170,19 +161,17 @@ rule align:
     params:
         max_fragment = config["bowtie2_params"]["max_fragment_length"],
         sort_memory = "2G",
-        tmp_dir = os.path.join(PIPELINE_DIR, "tmp")
+        tmp_dir = os.path.join(PIPELINE_DIR, "tmp", "{sample}")
     shell:
         """
         if [ "{resources.skip}" = "1" ]; then
-            touch {output.bam}
-            touch {output.sorted_bam}
-            touch {output.bai}
+            touch {output.temp_bam} {output.sorted_bam} {output.bai}
         else
-            # Create temporary directory for this job
-            TEMP_DIR=$(mktemp -d -p {params.tmp_dir})
+            # Create sample-specific temporary directory
+            mkdir -p {params.tmp_dir}
             
             # Align reads with optimized parameters
-            bowtie2 \
+            (bowtie2 \
                 -p {threads} \
                 -x {config[genome_index]} \
                 -1 {input.r1} -2 {input.r2} \
@@ -190,22 +179,22 @@ rule align:
                 --no-mixed --no-discordant \
                 --maxins {params.max_fragment} \
                 --mm \
-                2> {log} | \
-            samtools view -@ {threads} -bS -q 30 - > {output.bam}
+                2> {log} || (echo "Bowtie2 failed"; exit 1)) | \
+            samtools view -@ {threads} -bS -q 30 - > {output.temp_bam}
 
-            # Sort BAM file using multiple threads and temporary directory
+            # Sort BAM file
             samtools sort \
                 -@ {threads} \
                 -m {params.sort_memory} \
-                -T $TEMP_DIR/{wildcards.sample} \
+                -T {params.tmp_dir}/temp \
                 -o {output.sorted_bam} \
-                {output.bam}
+                {output.temp_bam}
 
             # Index BAM file
-            samtools index -@ {threads} {output.sorted_bam}
+            samtools index {output.sorted_bam}
             
             # Cleanup
-            rm -rf $TEMP_DIR
+            rm -rf {params.tmp_dir}
         fi
         """
 

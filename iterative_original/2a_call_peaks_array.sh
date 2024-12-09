@@ -8,9 +8,9 @@
 #SBATCH --ntasks-per-node=32
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/peaks_%A_%a.err"
-#SBATCH --output="logs/peaks_%A_%a.out"
-#SBATCH --array=0-11%4
+#SBATCH --error="logs/peaks.err"
+#SBATCH --output="logs/peaks.out"
+#SBATCH --array=0-9
 
 # Set working directory
 cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_original
@@ -54,7 +54,7 @@ INPUT_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/snake_pipel
 OUTPUT_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_original/results"
 
 BAM_DIR="${INPUT_DIR}/aligned"
-CONTROL_BAM="${INPUT_DIR}/IgM.bam"
+CONTROL_BAM="${INPUT_DIR}/aligned/IgM.bam"
 OUTPUT_DIR="${OUTPUT_DIR}/peaks"
 
 # Verify input files exist
@@ -70,7 +70,7 @@ fi
 
 # Default values
 GENOME_SIZE="mm"
-QVALUE="0.01"
+QVALUE="0.05"
 FORMAT="BAMPE"
 BROAD="--broad"
 
