@@ -20,4 +20,7 @@ conda activate snakemake
 mkdir -p logs
 
 # Run the script with working directory argument and full error traceback
-python -u ../scripts/analyze_enrichment_NEU.py --working-dir /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_original 2>&1 | tee "logs/analyze_enrichment_NEU.out"
+python -u ../scripts/analyze_enrichment_NEU.py \
+    --working-dir /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_original \
+    --data-dir /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_original/results \
+    2>&1 | tee "logs/analyze_enrichment_NEU.out"

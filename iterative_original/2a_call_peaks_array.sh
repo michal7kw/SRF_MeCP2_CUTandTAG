@@ -12,6 +12,8 @@
 #SBATCH --output="logs/peaks.out"
 #SBATCH --array=0-9
 
+# ln -s /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/snake_pipeline/results/aligned/* /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_original/results/aligned/
+
 # Set working directory
 cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_original
 

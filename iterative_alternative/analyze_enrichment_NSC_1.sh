@@ -8,8 +8,8 @@
 #SBATCH --mail-type=ALL
 #SBATCH --exclusive
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/analyze_enrichment_NSC.err"
-#SBATCH --output="logs/analyze_enrichment_NSC.out"
+#SBATCH --error="logs/analyze_enrichment_NSC_1.err"
+#SBATCH --output="logs/analyze_enrichment_NSC_1.out"
 
 cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative
 
@@ -20,4 +20,7 @@ conda activate snakemake
 mkdir -p logs
 
 # Run the script with working directory argument and full error traceback
-python -u ../scripts/analyze_enrichment_NSC.py --working-dir /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative 2>&1 | tee "logs/analyze_enrichment_NSC.out"
+python -u ../scripts/analyze_enrichment_NSC.py \
+    --working-dir /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative \
+    --data-dir /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/results \
+    2>&1 | tee "logs/analyze_enrichment_NSC_1.out"

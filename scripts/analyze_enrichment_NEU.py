@@ -17,10 +17,14 @@ import argparse
 parser = argparse.ArgumentParser(description='Analyze enrichment for NEU samples')
 parser.add_argument('--working-dir', type=str, required=True,
                    help='Path to working directory')
+
+parser.add_argument('--data-dir', type=str, required=True,
+                   help='Path to data directory')
 args = parser.parse_args()
 
 os.chdir(args.working_dir)
 
+DATA_DIR = args.data_dir
 
 # Add function to calculate sequencing depth
 def calculate_sequencing_depth(bam_file):
@@ -111,18 +115,18 @@ def load_data():
         
         # Load exogenous samples
         for sample in exo_samples:
-            peak_file = f"results/peaks/{sample}_peaks.narrowPeak"
+            peak_file = f"{DATA_DIR}/peaks/{sample}_peaks.narrowPeak"
             peaks_exo[sample] = load_peak_file(peak_file, sample)
-            depths_exo[sample] = calculate_sequencing_depth_safe(f"results/aligned/{sample}.bam")
+            depths_exo[sample] = calculate_sequencing_depth_safe(f"{DATA_DIR}/aligned/{sample}.bam")
             
             if not peaks_exo[sample].empty:
                 peaks_exo[sample]['signalValue'] = peaks_exo[sample]['signalValue'].clip(lower=0) * (1e6 / depths_exo[sample])
         
         # Load endogenous samples
         for sample in endo_samples:
-            peak_file = f"results/peaks/{sample}_peaks.narrowPeak"
+            peak_file = f"{DATA_DIR}/peaks/{sample}_peaks.narrowPeak"
             peaks_endo[sample] = load_peak_file(peak_file, sample)
-            depths_endo[sample] = calculate_sequencing_depth_safe(f"results/aligned/{sample}.bam")
+            depths_endo[sample] = calculate_sequencing_depth_safe(f"{DATA_DIR}/aligned/{sample}.bam")
             
             if not peaks_endo[sample].empty:
                 peaks_endo[sample]['signalValue'] = peaks_endo[sample]['signalValue'].clip(lower=0) * (1e6 / depths_endo[sample])
@@ -215,37 +219,49 @@ def get_peaks_near_gene(gene, peaks_dict, gene_annotations, name_to_info, window
     if gene_std not in name_to_info:
         return pd.DataFrame()
     
-    gene_info = name_to_info[gene_std]
-    
-    # Create promoter region (TSS ± window)
-    if gene_info['strand'] == '+':
-        promoter_start = max(0, gene_info['start'] - window)
-        promoter_end = gene_info['start'] + window
-    else:
-        promoter_start = max(0, gene_info['end'] - window)
-        promoter_end = gene_info['end'] + window
-    
-    # Collect overlapping peaks from all samples
-    all_peaks = []
-    for sample, peaks in peaks_dict.items():
-        # Filter peaks for the same chromosome first
-        chr_peaks = peaks[peaks['chr'] == gene_info['chr']]
+    try:
+        gene_info = name_to_info[gene_std]
         
-        # Find overlapping peaks
-        overlapping = chr_peaks[
-            (chr_peaks['start'] <= promoter_end) & 
-            (chr_peaks['end'] >= promoter_start)
-        ]
+        if 'chr' not in gene_info:
+            print(f"Error processing gene {gene}: Missing chromosome information")
+            return pd.DataFrame()
+            
+        # Create promoter region (TSS ± window)
+        if gene_info['strand'] == '+':
+            promoter_start = max(0, gene_info['start'] - window)
+            promoter_end = gene_info['start'] + window
+        else:
+            promoter_start = max(0, gene_info['end'] - window)
+            promoter_end = gene_info['end'] + window
         
-        if not overlapping.empty:
-            overlapping['sample'] = sample
-            all_peaks.append(overlapping)
-    
-    if not all_peaks:
+        # Collect overlapping peaks from all samples
+        all_peaks = []
+        for sample, peaks in peaks_dict.items():
+            # Filter peaks for the same chromosome first
+            chr_peaks = peaks[peaks['chr'] == gene_info['chr']]
+            
+            # Find overlapping peaks
+            overlapping = chr_peaks[
+                (chr_peaks['start'] <= promoter_end) & 
+                (chr_peaks['end'] >= promoter_start)
+            ].copy()  # Create a copy to avoid SettingWithCopyWarning
+            
+            if not overlapping.empty:
+                overlapping.loc[:, 'sample'] = sample  # Use .loc to set values
+                all_peaks.append(overlapping)
+        
+        if not all_peaks:
+            return pd.DataFrame()
+        
+        combined_peaks = pd.concat(all_peaks, ignore_index=True)
+        return combined_peaks
+        
+    except KeyError as e:
+        print(f"Error processing gene {gene}: Missing key {str(e)}")
         return pd.DataFrame()
-    
-    combined_peaks = pd.concat(all_peaks, ignore_index=True)
-    return combined_peaks
+    except Exception as e:
+        print(f"Error processing gene {gene}: {str(e)}")
+        return pd.DataFrame()
 
 def calculate_total_genome_peaks(peaks_exo, peaks_endo):
     """Calculate total number of peaks across all samples"""
@@ -410,7 +426,7 @@ def analyze_enrichment(dea, peaks_exo, peaks_endo, gene_annotations, name_to_inf
     for method_name, df in results.items():
         # Sort by enrichment score in descending order
         df_sorted = df.sort_values('enrichment_score', ascending=False)
-        df_sorted.to_csv(f'results/enrichment_{method_name}_NEU.csv', index=False)
+        df_sorted.to_csv(f'{DATA_DIR}/enrichment_{method_name}_NEU.csv', index=False)
     
     return results
 
@@ -431,7 +447,7 @@ def plot_enrichment(results):
         ax.legend()
     
     plt.tight_layout()
-    plt.savefig('results/enrichment_analysis_NEU.pdf')
+    plt.savefig(f'{DATA_DIR}/enrichment_analysis_NEU.pdf')
     plt.close()
 
 def summarize_results(results):
@@ -455,7 +471,7 @@ def summarize_results(results):
         }
     
     summary_df = pd.DataFrame(summary).T
-    summary_df.to_csv('results/enrichment_summary_NEU.csv')
+    summary_df.to_csv(f'{DATA_DIR}/enrichment_summary_NEU.csv')
     return summary_df
 
 def print_gene_name_examples(dea, name_to_info):
@@ -476,16 +492,25 @@ def plot_peak_width_distributions(peaks_exo, peaks_endo):
     
     # Collect all peak widths
     for sample, peaks in peaks_exo.items():
-        widths = peaks['end'] - peaks['start']
-        exo_widths.extend(widths)
+        if not peaks.empty and 'end' in peaks.columns and 'start' in peaks.columns:
+            widths = peaks['end'] - peaks['start']
+            exo_widths.extend(widths)
     
     for sample, peaks in peaks_endo.items():
-        widths = peaks['end'] - peaks['start']
-        endo_widths.extend(widths)
+        if not peaks.empty and 'end' in peaks.columns and 'start' in peaks.columns:
+            widths = peaks['end'] - peaks['start']
+            endo_widths.extend(widths)
+    
+    if not exo_widths and not endo_widths:
+        print("Warning: No valid peak data found for width distribution plot")
+        plt.close()
+        return
     
     # Create histogram
-    plt.hist(exo_widths, bins=50, alpha=0.5, label='Exogenous', density=True)
-    plt.hist(endo_widths, bins=50, alpha=0.5, label='Endogenous', density=True)
+    if exo_widths:
+        plt.hist(exo_widths, bins=50, alpha=0.5, label='Exogenous', density=True)
+    if endo_widths:
+        plt.hist(endo_widths, bins=50, alpha=0.5, label='Endogenous', density=True)
     
     # Add labels and title
     plt.xlabel('Peak Width (bp)')
@@ -494,29 +519,43 @@ def plot_peak_width_distributions(peaks_exo, peaks_endo):
     plt.legend()
     
     # Add summary statistics as text
-    exo_stats = f'Exo - Mean: {np.mean(exo_widths):.0f}, Median: {np.median(exo_widths):.0f}'
-    endo_stats = f'Endo - Mean: {np.mean(endo_widths):.0f}, Median: {np.median(endo_widths):.0f}'
-    plt.text(0.02, 0.98, exo_stats + '\n' + endo_stats,
-             transform=plt.gca().transAxes, 
-             verticalalignment='top',
-             bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+    stats_text = []
+    if exo_widths:
+        stats_text.append(f'Exo - Mean: {np.mean(exo_widths):.0f}, Median: {np.median(exo_widths):.0f}')
+    if endo_widths:
+        stats_text.append(f'Endo - Mean: {np.mean(endo_widths):.0f}, Median: {np.median(endo_widths):.0f}')
+    
+    if stats_text:
+        plt.text(0.02, 0.98, '\n'.join(stats_text),
+                transform=plt.gca().transAxes, 
+                verticalalignment='top',
+                bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
     
     # Save plot
-    plt.savefig('results/peak_width_distributions.pdf')
+    plt.savefig(f'{DATA_DIR}/peak_width_distributions.pdf')
     plt.close()
 
 def plot_detailed_peak_width_distributions(peaks_exo, peaks_endo):
     """Plot detailed histograms of peak widths for each sample"""
-    # Calculate number of samples
-    n_exo = len(peaks_exo)
-    n_endo = len(peaks_endo)
-    total_samples = n_exo + n_endo
+    # Calculate valid samples (those with peaks)
+    valid_exo = [(sample, peaks) for sample, peaks in peaks_exo.items() 
+                 if not peaks.empty and 'end' in peaks.columns and 'start' in peaks.columns]
+    valid_endo = [(sample, peaks) for sample, peaks in peaks_endo.items() 
+                  if not peaks.empty and 'end' in peaks.columns and 'start' in peaks.columns]
+    
+    total_samples = len(valid_exo) + len(valid_endo)
+    
+    if total_samples == 0:
+        print("Warning: No valid peak data found for detailed width distribution plot")
+        return
     
     # Create subplot grid
     fig, axes = plt.subplots(total_samples, 1, figsize=(12, 4*total_samples))
+    if total_samples == 1:
+        axes = [axes]  # Make axes iterable when there's only one subplot
     
     # Plot exogenous samples
-    for i, (sample, peaks) in enumerate(peaks_exo.items()):
+    for i, (sample, peaks) in enumerate(valid_exo):
         widths = peaks['end'] - peaks['start']
         axes[i].hist(widths, bins=50, alpha=0.7)
         axes[i].set_title(f'{sample} Peak Width Distribution')
@@ -532,23 +571,23 @@ def plot_detailed_peak_width_distributions(peaks_exo, peaks_endo):
                     bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
     
     # Plot endogenous samples
-    for i, (sample, peaks) in enumerate(peaks_endo.items()):
+    for i, (sample, peaks) in enumerate(valid_endo):
         widths = peaks['end'] - peaks['start']
-        axes[i+n_exo].hist(widths, bins=50, alpha=0.7)
-        axes[i+n_exo].set_title(f'{sample} Peak Width Distribution')
-        axes[i+n_exo].set_xlabel('Peak Width (bp)')
-        axes[i+n_exo].set_ylabel('Count')
+        axes[i+len(valid_exo)].hist(widths, bins=50, alpha=0.7)
+        axes[i+len(valid_exo)].set_title(f'{sample} Peak Width Distribution')
+        axes[i+len(valid_exo)].set_xlabel('Peak Width (bp)')
+        axes[i+len(valid_exo)].set_ylabel('Count')
         
         # Add statistics
         stats = f'Mean: {np.mean(widths):.0f}\nMedian: {np.median(widths):.0f}\nCount: {len(widths)}'
-        axes[i+n_exo].text(0.98, 0.98, stats,
-                          transform=axes[i+n_exo].transAxes,
-                          verticalalignment='top',
-                          horizontalalignment='right',
-                          bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+        axes[i+len(valid_exo)].text(0.98, 0.98, stats,
+                                  transform=axes[i+len(valid_exo)].transAxes,
+                                  verticalalignment='top',
+                                  horizontalalignment='right',
+                                  bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
     
     plt.tight_layout()
-    plt.savefig('results/peak_width_distributions_detailed.pdf')
+    plt.savefig(f'{DATA_DIR}/peak_width_distributions_detailed.pdf')
     plt.close()
 
 def plot_width_vs_enrichment(results, peaks_exo, peaks_endo, gene_annotations, name_to_info):
@@ -594,7 +633,7 @@ def plot_width_vs_enrichment(results, peaks_exo, peaks_endo, gene_annotations, n
                 print(f"Warning: Could not use log scale for {method}, using linear scale instead")
     
     plt.tight_layout()
-    plt.savefig('results/width_vs_enrichment_NEU.pdf')
+    plt.savefig(f'{DATA_DIR}/width_vs_enrichment_NEU.pdf')
     plt.close()
 
 def summarize_peak_distribution(results):
@@ -611,7 +650,7 @@ def summarize_peak_distribution(results):
         }
     
     summary_df = pd.DataFrame(summary).T
-    summary_df.to_csv('results/peak_distribution_summary_NEU.csv')
+    summary_df.to_csv(f'{DATA_DIR}/peak_distribution_summary_NEU.csv')
     return summary_df
 
 # if __name__ == "__main__":
@@ -636,7 +675,7 @@ summarize_results(results)
 
 # Save detailed results to CSV
 for method_name, df in results.items():
-    df.to_csv(f'results/enrichment_{method_name}_NEU.csv', index=False) 
+    df.to_csv(f'{DATA_DIR}/enrichment_{method_name}_NEU.csv', index=False) 
 
 # Plot width vs enrichment
 plot_width_vs_enrichment(results, peaks_exo, peaks_endo, gene_annotations, name_to_info)
