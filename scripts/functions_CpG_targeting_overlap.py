@@ -8,8 +8,8 @@ from matplotlib_venn import venn2
 from upsetplot import from_contents, UpSet
 import numpy as np
 
-wd_dir = '/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/custom_pipeline'
-os.chdir(wd_dir)
+# wd_dir = '/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/custom_pipeline'
+# os.chdir(wd_dir)
 
 
 def get_peaks_with_cpg(peak_file, cpg_file, extend=300, coverage_threshold=20, genome_size_file="DATA/genome.size"):

@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=analyze_enrichment_NSC
 #SBATCH --account=kubacki.michal
-#SBATCH --mem=128GB
-#SBATCH --time=24:00:00
+#SBATCH --mem=64GB
+#SBATCH --time=08:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=16
 #SBATCH --mail-type=ALL
@@ -20,7 +20,7 @@ conda activate snakemake
 mkdir -p logs
 
 # Run the script with working directory argument and full error traceback
-python -u ../scripts/analyze_enrichment_NSC.py \
+python -u ../scripts/analyze_enrichment_NSC_snake.py \
     --working-dir /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/snake_pipeline \
     --data-dir /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/snake_pipeline/results \
     2>&1 | tee "logs/analyze_enrichment_NSC.out"

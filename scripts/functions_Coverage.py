@@ -15,8 +15,8 @@ import mygene
 
 ######################## Per CpG Coverage ########################################################################################################################################################################
 # %%
-wd_dir = '/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/custom_pipeline'
-os.chdir(wd_dir)
+# wd_dir = '/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/custom_pipeline'
+# os.chdir(wd_dir)
 
 # %%
 def filter_standard_chromosomes(input_file, output_file):
@@ -85,14 +85,14 @@ def calculate_peak_cpg_coverage_exact(peak_file, cpg_file):
 import subprocess
 import os
 
-def calculate_peak_cpg_coverage(peak_file: str, cpg_file: str, extend: int = 300) -> list:
+def calculate_peak_cpg_coverage(peak_file: str, cpg_file: str, genome_size_file: str, extend: int = 300) -> list:
     """
     Calculate what percentage of each peak overlaps with CpG islands
     CpG islands are extended by extend bp on each side
     """
     try:
         # First extend CpG islands
-        cmd_extend = f"bedtools slop -i {cpg_file} -g DATA/genome.size -b {extend} > temp_extended_cpg.bed"
+        cmd_extend = f"bedtools slop -i {cpg_file} -g {genome_size_file} -b {extend} > temp_extended_cpg.bed"
         result = subprocess.run(cmd_extend, shell=True, capture_output=True, text=True)
         
         if result.returncode != 0:
