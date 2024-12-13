@@ -23,7 +23,10 @@ args = parser.parse_args()
 
 os.chdir(args.working_dir)
 
+WORKING_DIR = args.working_dir
 DATA_DIR = args.data_dir
+RESULTS_DIR = f"{WORKING_DIR}/results"
+
 
 # Add function to calculate sequencing depth
 def calculate_sequencing_depth(bam_file):
@@ -447,7 +450,7 @@ def analyze_enrichment(dea, peaks_exo, peaks_endo, gene_annotations, name_to_inf
     for method_name, df in results.items():
         # Sort by enrichment score in descending order
         df_sorted = df.sort_values('enrichment_score', ascending=False)
-        df_sorted.to_csv(f'{DATA_DIR}/enrichment_{method_name}_NSC.csv', index=False)
+        df_sorted.to_csv(f'{RESULTS_DIR}/enrichment_{method_name}_NSC.csv', index=False)
     
     return results
 
@@ -468,7 +471,7 @@ def plot_enrichment(results):
         ax.legend()
     
     plt.tight_layout()
-    plt.savefig(f'{DATA_DIR}/enrichment_analysis_NSC.pdf')
+    plt.savefig(f'{RESULTS_DIR}/enrichment_analysis_NSC.pdf')
     plt.close()
 
 def summarize_results(results):
@@ -492,7 +495,7 @@ def summarize_results(results):
         }
     
     summary_df = pd.DataFrame(summary).T
-    summary_df.to_csv(f'{DATA_DIR}/enrichment_summary_NSC.csv')
+    summary_df.to_csv(f'{RESULTS_DIR}/enrichment_summary_NSC.csv')
     return summary_df
 
 def print_gene_name_examples(dea, name_to_info):
@@ -539,7 +542,7 @@ def plot_peak_width_distributions(peaks_exo, peaks_endo):
              bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
     
     # Save plot
-    plt.savefig(f'{DATA_DIR}/peak_width_distributions.pdf')
+    plt.savefig(f'{RESULTS_DIR}/peak_width_distributions.pdf')
     plt.close()
 
 def plot_detailed_peak_width_distributions(peaks_exo, peaks_endo):
@@ -585,7 +588,7 @@ def plot_detailed_peak_width_distributions(peaks_exo, peaks_endo):
                           bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
     
     plt.tight_layout()
-    plt.savefig(f'{DATA_DIR}/peak_width_distributions_detailed.pdf')
+    plt.savefig(f'{RESULTS_DIR}/peak_width_distributions_detailed.pdf')
     plt.close()
 
 def plot_width_vs_enrichment(results, peaks_exo, peaks_endo, gene_annotations, name_to_info):
@@ -631,7 +634,7 @@ def plot_width_vs_enrichment(results, peaks_exo, peaks_endo, gene_annotations, n
                 print(f"Warning: Could not use log scale for {method}, using linear scale instead")
     
     plt.tight_layout()
-    plt.savefig(f'{DATA_DIR}/width_vs_enrichment_NSC.pdf')
+    plt.savefig(f'{RESULTS_DIR}/width_vs_enrichment_NSC.pdf')
     plt.close()
 
 def summarize_peak_distribution(results):
@@ -648,7 +651,7 @@ def summarize_peak_distribution(results):
         }
     
     summary_df = pd.DataFrame(summary).T
-    summary_df.to_csv(f'{DATA_DIR}/peak_distribution_summary_NSC.csv')
+    summary_df.to_csv(f'{RESULTS_DIR}/peak_distribution_summary_NSC.csv')
     return summary_df
 
 # if __name__ == "__main__":
@@ -673,7 +676,7 @@ summarize_results(results)
 
 # Save detailed results to CSV
 for method_name, df in results.items():
-    df.to_csv(f'{DATA_DIR}/enrichment_{method_name}_NSC.csv', index=False) 
+    df.to_csv(f'{RESULTS_DIR}/enrichment_{method_name}_NSC.csv', index=False) 
 
 # Plot width vs enrichment
 plot_width_vs_enrichment(results, peaks_exo, peaks_endo, gene_annotations, name_to_info)

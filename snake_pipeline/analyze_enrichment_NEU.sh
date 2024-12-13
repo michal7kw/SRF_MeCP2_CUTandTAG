@@ -14,7 +14,7 @@
 cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/snake_pipeline
 
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate
-conda activate snakemake
+conda activate smarcb1_analysis
 
 # Create logs directory if it doesn't exist
 mkdir -p logs
