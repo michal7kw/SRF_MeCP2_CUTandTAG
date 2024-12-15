@@ -1,0 +1,38 @@
+# Genome and annotation paths
+genome_index: "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/mm10_bowtie2_index/mm10"
+effective_genome_size: "mm"  # mm for mouse genome
+gene_annotations: "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/DATA/gencode.vM10.annotation.gtf"
+
+# Bowtie2 parameters
+bowtie2_params:
+  max_fragment_length: 1000
+
+# Peak calling parameters
+macs2_params:
+  q_value: 0.05
+  keep_dup: "all"
+  call_summits: true
+
+seacr_params:
+  stringent: true
+  norm_method: "non"  # can be "non" or "norm"
+
+# QC thresholds
+qc_thresholds:
+  min_mapping_rate: 70  # minimum mapping rate percentage
+  min_complexity: 0.7   # minimum library complexity
+  min_peak_overlap: 0.5 # minimum overlap for merging peaks
+
+# Output directories structure
+output_dirs:
+  fastqc: "fastqc"
+  trimmed: "trimmed"
+  aligned: "aligned"
+  peaks:
+    macs2: "peaks/macs2"
+    seacr: "peaks/seacr"
+    merged: "peaks/merged"
+  qc: "qc"
+  multiqc: "multiqc"
+  logs: "logs"
+  

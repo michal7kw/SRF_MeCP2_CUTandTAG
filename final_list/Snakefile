@@ -1,0 +1,232 @@
+# Improved Snakefile for CUT&TAG analysis
+import os
+from os.path import join
+from snakemake.utils import min_version
+import re
+
+min_version("6.0")
+
+# Set pipeline directory path
+PIPELINE_DIR = os.environ.get("PIPELINE_DIR", "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/final_list")
+DATA_DIR = os.environ.get("DATA_DIR", "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/DATA")
+
+# Load configuration
+configfile: os.path.join(PIPELINE_DIR, "configs/config.yaml")
+
+# Raw fastq files directories
+EXOGENOUS = os.path.join(DATA_DIR, "EXOGENOUS")
+ENDOGENOUS = os.path.join(DATA_DIR, "ENDOGENOUS")
+OUTPUT = os.path.join(PIPELINE_DIR, "results")
+
+# Get sample names
+EXOGENOUS_SAMPLES = [f.split("_R1")[0] for f in os.listdir(EXOGENOUS) if f.endswith("R1_001.fastq.gz")]
+ENDOGENOUS_SAMPLES = [f.split("_R1")[0] for f in os.listdir(ENDOGENOUS) if f.endswith("R1_001.fastq.gz")]
+
+# Handle IgM control
+if "IgM" not in ENDOGENOUS_SAMPLES and "IgM_R1_001.fastq.gz" in os.listdir(ENDOGENOUS):
+    ENDOGENOUS_SAMPLES.append("IgM")
+
+ALL_SAMPLES = list(set(EXOGENOUS_SAMPLES + ENDOGENOUS_SAMPLES))
+print(f"Running pipeline with {len(ALL_SAMPLES)} samples")
+
+def get_input_dir(sample):
+    if sample == "IgM":
+        return ENDOGENOUS
+    elif sample in EXOGENOUS_SAMPLES:
+        return EXOGENOUS
+    elif sample in ENDOGENOUS_SAMPLES:
+        return ENDOGENOUS
+    else:
+        raise ValueError(f"Unknown sample: {sample}")
+
+# Pipeline Rules
+rule all:
+    input:
+        # QC outputs
+        expand(join(OUTPUT, "qc", "{sample}.flagstat"), sample=ALL_SAMPLES),
+        expand(join(OUTPUT, "qc", "{sample}.complexity"), sample=ALL_SAMPLES),
+        # Peak calling outputs
+        expand(join(OUTPUT, "peaks/macs2/{sample}_peaks.narrowPeak"), sample=ALL_SAMPLES),
+        expand(join(OUTPUT, "peaks/seacr/{sample}.stringent.bed"), sample=ALL_SAMPLES),
+        # Final QC report
+        join(OUTPUT, "multiqc", "multiqc_report.html"),
+        expand(join(OUTPUT, "qc", "{sample}.qc_pass"), sample=ALL_SAMPLES),
+        join(OUTPUT, "peaks/merged/merged_peaks.bed")
+
+rule fastqc:
+    input:
+        r1 = lambda wildcards: join(get_input_dir(wildcards.sample), f"{wildcards.sample}_R1_001.fastq.gz"),
+        r2 = lambda wildcards: join(get_input_dir(wildcards.sample), f"{wildcards.sample}_R2_001.fastq.gz")
+    output:
+        html_r1 = join(OUTPUT, "fastqc", "{sample}_R1_001_fastqc.html"),
+        html_r2 = join(OUTPUT, "fastqc", "{sample}_R2_001_fastqc.html"),
+        zip_r1 = join(OUTPUT, "fastqc", "{sample}_R1_001_fastqc.zip"),
+        zip_r2 = join(OUTPUT, "fastqc", "{sample}_R2_001_fastqc.zip")
+    log:
+        join(OUTPUT, "logs", "fastqc", "{sample}.log")
+    threads: 2
+    shell:
+        "fastqc {input.r1} {input.r2} -o $(dirname {output.html_r1}) -t {threads} 2> {log}"
+
+rule trim_reads:
+    input:
+        r1 = lambda wildcards: join(get_input_dir(wildcards.sample), f"{wildcards.sample}_R1_001.fastq.gz"),
+        r2 = lambda wildcards: join(get_input_dir(wildcards.sample), f"{wildcards.sample}_R2_001.fastq.gz")
+    output:
+        r1 = join(OUTPUT, "trimmed", "{sample}_R1_001_val_1.fq.gz"),
+        r2 = join(OUTPUT, "trimmed", "{sample}_R2_001_val_2.fq.gz")
+    log:
+        join(OUTPUT, "logs", "trim_galore", "{sample}.log")
+    threads: 4
+    params:
+        quality = 20,
+        extra = "--nextera --paired"
+    shell:
+        """
+        trim_galore \
+            --quality {params.quality} \
+            --cores {threads} \
+            --output_dir $(dirname {output.r1}) \
+            {params.extra} \
+            {input.r1} {input.r2} \
+            2> {log}
+        """
+
+rule align:
+    input:
+        r1 = rules.trim_reads.output.r1,
+        r2 = rules.trim_reads.output.r2
+    output:
+        bam = join(OUTPUT, "aligned", "{sample}.bam"),
+        bai = join(OUTPUT, "aligned", "{sample}.bam.bai"),
+        flagstat = join(OUTPUT, "qc", "{sample}.flagstat"),
+        complexity = join(OUTPUT, "qc", "{sample}.complexity")
+    log:
+        join(OUTPUT, "logs", "align", "{sample}.log")
+    threads: 32
+    params:
+        tmp_dir = lambda wildcards: join(OUTPUT, "tmp", wildcards.sample),
+        max_fragment = config["bowtie2_params"]["max_fragment_length"]
+    shell:
+        """
+        mkdir -p {params.tmp_dir}
+        
+        # Alignment
+        bowtie2 \
+            -p {threads} \
+            -x {config[genome_index]} \
+            -1 {input.r1} -2 {input.r2} \
+            --local --very-sensitive-local \
+            --no-mixed --no-discordant \
+            --maxins {params.max_fragment} \
+            --mm 2> {log} | \
+        samtools view -@ {threads} -b -h -q 20 | \
+        samtools sort -@ {threads} -m 2G -T {params.tmp_dir} -o {output.bam}
+
+        # Index BAM
+        samtools index {output.bam}
+
+        # QC metrics
+        samtools flagstat {output.bam} > {output.flagstat}
+        preseq lc_extrap -B {output.bam} -o {output.complexity}
+        
+        rm -rf {params.tmp_dir}
+        """
+
+rule macs2_peaks:
+    input:
+        treatment = rules.align.output.bam,
+        control = lambda w: join(OUTPUT, "aligned", "IgM.bam") if w.sample != "IgM" else []
+    output:
+        peaks = join(OUTPUT, "peaks/macs2", "{sample}_peaks.narrowPeak")
+    log:
+        join(OUTPUT, "logs", "macs2", "{sample}.log")
+    params:
+        genome_size = config["effective_genome_size"],
+        control_param = lambda w, input: f"-c {input.control}" if w.sample != "IgM" else ""
+    threads: 16
+    shell:
+        """
+        macs2 callpeak \
+            -t {input.treatment} \
+            {params.control_param} \
+            -f BAMPE \
+            -g {params.genome_size} \
+            -n {wildcards.sample} \
+            --outdir $(dirname {output.peaks}) \
+            -q 0.05 \
+            --nomodel \
+            --keep-dup all \
+            --call-summits \
+            2> {log}
+        """
+
+rule seacr_peaks:
+    input:
+        treatment = rules.align.output.bam,
+        control = join(OUTPUT, "aligned", "IgM.bam")
+    output:
+        bedgraph = temp(join(OUTPUT, "peaks/seacr", "{sample}.bedgraph")),
+        peaks = join(OUTPUT, "peaks/seacr", "{sample}.stringent.bed")
+    log:
+        join(OUTPUT, "logs", "seacr", "{sample}.log")
+    threads: 4
+    shell:
+        """
+        # Generate bedgraph
+        bedtools genomecov -bg -ibam {input.treatment} > {output.bedgraph}
+        
+        # Run SEACR
+        SEACR_1.3.sh \
+            {output.bedgraph} \
+            {input.control} \
+            non \
+            stringent \
+            {output.peaks} \
+            2> {log}
+        """
+
+rule merge_peaks:
+    input:
+        peaks = expand(join(OUTPUT, "peaks/macs2/{sample}_peaks.narrowPeak"), sample=ALL_SAMPLES),
+        qc_files = expand(join(OUTPUT, "qc", "{sample}.flagstat"), sample=ALL_SAMPLES)
+    output:
+        merged_peaks = join(OUTPUT, "peaks/merged/merged_peaks.bed")
+    params:
+        min_overlap = 0.5,
+        output_dir = join(OUTPUT, "peaks/merged")
+    log:
+        join(OUTPUT, "logs", "merge_peaks", "merge_peaks.log")
+    script:
+        "scripts/merge_peaks.py"
+
+rule qc_check:
+    input:
+        flagstat = rules.align.output.flagstat,
+        complexity = rules.align.output.complexity
+    output:
+        qc_pass = join(OUTPUT, "qc", "{sample}.qc_pass")
+    params:
+        min_mapping_rate = 70,
+        min_complexity = 0.7
+    log:
+        join(OUTPUT, "logs", "qc", "{sample}.qc_check.log")
+    script:
+        "scripts/check_qc.py"
+
+rule multiqc:
+    input:
+        expand(join(OUTPUT, "fastqc", "{sample}_R1_001_fastqc.html"), sample=ALL_SAMPLES),
+        expand(join(OUTPUT, "fastqc", "{sample}_R2_001_fastqc.html"), sample=ALL_SAMPLES),
+        expand(join(OUTPUT, "qc", "{sample}.flagstat"), sample=ALL_SAMPLES),
+        expand(join(OUTPUT, "qc", "{sample}.complexity"), sample=ALL_SAMPLES)
+    output:
+        report = join(OUTPUT, "multiqc", "multiqc_report.html")
+    log:
+        join(OUTPUT, "logs", "multiqc", "multiqc.log")
+    shell:
+        "multiqc {OUTPUT} -o $(dirname {output.report}) &> {log}"
+
+wildcard_constraints:
+    sample = "|".join([re.escape(x) for x in ALL_SAMPLES])
+
