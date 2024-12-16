@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=analyze_enrichment_NSC_separate_RNA_integration_3
+#SBATCH --job-name=enrichment_NSC_5
 #SBATCH --account=kubacki.michal
 #SBATCH --mem=128GB
 #SBATCH --time=24:00:00
@@ -8,8 +8,8 @@
 #SBATCH --mail-type=ALL
 #SBATCH --exclusive
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/analyze_enrichment_NSC_5.err"
-#SBATCH --output="logs/analyze_enrichment_NSC_5.out"
+#SBATCH --error="logs/enrichment_NSC_5.err"
+#SBATCH --output="logs/enrichment_NSC_5.out"
 
 cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative
 
@@ -20,8 +20,11 @@ conda activate snakemake
 mkdir -p logs
 
 # Run the script with working directory argument and full error traceback
-python -u ../scripts/analyze_enrichment_NSC_separate_RNA_integration_3.py \
+python -u ../scripts/analyze_enrichment_NSC_5.py \
     --working-dir /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative \
-    --data-dir /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/results \
-    --results-dir /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/results_separate_RNA_integration_3 \
-    2>&1 | tee "logs/analyze_enrichment_NSC_5.out"
+    --data-dir /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/results_1 \
+    --results-dir /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/results_5 \
+    2>&1 | tee "logs/enrichment_NSC_5.out"
+
+
+# peaks were copied to results_5 from results_2

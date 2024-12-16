@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=process_cpg_enrichment
+#SBATCH --job-name=process_cpg_enrichment_NSC_3
 #SBATCH --account=kubacki.michal
 #SBATCH --mem=128GB
 #SBATCH --time=24:00:00
@@ -8,8 +8,8 @@
 #SBATCH --mail-type=ALL
 #SBATCH --exclusive
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/process_cpg_enrichment.err"
-#SBATCH --output="logs/process_cpg_enrichment.out"
+#SBATCH --error="logs/process_cpg_enrichment_NSC_3.err"
+#SBATCH --output="logs/process_cpg_enrichment_NSC_3.out"
 
 cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative
 
