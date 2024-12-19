@@ -11,7 +11,7 @@ library(org.Hs.eg.db)
 setwd("/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/custom_pipeline")
 
 # Create output directory
-dir.create("results/differential", recursive = TRUE)
+dir.create("results_1/differential", recursive = TRUE)
 
 # Function to create count matrix
 create_count_matrix <- function(peaks, bam_files, sample_names) {
@@ -78,11 +78,11 @@ main <- function() {
     )
     
     # Get BAM files
-    bam_files <- file.path("results/aligned", 
+    bam_files <- file.path("results_1/aligned", 
                           paste0(samples$sample, ".bam"))
     
     # Create consensus peak set
-    consensus_peaks <- "results/peaks/consensus_peaks.bed"
+    consensus_peaks <- "results_1/peaks/consensus_peaks.bed"
     
     # Create count matrix
     counts <- create_count_matrix(consensus_peaks, bam_files, samples$sample)
@@ -92,12 +92,12 @@ main <- function() {
     
     # Save results
     write.csv(as.data.frame(diff_results$res),
-              file="results/differential/differential_peaks.csv")
+              file="results_1/differential/differential_peaks.csv")
     
     # Run pathway analysis for significant peaks
     sig_peaks <- diff_results$res[which(diff_results$res$padj < 0.05),]
     pathway_results <- run_pathway_analysis(sig_peaks,
-                                          "results/differential/pathway_analysis")
+                                          "results_1/differential/pathway_analysis")
 }
 
 main() 

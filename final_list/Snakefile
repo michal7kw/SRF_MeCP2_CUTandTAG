@@ -4,6 +4,10 @@ from os.path import join
 from snakemake.utils import min_version
 import re
 
+# Set working directory
+workdir: "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/final_list"
+
+
 min_version("6.0")
 
 # Set pipeline directory path
@@ -171,19 +175,44 @@ rule seacr_peaks:
     log:
         join(OUTPUT, "logs", "seacr", "{sample}.log")
     threads: 4
+    resources:
+        mem_mb = 8000
+    params:
+        # Get the output directory and sample name for SEACR
+        outdir = lambda wildcards, output: os.path.dirname(output.peaks),
+        prefix = lambda wildcards: wildcards.sample
     shell:
         """
-        # Generate bedgraph
-        bedtools genomecov -bg -ibam {input.treatment} > {output.bedgraph}
+        # Skip processing if this is the IgM control sample
+        if [ "{wildcards.sample}" = "IgM" ]; then
+            touch {output.bedgraph}
+            touch {output.peaks}
+            exit 0
+        fi
+
+        # Generate treatment bedgraph with normalization and filtering
+        bedtools genomecov -bg -scale 1.0 -ibam {input.treatment} | \
+        awk '$4 > 0' | \
+        sort -k1,1 -k2,2n > {output.bedgraph} 2> {log}
         
-        # Run SEACR
+        # Generate control bedgraph
+        TMP_CONTROL=$(mktemp).bedgraph
+        bedtools genomecov -bg -scale 1.0 -ibam {input.control} | \
+        awk '$4 > 0' | \
+        sort -k1,1 -k2,2n > $TMP_CONTROL 2>> {log}
+        
+        # Run SEACR with numeric threshold
+        cd {params.outdir} && \
         SEACR_1.3.sh \
             {output.bedgraph} \
-            {input.control} \
-            non \
+            $TMP_CONTROL \
+            norm \
             stringent \
-            {output.peaks} \
-            2> {log}
+            {params.prefix} \
+            2>> {log}
+        
+        # Cleanup
+        rm -f $TMP_CONTROL
         """
 
 rule merge_peaks:

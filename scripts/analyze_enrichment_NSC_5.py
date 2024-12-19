@@ -1,3 +1,25 @@
+import sys
+import subprocess
+
+def check_numpy_version():
+    """Check numpy version and downgrade if needed"""
+    try:
+        import numpy as np
+        numpy_version = np.__version__
+        if numpy_version.startswith('2.'):
+            print("Detected NumPy 2.x - downgrading to 1.x for compatibility")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "numpy<2"])
+            print("NumPy downgraded successfully. Please restart the script.")
+            sys.exit(0)
+    except ImportError:
+        print("NumPy not found. Installing compatible version...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "numpy<2"])
+        print("NumPy installed successfully. Please restart the script.")
+        sys.exit(0)
+
+# Add this at the start of the script
+# check_numpy_version()
+
 import pandas as pd
 import numpy as np
 from scipy import stats
@@ -12,6 +34,10 @@ import multiprocessing as mp
 from functools import partial
 from itertools import chain
 from tqdm import tqdm
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from functools import partial
+import numpy as np
+from tqdm.auto import tqdm
 
 PROMOTER_WINDOW = 2000  # Define promoter region as ±2kb from TSS
 
@@ -38,6 +64,29 @@ def calculate_sequencing_depth(bam_file):
     """Calculate total mapped reads from BAM file"""
     with pysam.AlignmentFile(bam_file, "rb") as bam:
         return bam.count()
+
+def normalize_signals(df, depth):
+    """Apply multiple normalization methods to signals"""
+    if df.empty:
+        return df
+    
+    df = df.copy()
+    
+    # Basic depth normalization
+    df['signalValue'] = df['signalValue'].clip(lower=0) * (1e6 / depth)
+    
+    # Additional normalization methods
+    # 1. Quantile normalization
+    df['signalValue'] = stats.rankdata(df['signalValue']) / len(df['signalValue'])
+    
+    # 2. Z-score normalization
+    df['signalValue'] = (df['signalValue'] - df['signalValue'].mean()) / df['signalValue'].std()
+    
+    # 3. Min-max normalization
+    df['signalValue'] = (df['signalValue'] - df['signalValue'].min()) / \
+                        (df['signalValue'].max() - df['signalValue'].min())
+    
+    return df
 
 def load_data():
     try:
@@ -127,7 +176,7 @@ def load_data():
             depths_exo[sample] = calculate_sequencing_depth_safe(f"{DATA_DIR}/aligned/{sample}.bam")
             
             if not peaks_exo[sample].empty:
-                peaks_exo[sample]['signalValue'] = peaks_exo[sample]['signalValue'].clip(lower=0) * (1e6 / depths_exo[sample])
+                peaks_exo[sample] = normalize_signals(peaks_exo[sample], depths_exo[sample])
         
         # Load endogenous samples
         for sample in endo_samples:
@@ -136,7 +185,7 @@ def load_data():
             depths_endo[sample] = calculate_sequencing_depth_safe(f"{DATA_DIR}/aligned/{sample}.bam")
             
             if not peaks_endo[sample].empty:
-                peaks_endo[sample]['signalValue'] = peaks_endo[sample]['signalValue'].clip(lower=0) * (1e6 / depths_endo[sample])
+                peaks_endo[sample] = normalize_signals(peaks_endo[sample], depths_endo[sample])
         
         # Validate we have usable data
         if all(df.empty for df in peaks_exo.values()) or all(df.empty for df in peaks_endo.values()):
@@ -765,12 +814,37 @@ def integrate_with_rna_seq(enrichment_df, dea_nsc, gene_annotations):
     
     return integrated_df
 
-def process_chunk(chunk_data, exo_combined, endo_combined):
-    """Process a chunk of overlaps in parallel"""
-    enrichment_data = []
+def calculate_enrichment_scores(exo_row, endo_row):
+    """Calculate multiple enrichment scores"""
     
-    for overlap in chunk_data:
-        # Use boolean indexing instead of individual lookups
+    # Prevent division by zero
+    min_signal = 1e-10
+    
+    # Basic signal ratio
+    basic_enrichment = exo_row['signal_basic'] / max(endo_row['signal_basic'], min_signal)
+    
+    # Width-weighted signal ratio (Method 5)
+    ww_enrichment = exo_row['signal_ww'] / max(endo_row['signal_ww'], min_signal)
+    
+    # Coverage score ratio (Method 6)
+    cs_enrichment = exo_row['signal_cs'] / max(endo_row['signal_cs'], min_signal)
+    
+    return {
+        'exo_signal': exo_row['signal_basic'],
+        'endo_signal': endo_row['signal_basic'],
+        'enrichment': basic_enrichment,
+        'exo_ww': exo_row['signal_ww'],
+        'endo_ww': endo_row['signal_ww'],
+        'enrichment_ww': ww_enrichment,
+        'exo_cs': exo_row['signal_cs'],
+        'endo_cs': endo_row['signal_cs'],
+        'enrichment_cs': cs_enrichment
+    }
+
+def process_overlap_chunk(chunk, exo_combined, endo_combined):
+    """Process a chunk of overlaps"""
+    chunk_results = []
+    for overlap in chunk:
         exo_mask = ((exo_combined['chr'] == overlap[0]) & 
                     (exo_combined['start'] == int(overlap[1])) & 
                     (exo_combined['end'] == int(overlap[2])))
@@ -781,159 +855,198 @@ def process_chunk(chunk_data, exo_combined, endo_combined):
         
         if not any(exo_mask) or not any(endo_mask):
             continue
-            
+        
         exo_row = exo_combined[exo_mask].iloc[0]
         endo_row = endo_combined[endo_mask].iloc[0]
         
-        enrichment = exo_row['signalValue'] / max(endo_row['signalValue'], 1)
+        enrichment_scores = calculate_enrichment_scores(exo_row, endo_row)
         
-        enrichment_data.append({
+        chunk_results.append({
             'chr': overlap[0],
             'start': int(overlap[1]),
             'end': int(overlap[2]),
-            'exo_signal': exo_row['signalValue'],
-            'endo_signal': endo_row['signalValue'],
-            'enrichment': enrichment,
+            **enrichment_scores,
             'exo_qValue': exo_row['qValue'],
-            'endo_qValue': endo_row['qValue']
+            'endo_qValue': endo_row['qValue'],
+            'exo_replicates': exo_row['num_replicates'],
+            'endo_replicates': endo_row['num_replicates']
         })
-    
-    return enrichment_data
+    return chunk_results
 
-def combine_peaks(peaks_dict):
-    """Combine peaks from replicates efficiently"""
-    # Pre-allocate a list for better memory efficiency
-    dfs = []
-    for df in peaks_dict.values():
-        # Select only needed columns
-        dfs.append(df[['chr', 'start', 'end', 'signalValue', 'qValue']])
-    
-    combined = pd.concat(dfs, ignore_index=True)
-    
-    # Use groupby with agg for better performance
-    return combined.groupby(['chr', 'start', 'end'], as_index=False).agg({
-        'signalValue': 'sum',
-        'qValue': 'min'
-    })
-
-def analyze_mecp2_enrichment_independent(peaks_exo, peaks_endo):
-    """Analyze Mecp2 enrichment independent of RNA-seq data with parallel processing"""
-    print("\nAnalyzing Mecp2 enrichment independently...")
-    
-    # Process exo and endo peaks separately to avoid multiprocessing issues
-    print("Combining exogenous peaks...")
-    exo_combined = combine_peaks(peaks_exo)
-    
-    print("Combining endogenous peaks...")
-    endo_combined = combine_peaks(peaks_endo)
-    
-    # Convert to BedTool objects
-    exo_bed = BedTool.from_dataframe(exo_combined[['chr', 'start', 'end']])
-    endo_bed = BedTool.from_dataframe(endo_combined[['chr', 'start', 'end']])
-    
-    # Get overlapping regions
-    print("Finding overlapping regions...")
-    overlaps = list(exo_bed.intersect(endo_bed, wa=True, wb=True))
-    
-    # Split overlaps into chunks for parallel processing
-    chunk_size = max(1, len(overlaps) // (mp.cpu_count() * 4))  # Adjust chunk size based on CPU count
+def parallel_process_overlaps(overlaps, exo_combined, endo_combined, chunk_size=1000):
+    """Process overlaps in parallel chunks"""
+    # Split overlaps into chunks
     chunks = [overlaps[i:i + chunk_size] for i in range(0, len(overlaps), chunk_size)]
     
     # Process chunks in parallel
-    process_chunk_partial = partial(process_chunk, 
-                                  exo_combined=exo_combined, 
-                                  endo_combined=endo_combined)
+    with ProcessPoolExecutor() as executor:
+        process_chunk_partial = partial(process_overlap_chunk, 
+                                     exo_combined=exo_combined, 
+                                     endo_combined=endo_combined)
+        results = list(tqdm(
+            executor.map(process_chunk_partial, chunks),
+            total=len(chunks),
+            desc="Processing overlaps"
+        ))
     
-    print(f"Processing {len(chunks)} chunks in parallel...")
-    with mp.Pool() as pool:
-        results = list(tqdm(pool.imap(process_chunk_partial, chunks), 
-                          total=len(chunks),
-                          desc="Processing chunks"))
-    
-    # Combine results
-    enrichment_data = list(chain.from_iterable(results))
-    
-    # Convert to DataFrame more efficiently
-    enrichment_df = pd.DataFrame(enrichment_data)
-    
-    if not enrichment_df.empty:
-        # Define significant enrichment using vectorized operations
-        enrichment_df['significant'] = ((enrichment_df['enrichment'] > 2) & 
-                                      (enrichment_df['exo_qValue'] < 0.05))
+    # Flatten results
+    return [item for sublist in results for item in sublist]
+
+def process_gene_chunk(gene_chunk, gene_annotations, peaks_exo, peaks_endo):
+    """Process a chunk of genes"""
+    chunk_results = []
+    for gene in gene_chunk:
+        if gene not in gene_annotations['gene_name'].values:
+            continue
         
-        # Save results
-        enrichment_df.to_csv(f'{RESULTS_DIR}/mecp2_enrichment_independent.csv', index=False)
+        gene_info = gene_annotations[gene_annotations['gene_name'] == gene].iloc[0]
+        gene_start = gene_info['start'] - 2000
+        gene_end = gene_info['end'] + 2000
         
-        print(f"Found {len(enrichment_df)} overlapping regions")
-        print(f"Of which {enrichment_df['significant'].sum()} are significantly enriched")
+        # Vectorized peak filtering
+        exo_peaks = pd.concat([
+            peaks[
+                (peaks['chr'] == gene_info['chr']) &
+                (peaks['start'].between(gene_start, gene_end))
+            ] for peaks in peaks_exo.values()
+        ])
+        
+        endo_peaks = pd.concat([
+            peaks[
+                (peaks['chr'] == gene_info['chr']) &
+                (peaks['start'].between(gene_start, gene_end))
+            ] for peaks in peaks_endo.values()
+        ])
+        
+        if len(exo_peaks) > 0 or len(endo_peaks) > 0:
+            chunk_results.append({
+                'gene': gene,
+                'exo_peaks': len(exo_peaks),
+                'endo_peaks': len(endo_peaks),
+                'exo_signal': exo_peaks['signalValue'].sum() if len(exo_peaks) > 0 else 0,
+                'endo_signal': endo_peaks['signalValue'].sum() if len(endo_peaks) > 0 else 0,
+                'enrichment': (exo_peaks['signalValue'].sum() / max(endo_peaks['signalValue'].sum(), 1))
+                            if len(exo_peaks) > 0 else 0
+            })
+    return chunk_results
+
+def parallel_analyze_categories(genes, gene_annotations, peaks_exo, peaks_endo, chunk_size=100):
+    """Analyze gene categories in parallel"""
+    # Split genes into chunks
+    gene_chunks = [genes[i:i + chunk_size] for i in range(0, len(genes), chunk_size)]
+    
+    # Process chunks in parallel
+    with ProcessPoolExecutor() as executor:
+        process_chunk_partial = partial(process_gene_chunk,
+                                     gene_annotations=gene_annotations,
+                                     peaks_exo=peaks_exo,
+                                     peaks_endo=peaks_endo)
+        results = list(tqdm(
+            executor.map(process_chunk_partial, gene_chunks),
+            total=len(gene_chunks),
+            desc="Processing genes"
+        ))
+    
+    # Flatten results
+    return [item for sublist in results for item in sublist]
+
+def analyze_mecp2_enrichment_independent(peaks_exo, peaks_endo, n_jobs=None, results_dir=None):
+    """Optimized version with parallel processing and intermediate file saving"""
+    print("\nAnalyzing Mecp2 enrichment independently...")
+    
+    # Check for existing intermediate files
+    exo_combined_file = f'{results_dir}/intermediate/exo_combined_peaks.csv'
+    endo_combined_file = f'{results_dir}/intermediate/endo_combined_peaks.csv'
+    enrichment_file = f'{results_dir}/intermediate/enrichment_results.csv'
+    
+    # Create intermediate directory if it doesn't exist
+    os.makedirs(f'{results_dir}/intermediate', exist_ok=True)
+    
+    # Process exo peaks
+    if os.path.exists(exo_combined_file):
+        print("Loading existing combined exo peaks...")
+        exo_combined = pd.read_csv(exo_combined_file)
     else:
-        print("Warning: No enrichment data found")
-        enrichment_df = pd.DataFrame(columns=['chr', 'start', 'end', 'exo_signal', 
-                                            'endo_signal', 'enrichment', 'exo_qValue', 
-                                            'endo_qValue', 'significant'])
+        print("Combining exo peaks in parallel...")
+        exo_combined = parallel_combine_peaks(peaks_exo, n_jobs=n_jobs)
+        exo_combined.to_csv(exo_combined_file, index=False)
+    
+    # Process endo peaks
+    if os.path.exists(endo_combined_file):
+        print("Loading existing combined endo peaks...")
+        endo_combined = pd.read_csv(endo_combined_file)
+    else:
+        print("Combining endo peaks in parallel...")
+        endo_combined = parallel_combine_peaks(peaks_endo, n_jobs=n_jobs)
+        endo_combined.to_csv(endo_combined_file, index=False)
+    
+    # Check for existing enrichment results
+    if os.path.exists(enrichment_file):
+        print("Loading existing enrichment results...")
+        enrichment_df = pd.read_csv(enrichment_file)
+    else:
+        # Convert to BedTool objects
+        print("Finding overlapping regions...")
+        exo_bed = BedTool.from_dataframe(exo_combined[['chr', 'start', 'end']])
+        endo_bed = BedTool.from_dataframe(endo_combined[['chr', 'start', 'end']])
+        
+        # Find overlapping regions
+        overlaps = list(exo_bed.intersect(endo_bed, wa=True, wb=True))
+        
+        # Process overlaps in parallel
+        print("Processing overlaps in parallel...")
+        enrichment_data = parallel_process_overlaps(overlaps, exo_combined, endo_combined)
+        
+        # Convert to DataFrame
+        enrichment_df = pd.DataFrame(enrichment_data)
+        
+        # Calculate significance
+        if not enrichment_df.empty:
+            # Calculate significance based on enrichment scores
+            enrichment_threshold = np.percentile(enrichment_df['enrichment'], 75)  # Top 25%
+            qvalue_threshold = 0.05
+            
+            enrichment_df['significant'] = (
+                (enrichment_df['enrichment'] > enrichment_threshold) & 
+                (enrichment_df['exo_qValue'] < qvalue_threshold) &
+                (enrichment_df['endo_qValue'] < qvalue_threshold)
+            )
+            
+            # Save results
+            enrichment_df.to_csv(enrichment_file, index=False)
+            
+            print(f"Found {len(enrichment_df)} overlapping regions")
+            print(f"Identified {enrichment_df['significant'].sum()} significant regions")
+            
+            # Create visualizations
+            with ThreadPoolExecutor() as executor:
+                executor.submit(plot_signal_distributions, enrichment_df, results_dir)
+                executor.submit(plot_width_analysis, enrichment_df, results_dir)
     
     return enrichment_df
 
 def analyze_by_expression_categories(dea_nsc, peaks_exo, peaks_endo, gene_annotations):
-    """Analyze Mecp2 binding based on gene expression categories"""
+    """Parallelized version of expression category analysis"""
     print("\nAnalyzing Mecp2 binding by expression categories...")
     
-    # Categorize genes
+    # Categorize genes (vectorized operation)
     dea_nsc['category'] = 'non-deregulated'
-    dea_nsc.loc[(dea_nsc['log2FoldChange'] > 1) & (dea_nsc['padj'] < 0.05), 'category'] = 'up-regulated'
-    dea_nsc.loc[(dea_nsc['log2FoldChange'] < -1) & (dea_nsc['padj'] < 0.05), 'category'] = 'down-regulated'
+    mask_up = (dea_nsc['log2FoldChange'] > 1) & (dea_nsc['padj'] < 0.05)
+    mask_down = (dea_nsc['log2FoldChange'] < -1) & (dea_nsc['padj'] < 0.05)
+    dea_nsc.loc[mask_up, 'category'] = 'up-regulated'
+    dea_nsc.loc[mask_down, 'category'] = 'down-regulated'
     
-    # Create gene lists for each category
+    # Process categories in parallel
     categories = {
         cat: dea_nsc[dea_nsc['category'] == cat]['gene'].tolist()
         for cat in ['non-deregulated', 'up-regulated', 'down-regulated']
     }
     
-    # Analyze binding for each category
     category_results = {}
     for category, genes in categories.items():
         print(f"\nAnalyzing {category} genes ({len(genes)} genes)")
-        
-        category_data = []
-        for gene in genes:
-            # Get gene coordinates
-            if gene not in gene_annotations['gene_name'].values:
-                continue
-                
-            gene_info = gene_annotations[gene_annotations['gene_name'] == gene].iloc[0]
-            
-            # Define gene region (you might want to adjust this window)
-            gene_start = gene_info['start'] - 2000  # 2kb upstream
-            gene_end = gene_info['end'] + 2000      # 2kb downstream
-            
-            # Count peaks and calculate signals
-            exo_peaks = pd.concat([
-                peaks[
-                    (peaks['chr'] == gene_info['chr']) &
-                    (peaks['start'] >= gene_start) &
-                    (peaks['end'] <= gene_end)
-                ] for peaks in peaks_exo.values()
-            ])
-            
-            endo_peaks = pd.concat([
-                peaks[
-                    (peaks['chr'] == gene_info['chr']) &
-                    (peaks['start'] >= gene_start) &
-                    (peaks['end'] <= gene_end)
-                ] for peaks in peaks_endo.values()
-            ])
-            
-            if len(exo_peaks) > 0 or len(endo_peaks) > 0:
-                category_data.append({
-                    'gene': gene,
-                    'exo_peaks': len(exo_peaks),
-                    'endo_peaks': len(endo_peaks),
-                    'exo_signal': exo_peaks['signalValue'].sum() if len(exo_peaks) > 0 else 0,
-                    'endo_signal': endo_peaks['signalValue'].sum() if len(endo_peaks) > 0 else 0,
-                    'enrichment': (exo_peaks['signalValue'].sum() / max(endo_peaks['signalValue'].sum(), 1))
-                                if len(exo_peaks) > 0 else 0
-                })
-        
+        category_data = parallel_analyze_categories(
+            genes, gene_annotations, peaks_exo, peaks_endo)
         category_results[category] = pd.DataFrame(category_data)
         
         # Save category results
@@ -994,34 +1107,230 @@ def plot_category_results(category_results):
     plt.savefig(f'{RESULTS_DIR}/enrichment_distribution_by_category.pdf')
     plt.close()
 
+def plot_enrichment_method_comparison(enrichment_df):
+    """Create visualizations comparing different enrichment calculation methods"""
+    plt.figure(figsize=(15, 10))
+    
+    # Plot correlations between methods
+    methods = ['enrichment', 'enrichment_ww', 'enrichment_cs']
+    method_names = ['Basic', 'Width-Weighted', 'Coverage Score']
+    
+    for i, (m1, n1) in enumerate(zip(methods, method_names)):
+        for j, (m2, n2) in enumerate(zip(methods, method_names)):
+            if i < j:
+                plt.subplot(2, 2, i*2 + j)
+                plt.scatter(enrichment_df[m1], enrichment_df[m2], alpha=0.5)
+                plt.xlabel(f'{n1} Enrichment')
+                plt.ylabel(f'{n2} Enrichment')
+                
+                # Add correlation coefficient
+                corr = np.corrcoef(enrichment_df[m1], enrichment_df[m2])[0,1]
+                plt.title(f'Correlation: {corr:.3f}')
+    
+    plt.tight_layout()
+    plt.savefig(f'{RESULTS_DIR}/enrichment_method_comparison.pdf')
+    plt.close()
+
+def process_sample(sample_data):
+    """Process a single sample of peaks"""
+    sample, peaks = sample_data
+    if not peaks.empty:
+        peaks = peaks.copy()
+        peaks['sample'] = sample
+        return peaks
+    return None
+
+def parallel_combine_peaks(peaks_dict, n_jobs=None):
+    """Parallelized version of combine_peaks"""
+    if not peaks_dict:
+        return pd.DataFrame()
+    
+    # Set number of workers
+    if n_jobs is None or n_jobs <= 0:
+        n_jobs = max(1, mp.cpu_count() - 1)  # Use all cores except one, minimum 1
+    
+    # Process samples in parallel
+    with ProcessPoolExecutor(max_workers=n_jobs) as executor:
+        processed_peaks = list(executor.map(process_sample, peaks_dict.items()))
+        all_peaks = [peaks for peaks in processed_peaks if peaks is not None]
+    
+    if not all_peaks:
+        return pd.DataFrame()
+    
+    # Combine results
+    combined = pd.concat(all_peaks, ignore_index=True)
+    
+    # Group and calculate metrics (this part is fast enough to keep sequential)
+    grouped = combined.groupby(['chr', 'start', 'end'])
+    
+    # Use numpy operations for faster calculations
+    metrics = {
+        'signal_basic': grouped['signalValue'].median(),  # Using median instead of mean
+        'qValue': grouped['qValue'].min(),
+        'num_replicates': grouped.size()
+    }
+    
+    combined_peaks = pd.DataFrame(metrics).reset_index()
+    combined_peaks['width'] = combined_peaks['end'] - combined_peaks['start']
+    
+    # Vectorized calculations for different signal metrics
+    # Width-weighted signal
+    combined_peaks['signal_ww'] = combined_peaks['signal_basic'] * combined_peaks['width']
+    
+    # Coverage score
+    total_width = combined_peaks['width'].sum()
+    combined_peaks['signal_cs'] = combined_peaks['signal_ww'] / total_width
+    
+    # Additional normalizations
+    for signal_col in ['signal_basic', 'signal_ww', 'signal_cs']:
+        # Log transform
+        combined_peaks[f'{signal_col}_log'] = np.log1p(combined_peaks[signal_col])
+        
+        # Z-score normalization
+        combined_peaks[f'{signal_col}_zscore'] = stats.zscore(
+            combined_peaks[signal_col], nan_policy='omit')
+        
+        # Quantile normalization
+        combined_peaks[f'{signal_col}_quantile'] = stats.rankdata(
+            combined_peaks[signal_col]) / len(combined_peaks)
+    
+    return combined_peaks
+
+def plot_signal_distributions(enrichment_df, results_dir):
+    """Plot distributions of signal values and enrichment scores"""
+    plt.figure(figsize=(15, 10))
+    
+    # Plot 1: Distribution of exo vs endo signals
+    plt.subplot(2, 2, 1)
+    plt.hist(enrichment_df['exo_signal'], bins=50, alpha=0.5, label='Exo', density=True)
+    plt.hist(enrichment_df['endo_signal'], bins=50, alpha=0.5, label='Endo', density=True)
+    plt.xlabel('Signal Value')
+    plt.ylabel('Density')
+    plt.title('Distribution of Signal Values')
+    plt.legend()
+    
+    # Plot 2: Distribution of enrichment scores
+    plt.subplot(2, 2, 2)
+    plt.hist(np.log2(enrichment_df['enrichment'].clip(min=0.01)), bins=50)
+    plt.xlabel('log2(Enrichment Score)')
+    plt.ylabel('Count')
+    plt.title('Distribution of Enrichment Scores')
+    
+    # Plot 3: Signal correlation
+    plt.subplot(2, 2, 3)
+    plt.scatter(np.log2(enrichment_df['endo_signal'].clip(min=0.01)), 
+               np.log2(enrichment_df['exo_signal'].clip(min=0.01)), 
+               alpha=0.5)
+    plt.xlabel('log2(Endo Signal)')
+    plt.ylabel('log2(Exo Signal)')
+    plt.title('Exo vs Endo Signal Correlation')
+    
+    # Plot 4: QValue distribution
+    plt.subplot(2, 2, 4)
+    plt.hist(-np.log10(enrichment_df['exo_qValue'].clip(max=1)), 
+             bins=50, alpha=0.5, label='Exo')
+    plt.hist(-np.log10(enrichment_df['endo_qValue'].clip(max=1)), 
+             bins=50, alpha=0.5, label='Endo')
+    plt.xlabel('-log10(qValue)')
+    plt.ylabel('Count')
+    plt.title('Distribution of qValues')
+    plt.legend()
+    
+    plt.tight_layout()
+    plt.savefig(f'{results_dir}/signal_distributions.pdf')
+    plt.close()
+
+def plot_width_analysis(enrichment_df, results_dir):
+    """Plot analysis of peak widths and their relationship to enrichment"""
+    plt.figure(figsize=(15, 10))
+    
+    # Calculate peak widths
+    enrichment_df['width'] = enrichment_df['end'] - enrichment_df['start']
+    
+    # Plot 1: Width distribution
+    plt.subplot(2, 2, 1)
+    plt.hist(np.log10(enrichment_df['width']), bins=50)
+    plt.xlabel('log10(Peak Width)')
+    plt.ylabel('Count')
+    plt.title('Distribution of Peak Widths')
+    
+    # Plot 2: Width vs Enrichment
+    plt.subplot(2, 2, 2)
+    plt.scatter(np.log10(enrichment_df['width']), 
+               np.log2(enrichment_df['enrichment'].clip(min=0.01)), 
+               alpha=0.5)
+    plt.xlabel('log10(Peak Width)')
+    plt.ylabel('log2(Enrichment)')
+    plt.title('Peak Width vs Enrichment')
+    
+    # Plot 3: Width vs Signal
+    plt.subplot(2, 2, 3)
+    plt.scatter(np.log10(enrichment_df['width']), 
+               np.log2(enrichment_df['exo_signal'].clip(min=0.01)), 
+               alpha=0.5, label='Exo')
+    plt.scatter(np.log10(enrichment_df['width']), 
+               np.log2(enrichment_df['endo_signal'].clip(min=0.01)), 
+               alpha=0.5, label='Endo')
+    plt.xlabel('log10(Peak Width)')
+    plt.ylabel('log2(Signal)')
+    plt.title('Peak Width vs Signal')
+    plt.legend()
+    
+    # Plot 4: Width vs Replicate Count
+    plt.subplot(2, 2, 4)
+    plt.scatter(np.log10(enrichment_df['width']), 
+               enrichment_df['exo_replicates'], 
+               alpha=0.5, label='Exo')
+    plt.scatter(np.log10(enrichment_df['width']), 
+               enrichment_df['endo_replicates'], 
+               alpha=0.5, label='Endo')
+    plt.xlabel('log10(Peak Width)')
+    plt.ylabel('Number of Replicates')
+    plt.title('Peak Width vs Replicate Count')
+    plt.legend()
+    
+    plt.tight_layout()
+    plt.savefig(f'{results_dir}/width_analysis.pdf')
+    plt.close()
+
 # Modify the main execution block
 if __name__ == "__main__":
     # Create output directory if it doesn't exist
     os.makedirs(RESULTS_DIR, exist_ok=True)
 
+    # Set number of workers (minimum 1)
+    N_JOBS = max(1, mp.cpu_count() - 1)  # Leave one core free
+    print(f"Using {N_JOBS} workers for parallel processing")
+
     # Load data
     dea, peaks_exo, peaks_endo, gene_annotations, name_to_info = load_data()
 
     # Approach 1: Independent Mecp2 enrichment analysis
-    enrichment_df = analyze_mecp2_enrichment_independent(peaks_exo, peaks_endo)
+    enrichment_df = analyze_mecp2_enrichment_independent(
+        peaks_exo, peaks_endo, n_jobs=N_JOBS, results_dir=RESULTS_DIR
+    )
     
     # Integrate with RNA-seq data
-    significant_regions = enrichment_df[enrichment_df['significant']]
-    genes_near_regions = []
-    
-    # Find genes near significant regions
-    for _, region in significant_regions.iterrows():
-        nearby_genes = gene_annotations[
-            (gene_annotations['chr'] == region['chr']) &
-            ((gene_annotations['start'] - 2000 <= region['end']) &
-             (gene_annotations['end'] + 2000 >= region['start']))
-        ]['gene_name'].tolist()
+    if 'significant' in enrichment_df.columns:
+        significant_regions = enrichment_df[enrichment_df['significant']]
+        genes_near_regions = []
         
-        genes_near_regions.extend(nearby_genes)
-    
-    # Get expression data for these genes
-    genes_with_expression = dea[dea['gene'].isin(genes_near_regions)].copy()
-    genes_with_expression.to_csv(f'{RESULTS_DIR}/genes_near_enriched_regions.csv', index=False)
+        # Find genes near significant regions
+        for _, region in significant_regions.iterrows():
+            nearby_genes = gene_annotations[
+                (gene_annotations['chr'] == region['chr']) &
+                ((gene_annotations['start'] - 2000 <= region['end']) &
+                 (gene_annotations['end'] + 2000 >= region['start']))
+            ]['gene_name'].tolist()
+            
+            genes_near_regions.extend(nearby_genes)
+        
+        # Get expression data for these genes
+        genes_with_expression = dea[dea['gene'].isin(genes_near_regions)].copy()
+        genes_with_expression.to_csv(f'{RESULTS_DIR}/genes_near_enriched_regions.csv', index=False)
+    else:
+        print("Warning: No significance information found in enrichment results")
+        genes_near_regions = []
 
     # Approach 2: Analysis by expression categories
     category_results = analyze_by_expression_categories(dea, peaks_exo, peaks_endo, gene_annotations)
@@ -1029,7 +1338,8 @@ if __name__ == "__main__":
 
     # Generate summary statistics
     summary_stats = {
-        'total_enriched_regions': len(significant_regions),
+        'total_enriched_regions': len(enrichment_df),
+        'significant_regions': len(significant_regions) if 'significant' in enrichment_df.columns else 0,
         'genes_near_enriched_regions': len(set(genes_near_regions)),
         'up_regulated_targets': len(category_results['up-regulated']),
         'down_regulated_targets': len(category_results['down-regulated']),
@@ -1039,3 +1349,18 @@ if __name__ == "__main__":
     with open(f'{RESULTS_DIR}/analysis_summary.txt', 'w') as f:
         for key, value in summary_stats.items():
             f.write(f'{key}: {value}\n')
+
+    # Generate enrichment analysis
+    enrichment_df = analyze_mecp2_enrichment_independent(
+        peaks_exo, peaks_endo, n_jobs=N_JOBS, results_dir=RESULTS_DIR
+    )
+    
+    # Plot method comparisons
+    plot_enrichment_method_comparison(enrichment_df)
+    
+    # Calculate summary statistics for each method
+    summary_stats.update({
+        'median_basic_enrichment': enrichment_df['enrichment'].median(),
+        'median_ww_enrichment': enrichment_df['enrichment_ww'].median(),
+        'median_cs_enrichment': enrichment_df['enrichment_cs'].median()
+    })

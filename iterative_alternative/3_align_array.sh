@@ -20,8 +20,8 @@ log_progress() {
 # Function to validate input files
 validate_inputs() {
     local sample=$1
-    local r1="results/trimmed/${sample}_R1_001_val_1.fq.gz"
-    local r2="results/trimmed/${sample}_R2_001_val_2.fq.gz"
+    local r1="results_1/trimmed/${sample}_R1_001_val_1.fq.gz"
+    local r2="results_1/trimmed/${sample}_R2_001_val_2.fq.gz"
     [[ -f "$r1" && -f "$r2" ]] || return 1
 }
 
@@ -38,10 +38,10 @@ if ! source /opt/common/tools/ric.cosr/miniconda3/bin/activate /beegfs/scratch/r
 fi
 
 # Create required directories
-mkdir -p results/aligned logs
+mkdir -p results_1/aligned logs
 
 # Get sample names from trimmed files (more reliable than fastqc results)
-ALL_SAMPLES=($(find results/trimmed -name "*_R1_001_val_1.fq.gz" -type f | sed 's|results/trimmed/||;s|_R1_001_val_1.fq.gz||' | sort))
+ALL_SAMPLES=($(find results_1/trimmed -name "*_R1_001_val_1.fq.gz" -type f | sed 's|results_1/trimmed/||;s|_R1_001_val_1.fq.gz||' | sort))
 
 # Verify we have samples before continuing
 if [ ${#ALL_SAMPLES[@]} -eq 0 ]; then
@@ -60,7 +60,8 @@ SAMPLE=${ALL_SAMPLES[$SLURM_ARRAY_TASK_ID]}
 
 # Set parameters
 GENOME_INDEX="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/mm10_bowtie2_index/mm10"
-MAX_FRAGMENT=1000
+MAX_FRAGMENT=2000
+MIN_FRAGMENT=150
 SORT_MEMORY="32G"
 THREADS=32
 TMP_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/custom_pipeline/iterative_processing/tmp"
@@ -103,13 +104,15 @@ else
     log_progress "Starting alignment for ${SAMPLE}..."
     # Run Bowtie2 alignment
     if ! bowtie2 \
-        -p 32 \
+        -p $THREADS \
         -x $GENOME_INDEX \
-        -1 results/trimmed/${SAMPLE}_R1_001_val_1.fq.gz \
-        -2 results/trimmed/${SAMPLE}_R2_001_val_2.fq.gz \
+        -1 results_1/trimmed/${SAMPLE}_R1_001_val_1.fq.gz \
+        -2 results_1/trimmed/${SAMPLE}_R2_001_val_2.fq.gz \
         --local --very-sensitive-local \
         --no-mixed --no-discordant \
         --maxins $MAX_FRAGMENT \
+        --minins $MIN_FRAGMENT \
+        --dovetail \
         --mm \
         -S "$TEMP_DIR/${SAMPLE}.sam" \
         2> logs/align_${SAMPLE}.log; then
@@ -133,21 +136,56 @@ if ! samtools view -@ "$THREADS" -b -h -q 20 "$TEMP_DIR/${SAMPLE}.sam" > "$TEMP_
     exit 1
 fi
 
-# Then apply additional filters in separate steps
-log_progress "Applying additional filters..."
-if ! samtools view -@ "$THREADS" -b -f 2 -F 1804 "$TEMP_DIR/${SAMPLE}.temp1.bam" > "$TEMP_DIR/${SAMPLE}.temp2.bam"; then
-    log_progress "Error: Filtering step 1 failed for ${SAMPLE}"
+# Modified filtering steps with fragment size selection
+log_progress "Applying filters and size selection..."
+if ! samtools view -@ "$THREADS" -h "$TEMP_DIR/${SAMPLE}.temp1.bam" | \
+    awk -v min=$MIN_FRAGMENT -v max=$MAX_FRAGMENT \
+    'BEGIN {OFS="\t"} 
+     /^@/ {print; next}
+     ($9 >= min && $9 <= max) || ($9 <= -min && $9 >= -max)' | \
+    samtools view -@ "$THREADS" -b -f 2 -F 1804 -q 20 > "$TEMP_DIR/${SAMPLE}.temp2.bam"; then
+    log_progress "Error: Filtering and size selection failed for ${SAMPLE}"
     exit 1
 fi
 
-# Final filtering step for mapping quality and read length
-if ! samtools view -@ "$THREADS" -h -b -q 20 "$TEMP_DIR/${SAMPLE}.temp2.bam" > "$TEMP_DIR/${SAMPLE}.filtered.bam"; then
-    log_progress "Error: Final filtering step failed for ${SAMPLE}"
-    exit 1
+# Add fragment size distribution analysis
+log_progress "Analyzing fragment size distribution..."
+samtools view -@ "$THREADS" "$TEMP_DIR/${SAMPLE}.temp2.bam" | \
+    awk '{print sqrt($9^2)}' | \
+    sort -n | \
+    uniq -c > results_1/aligned/${SAMPLE}.fragment_sizes.txt
+
+# Add more detailed QC metrics
+log_progress "Generating detailed QC metrics..."
+# Calculate percentage of reads in peaks (FRIP)
+if [ -f "results_1/peaks/${SAMPLE}_peaks.narrowPeak" ]; then
+    bedtools intersect -a "$TEMP_DIR/${SAMPLE}.temp2.bam" \
+        -b "results_1/peaks/${SAMPLE}_peaks.narrowPeak" \
+        -bed -c > results_1/aligned/${SAMPLE}.frip.txt
 fi
 
-# Clean up temporary files
-rm -f "$TEMP_DIR/${SAMPLE}.temp1.bam" "$TEMP_DIR/${SAMPLE}.temp2.bam"
+# Generate insert size metrics
+picard CollectInsertSizeMetrics \
+    I="$TEMP_DIR/${SAMPLE}.temp2.bam" \
+    O=results_1/aligned/${SAMPLE}.insert_metrics.txt \
+    H=results_1/aligned/${SAMPLE}.insert_histogram.pdf
+
+# Add cross-correlation analysis for CUT&TAG
+phantompeakqualtools run \
+    -c="$TEMP_DIR/${SAMPLE}.temp2.bam" \
+    -p=$THREADS \
+    -out=results_1/aligned/${SAMPLE}.cc.qc
+
+# Create comprehensive QC report
+cat > results_1/aligned/${SAMPLE}.qc_report.txt << EOF
+Sample: ${SAMPLE}
+Date: $(date)
+Alignment Rate: $(grep "overall alignment rate" logs/align_${SAMPLE}.log | tail -n1)
+Fragment Size Statistics:
+$(awk 'BEGIN{OFS="\t"} NR==1,NR==5{print $1, $2}' results_1/aligned/${SAMPLE}.insert_metrics.txt)
+Library Complexity:
+$(head -n 5 results_1/aligned/${SAMPLE}.complexity_estimates.txt)
+EOF
 
 log_progress "Sorting BAM file..."
 
@@ -156,83 +194,44 @@ if ! samtools sort \
     -@ $THREADS \
     -m $SORT_MEMORY \
     -T "$TEMP_DIR/${SAMPLE}" \
-    "$TEMP_DIR/${SAMPLE}.filtered.bam" \
-    -o results/aligned/${SAMPLE}.bam; then
+    "$TEMP_DIR/${SAMPLE}.temp2.bam" \
+    -o results_1/aligned/${SAMPLE}.bam; then
     log_progress "Error: BAM sorting failed for ${SAMPLE}"
     exit 1
 fi
 
 log_progress "Indexing BAM file..."
-samtools index -@ $THREADS results/aligned/${SAMPLE}.bam
+samtools index -@ $THREADS results_1/aligned/${SAMPLE}.bam
 
 log_progress "Removing PCR duplicates..."
 # Remove duplicates and save metrics
 if ! samtools markdup -@ $THREADS -r \
-    results/aligned/${SAMPLE}.bam \
-    results/aligned/${SAMPLE}.dedup.bam \
-    2> results/aligned/${SAMPLE}.markdup_metrics; then
+    results_1/aligned/${SAMPLE}.bam \
+    results_1/aligned/${SAMPLE}.dedup.bam \
+    2> results_1/aligned/${SAMPLE}.markdup_metrics; then
     log_progress "Error: Duplicate marking failed for ${SAMPLE}"
     exit 1
 fi
 
 # Index the deduplicated BAM
-samtools index -@ $THREADS results/aligned/${SAMPLE}.dedup.bam
+samtools index -@ $THREADS results_1/aligned/${SAMPLE}.dedup.bam
 
 log_progress "Generating QC metrics..."
 # Generate comprehensive QC metrics
-samtools flagstat results/aligned/${SAMPLE}.dedup.bam > results/aligned/${SAMPLE}.flagstat
-samtools idxstats results/aligned/${SAMPLE}.dedup.bam > results/aligned/${SAMPLE}.idxstats
-samtools stats results/aligned/${SAMPLE}.dedup.bam > results/aligned/${SAMPLE}.stats
+samtools flagstat results_1/aligned/${SAMPLE}.dedup.bam > results_1/aligned/${SAMPLE}.flagstat
+samtools idxstats results_1/aligned/${SAMPLE}.dedup.bam > results_1/aligned/${SAMPLE}.idxstats
+samtools stats results_1/aligned/${SAMPLE}.dedup.bam > results_1/aligned/${SAMPLE}.stats
 
 # Calculate alignment rate from bowtie2 logs
 alignment_rate=$(grep "overall alignment rate" logs/align_${SAMPLE}.log | tail -n1 | awk '{print $1}')
-echo "Overall alignment rate: ${alignment_rate}" >> results/aligned/${SAMPLE}.alignment_summary
+echo "Overall alignment rate: ${alignment_rate}" >> results_1/aligned/${SAMPLE}.alignment_summary
 
 log_progress "Calculating library complexity metrics..."
-preseq lc_extrap -B results/aligned/${SAMPLE}.dedup.bam \
-    -o results/aligned/${SAMPLE}.complexity_estimates.txt
+preseq lc_extrap -B results_1/aligned/${SAMPLE}.dedup.bam \
+    -o results_1/aligned/${SAMPLE}.complexity_estimates.txt
 
 # log_progress "Cleaning up intermediate files..."
 # rm -f "$TEMP_DIR/${SAMPLE}.filtered.bam"
 # rm -f "$TEMP_DIR/${SAMPLE}.sam"
 
 log_progress "Processing completed successfully for ${SAMPLE}"
-
-# # Generate comprehensive QC summary
-# log_progress "Generating QC summary..."
-# {
-#     echo "=== QC Summary for ${SAMPLE} ==="
-#     echo "Initial alignment rate: ${alignment_rate}"
-#     echo "=== Fragment Metrics ==="
-#     awk 'NR==1{total=0} {total+=$2} END{print "Total fragments: "total}' \
-#         results/aligned/${SAMPLE}.fragment_sizes.txt
-#     echo "=== Duplication Rate ==="
-#     grep "^Duplication" results/aligned/${SAMPLE}.markdup_metrics
-#     echo "=== Final Mapped Reads ==="
-#     samtools flagstat results/aligned/${SAMPLE}.dedup.bam | head -n 1
-# } > results/aligned/${SAMPLE}.qc_summary.txt
-
-# # Add near the start of the script
-# check_file_size() {
-#     local file=$1
-#     local min_size=${2:-1000} # minimum size in bytes
-#     if [ ! -s "$file" ] || [ $(stat -c%s "$file") -lt $min_size ]; then
-#         return 1
-#     fi
-#     return 0
-# }
-
-# # Add after BAM creation steps
-# check_file_size "results/aligned/${SAMPLE}.bam" || {
-#     log_progress "Error: Final BAM file is too small or empty"
-#     exit 1
-# }
-
-# # Modify trap to handle more signals
-# trap 'log_progress "Cleaning up temporary files..."; rm -rf "$TEMP_DIR"' EXIT SIGINT SIGTERM
-
-# # Add fragment size calculation before QC summary
-# log_progress "Calculating fragment sizes..."
-# samtools view -f 2 results/aligned/${SAMPLE}.dedup.bam | \
-#     awk -F'\t' 'function abs(v) {return v < 0 ? -v : v} {print abs($9)}' | \
-#     sort -n | uniq -c > results/aligned/${SAMPLE}.fragment_sizes.txt

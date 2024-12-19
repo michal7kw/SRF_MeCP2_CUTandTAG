@@ -19,24 +19,24 @@ export PIPELINE_DIR
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate /beegfs/scratch/ric.broccoli/kubacki.michal/conda_envs/snakemake
 
 # Install required executor plugin if not already installed
-pip install snakemake-executor-plugin-slurm
+# pip install snakemake-executor-plugin-slurm
 
 # Set temporary directories
 export TMPDIR="${PIPELINE_DIR}/tmp"
 export XDG_CACHE_HOME="/beegfs/scratch/ric.broccoli/kubacki.michal/cache"
 export SNAKEMAKE_PERSISTENT_CACHE="/beegfs/scratch/ric.broccoli/kubacki.michal/snakemake_cache"
 
-# Create necessary directories
-mkdir -p "$TMPDIR" && chmod 755 "$TMPDIR"
-mkdir -p "$XDG_CACHE_HOME" && chmod 755 "$XDG_CACHE_HOME"
-mkdir -p "$SNAKEMAKE_PERSISTENT_CACHE" && chmod 755 "$SNAKEMAKE_PERSISTENT_CACHE"
-mkdir -p ${PIPELINE_DIR}/logs/slurm && chmod 755 ${PIPELINE_DIR}/logs/slurm
-mkdir -p ${PIPELINE_DIR}/results/{fastqc,trimmed,aligned,peaks/{macs2,seacr,consensus,final},qc,multiqc} \
-    && chmod -R 755 ${PIPELINE_DIR}/results
+# # Create necessary directories
+# mkdir -p "$TMPDIR" && chmod 755 "$TMPDIR"
+# mkdir -p "$XDG_CACHE_HOME" && chmod 755 "$XDG_CACHE_HOME"
+# mkdir -p "$SNAKEMAKE_PERSISTENT_CACHE" && chmod 755 "$SNAKEMAKE_PERSISTENT_CACHE"
+# mkdir -p ${PIPELINE_DIR}/logs/slurm && chmod 755 ${PIPELINE_DIR}/logs/slurm
+# mkdir -p ${PIPELINE_DIR}/results/{fastqc,trimmed,aligned,peaks/{macs2,seacr,consensus,final},qc,multiqc} \
+#     && chmod -R 755 ${PIPELINE_DIR}/results
 
 # Clean up any existing temporary files
-find ${PIPELINE_DIR}/tmp -type f -delete
-find ${PIPELINE_DIR}/results/aligned -name "*.unsorted.bam" -delete
+# find ${PIPELINE_DIR}/tmp -type f -delete
+# find ${PIPELINE_DIR}/results/aligned -name "*.unsorted.bam" -delete
 
 # Unlock the working directory if needed
 snakemake --unlock

@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=qc_metrics
+#SBATCH --job-name=tss_enrich
 #SBATCH --account=kubacki.michal
 #SBATCH --mem=16GB
 #SBATCH --time=4:00:00
@@ -8,8 +8,8 @@
 #SBATCH --ntasks-per-node=8
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/qc_%a.err"
-#SBATCH --output="logs/qc_%a.out"
+#SBATCH --error="logs/tss_enrich_1.err"
+#SBATCH --output="logs/tss_enrich_1.out"
 #SBATCH --array=0-11
 
 # Set working directory
@@ -25,7 +25,7 @@ ALL_SAMPLES=("${EXOGENOUS_SAMPLES[@]}" "${ENDOGENOUS_SAMPLES[@]}")
 SAMPLE=${ALL_SAMPLES[$SLURM_ARRAY_TASK_ID]}
 
 # Create output directories
-mkdir -p results/qc/tss_enrichment
+mkdir -p results_1/qc/tss_enrichment
 
 # 3. TSS enrichment (requires TSS bed file)
 if [ -s "../DATA/mm10_TSS.bed" ]; then
@@ -33,16 +33,16 @@ if [ -s "../DATA/mm10_TSS.bed" ]; then
         --referencePoint TSS \
         -b 2000 -a 2000 \
         -R ../DATA/mm10_TSS.bed \
-        -S results/bigwig/${SAMPLE}.bw \
+        -S results_1/bigwig/${SAMPLE}.bw \
         --skipZeros \
         --numberOfProcessors 8 \
-        -o results/qc/tss_enrichment/${SAMPLE}_matrix.gz
+        -o results_1/qc/tss_enrichment/${SAMPLE}_matrix.gz
 
     # Only attempt to create profile plot if matrix was generated successfully
-    if [ -f "results/qc/tss_enrichment/${SAMPLE}_matrix.gz" ]; then
+    if [ -f "results_1/qc/tss_enrichment/${SAMPLE}_matrix.gz" ]; then
         plotProfile \
-            -m results/qc/tss_enrichment/${SAMPLE}_matrix.gz \
-            -o results/qc/tss_enrichment/${SAMPLE}_profile.png \
+            -m results_1/qc/tss_enrichment/${SAMPLE}_matrix.gz \
+            -o results_1/qc/tss_enrichment/${SAMPLE}_profile.png \
             --plotTitle "${SAMPLE} TSS Enrichment" \
             --averageType mean
     else

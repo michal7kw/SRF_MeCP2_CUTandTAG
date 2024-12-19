@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=analyze_enrichment_NEU
+#SBATCH --job-name=6_generate_qc_report
 #SBATCH --account=kubacki.michal
 #SBATCH --mem=128GB
 #SBATCH --time=INFINITE

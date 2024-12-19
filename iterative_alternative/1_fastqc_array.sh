@@ -37,11 +37,11 @@ else
 fi
 
 # Create output directory
-mkdir -p results/fastqc
+mkdir -p results_1/fastqc
 
 # Run FastQC
 fastqc \
     ${INPUT_DIR}/${SAMPLE}_R1_001.fastq.gz \
     ${INPUT_DIR}/${SAMPLE}_R2_001.fastq.gz \
-    --outdir=results/fastqc \
+    --outdir=results_1/fastqc \
     --threads=4

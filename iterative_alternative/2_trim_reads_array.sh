@@ -16,11 +16,6 @@
 cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate /beegfs/scratch/ric.broccoli/kubacki.michal/conda_envs/snakemake
 
-# Source modules
-# source /etc/profile.d/modules.sh
-# module load trimgalore/0.6.6
-# module load fastqc/0.11.9
-
 # Get sample names (same as in fastqc script)
 EXOGENOUS_SAMPLES=($(ls ../DATA/EXOGENOUS/*_R1_001.fastq.gz | xargs -n 1 basename | sed 's/_R1_001.fastq.gz//'))
 ENDOGENOUS_SAMPLES=($(ls ../DATA/ENDOGENOUS/*_R1_001.fastq.gz | xargs -n 1 basename | sed 's/_R1_001.fastq.gz//'))
@@ -37,7 +32,7 @@ else
 fi
 
 # Create output directory
-mkdir -p results/trimmed
+mkdir -p results_1/trimmed
 
 # Run Trim Galore
 trim_galore \
@@ -45,6 +40,6 @@ trim_galore \
     --gzip \
     --fastqc \
     --cores 16 \
-    --output_dir results/trimmed \
+    --output_dir results_1/trimmed \
     ${INPUT_DIR}/${SAMPLE}_R1_001.fastq.gz \
     ${INPUT_DIR}/${SAMPLE}_R2_001.fastq.gz 
