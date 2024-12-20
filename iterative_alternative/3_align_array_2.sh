@@ -62,9 +62,10 @@ SAMPLE=${ALL_SAMPLES[$SLURM_ARRAY_TASK_ID]}
 GENOME_INDEX="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/mm10_bowtie2_index/mm10"
 MAX_FRAGMENT=2000
 MIN_FRAGMENT=150
-SORT_MEMORY="32G"
+SORT_MEMORY="2G"
 THREADS=32
 TMP_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/tmpb"
+TOTAL_MEMORY="30G"
 
 # Create temporary directory if it doesn't exist
 if [ ! -d "$TMP_DIR" ]; then
@@ -176,24 +177,43 @@ phantompeakqualtools run \
     -p=$THREADS \
     -out=results_1b/aligned/${SAMPLE}.cc.qc
 
-# Create comprehensive QC report
-cat > results_1b/aligned/${SAMPLE}.qc_report.txt << EOF
-Sample: ${SAMPLE}
-Date: $(date)
-Alignment Rate: $(grep "overall alignment rate" logs/align_${SAMPLE}.log | tail -n1)
-Fragment Size Statistics:
-$(awk 'BEGIN{OFS="\t"} NR==1,NR==5{print $1, $2}' results_1b/aligned/${SAMPLE}.insert_metrics.txt)
-Library Complexity:
-$(head -n 5 results_1b/aligned/${SAMPLE}.complexity_estimates.txt)
-EOF
+# Create comprehensive QC report with error checking
+{
+    echo "Sample: ${SAMPLE}"
+    echo "Date: $(date)"
+    
+    # Alignment rate
+    if [ -f "logs/align_${SAMPLE}.log" ]; then
+        echo "Alignment Rate: $(grep "overall alignment rate" logs/align_${SAMPLE}.log | tail -n1)"
+    else
+        echo "Alignment Rate: Not available"
+    fi
+    
+    # Fragment Size Statistics
+    echo "Fragment Size Statistics:"
+    if [ -f "results_1b/aligned/${SAMPLE}.insert_metrics.txt" ]; then
+        awk 'BEGIN{OFS="\t"} NR==1,NR==5{print $1, $2}' "results_1b/aligned/${SAMPLE}.insert_metrics.txt"
+    else
+        echo "Not available"
+    fi
+    
+    # Library Complexity
+    echo "Library Complexity:"
+    if [ -f "results_1b/aligned/${SAMPLE}.complexity_estimates.txt" ]; then
+        head -n 5 "results_1b/aligned/${SAMPLE}.complexity_estimates.txt"
+    else
+        echo "Not available"
+    fi
+} > "results_1b/aligned/${SAMPLE}.qc_report.txt"
 
 log_progress "Sorting BAM file..."
 
-# Sort BAM file
+# Sort BAM file with adjusted memory settings
 if ! samtools sort \
     -@ $THREADS \
     -m $SORT_MEMORY \
     -T "$TEMP_DIR/${SAMPLE}" \
+    --write-index \
     "$TEMP_DIR/${SAMPLE}.temp2.bam" \
     -o results_1b/aligned/${SAMPLE}.bam; then
     log_progress "Error: BAM sorting failed for ${SAMPLE}"
