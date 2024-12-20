@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=meta_1
+#SBATCH --job-name=metaprofile
 #SBATCH --account=kubacki.michal
 #SBATCH --mem=64GB
 #SBATCH --time=24:00:00
@@ -8,8 +8,8 @@
 #SBATCH --mail-type=ALL
 #SBATCH --exclusive
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/meta_1.err"
-#SBATCH --output="logs/meta_1.out"
+#SBATCH --error="logs/metaprofile.err"
+#SBATCH --output="logs/metaprofile.out"
 
 cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/Visualization
 

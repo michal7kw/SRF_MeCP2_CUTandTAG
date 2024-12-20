@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=peaks_macs2
+#SBATCH --job-name=peaks_original
 #SBATCH --account=kubacki.michal
 #SBATCH --mem=8GB
 #SBATCH --time=2:00:00
@@ -8,8 +8,8 @@
 #SBATCH --ntasks-per-node=8
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/peaks_2.err"
-#SBATCH --output="logs/peaks_2.out"
+#SBATCH --error="logs/peaks_original.err"
+#SBATCH --output="logs/peaks_original.out"
 #SBATCH --array=0-10  # Excluding IgM controls
 
 # Set working directory
@@ -76,8 +76,8 @@ SAMPLES=(
 SAMPLE=${SAMPLES[$SLURM_ARRAY_TASK_ID]}
 
 # Define input and control files
-INPUT_BAM="results/aligned/${SAMPLE}.bam"
-CONTROL_BAM="results/aligned/IgM.bam"
+INPUT_BAM="results_1/aligned/${SAMPLE}.bam"
+CONTROL_BAM="results_1/aligned/IgM.bam"
 
 # Run MACS2 for broad peaks
 echo "Running MACS2 broad peak calling for ${SAMPLE}..."
@@ -113,7 +113,7 @@ fi
 echo "Finished processing $SAMPLE"
 
 # Verify output was created
-if [ ! -f "${RESULTS_DIR}/peaks/broad/${SAMPLE}_peaks.broadPeak" ]; then
+if [ ! -f "${RESULTS_DIR}/peaks/broad/${SAMPLE}_broad_peaks.broadPeak" ]; then
     echo "Error: Output file not created for sample $SAMPLE (broad)"
     exit 1
 fi

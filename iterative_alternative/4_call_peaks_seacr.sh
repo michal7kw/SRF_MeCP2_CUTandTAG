@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=peaks_1
+#SBATCH --job-name=peaks_seacr
 #SBATCH --account=kubacki.michal
 #SBATCH --mem=16GB
 #SBATCH --time=8:00:00
@@ -8,8 +8,8 @@
 #SBATCH --ntasks-per-node=16
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/peaks_1.err"
-#SBATCH --output="logs/peaks_1.out"
+#SBATCH --error="logs/peaks_seacr.err"
+#SBATCH --output="logs/peaks_seacr.out"
 #SBATCH --array=0-10  # Excluding IgM controls
 
 # Set base directory and create required directories
@@ -48,7 +48,7 @@ if [ ! -f "results_1/bedgraph/${SAMPLE}.bedgraph" ]; then
 fi
 
 # Create temporary directory
-TEMP_DIR=$(mktemp -d -p results/peaks/seacr/auc)
+TEMP_DIR=$(mktemp -d -p results_1/peaks/seacr/auc)
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
 # Copy SEACR files to temp directory

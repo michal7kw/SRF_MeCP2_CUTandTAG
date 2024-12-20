@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=enrichment_NSC_5
+#SBATCH --job-name=enrichment_NSC_5_new_005
 #SBATCH --account=kubacki.michal
 #SBATCH --mem=32GB
 #SBATCH --time=24:00:00
@@ -8,8 +8,8 @@
 #SBATCH --mail-type=ALL
 #SBATCH --exclusive
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/enrichment_NSC_5.err"
-#SBATCH --output="logs/enrichment_NSC_5.out"
+#SBATCH --error="logs/enrichment_NSC_5_new_005.err"
+#SBATCH --output="logs/enrichment_NSC_5_new_005.out"
 
 cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative
 
@@ -21,14 +21,17 @@ mkdir -p logs
 
 WORKING_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative"
 DATA_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/results_1"
-RESULTS_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/results_5"
+RESULTS_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/results_5_new_005"
+
+# Copy peaks folder from results_2_new_005 to RESULTS_DIR, overwriting if it exists
+echo "Copying peaks folder from results_2_new_005 to ${RESULTS_DIR}..."
+rm -rf "${RESULTS_DIR}/peaks"
+cp -r "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/results_2_new_005/peaks" "${RESULTS_DIR}/"
+
 
 # Run the script with working directory argument and full error traceback
 python -u ../scripts/analyze_enrichment_NSC_5.py \
     --working-dir $WORKING_DIR \
     --data-dir $DATA_DIR \
     --results-dir $RESULTS_DIR \
-    2>&1 | tee "logs/enrichment_NSC_5.out"
-
-
-# peaks were copied to results_5 from results_2_original
+    2>&1 | tee "logs/enrichment_NSC_5_new_005.out"

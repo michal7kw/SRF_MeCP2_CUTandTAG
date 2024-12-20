@@ -171,11 +171,12 @@ picard CollectInsertSizeMetrics \
     O=results_1b/aligned/${SAMPLE}.insert_metrics.txt \
     H=results_1b/aligned/${SAMPLE}.insert_histogram.pdf
 
-# Add cross-correlation analysis for CUT&TAG
-phantompeakqualtools run \
-    -c="$TEMP_DIR/${SAMPLE}.temp2.bam" \
-    -p=$THREADS \
-    -out=results_1b/aligned/${SAMPLE}.cc.qc
+# Remove or comment out the phantompeakqualtools section since it's not installed
+# If you need this tool, you should install it first through conda or other means
+# phantompeakqualtools run \
+#     -c="$TEMP_DIR/${SAMPLE}.temp2.bam" \
+#     -p=$THREADS \
+#     -out=results_1b/aligned/${SAMPLE}.cc.qc
 
 # Create comprehensive QC report with error checking
 {
@@ -208,13 +209,13 @@ phantompeakqualtools run \
 
 log_progress "Sorting BAM file..."
 
-# Sort BAM file with adjusted memory settings
+# Fix the path to use the correct temporary directory structure
 if ! samtools sort \
     -@ $THREADS \
     -m $SORT_MEMORY \
-    -T "$TEMP_DIR/${SAMPLE}" \
+    -T "$TMP_DIR/${SAMPLE}" \
     --write-index \
-    "$TEMP_DIR/${SAMPLE}.temp2.bam" \
+    "$TMP_DIR/${SAMPLE}/${SAMPLE}.temp2.bam" \
     -o results_1b/aligned/${SAMPLE}.bam; then
     log_progress "Error: BAM sorting failed for ${SAMPLE}"
     exit 1
