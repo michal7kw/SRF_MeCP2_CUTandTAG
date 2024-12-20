@@ -1,0 +1,8 @@
+,total_genes,exo_only,endo_only,both
+signal_ratio,2551,77,29,2445
+peak_count,2445,0,0,2445
+combined_score,2474,0,29,2445
+statistical,2445,0,0,2445
+width_weighted,2474,0,29,2445
+coverage_score,2474,0,29,2445
+area_integration,2474,0,2474,0
