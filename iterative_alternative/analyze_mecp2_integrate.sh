@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=mecp2_cpg_enrichment
+#SBATCH --job-name=mecp2_integrate
 #SBATCH --account=kubacki.michal
 #SBATCH --mem=32GB
 #SBATCH --time=24:00:00
@@ -8,8 +8,8 @@
 #SBATCH --mail-type=ALL
 #SBATCH --exclusive
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/mecp2_cpg_enrichment.err"
-#SBATCH --output="logs/mecp2_cpg_enrichment.out"
+#SBATCH --error="logs/mecp2_integrate.err"
+#SBATCH --output="logs/mecp2_integrate.out"
 
 cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative
 
@@ -23,11 +23,18 @@ WORKING_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative
 DATA_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/DATA"
 RESULTS_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/analyze_mecp2_cpg_enrichment"
 
-# Run the script with working directory argument and full error traceback
-python integrate_rna_seq.py \
-    --enrichment-file ${RESULTS_DIR}/mecp2_cpg_enrichment.csv \
-    --rna-seq-file ${RESULTS_DIR}/rna_seq_results.csv \
+# Ensure enrichment analysis is complete
+ENRICHMENT_FILE="${RESULTS_DIR}/mecp2_cpg_enrichment_parallel/mecp2_cpg_enrichment_parallel.csv"
+if [ ! -f "$ENRICHMENT_FILE" ]; then
+    echo "Error: Enrichment analysis results not found at $ENRICHMENT_FILE"
+    exit 1
+fi
+
+# Run the integration script
+python ../scripts/integrate_rna_seq.py \
+    --enrichment-file ${ENRICHMENT_FILE} \
+    --rna-seq-file ${DATA_DIR}/DEA_NSC.csv \
     --gene-annotations ${DATA_DIR}/gencode.vM10.annotation.gtf \
     --output-dir ${RESULTS_DIR}/integrated/
 
-# peaks were copied to results_5 from results_2_new_001
+echo "Integration complete. Check results in ${RESULTS_DIR}/integrated/"

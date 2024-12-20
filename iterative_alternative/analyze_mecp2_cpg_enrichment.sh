@@ -37,19 +37,29 @@ python ../scripts/analyze_mecp2_cpg_enrichment.py \
 # If this is the last chunk, wait for all other chunks and combine results
 if [ $SLURM_ARRAY_TASK_ID -eq 9 ]; then
     echo "Waiting for all chunks to complete..."
-    # Wait for all chunk files to be created
-    while [ $(ls ${RESULTS_DIR}/mecp2_cpg_enrichment_parallel/chunk_*.csv 2>/dev/null | wc -l) -lt 12 ]; do
+    
+    # Wait for all 10 chunk files (0-9)
+    expected_files=10
+    while true; do
+        actual_files=$(ls ${RESULTS_DIR}/mecp2_cpg_enrichment_parallel/chunk_*.csv 2>/dev/null | wc -l)
+        if [ "$actual_files" -eq "$expected_files" ]; then
+            break
+        fi
+        echo "Found $actual_files/$expected_files chunk files. Waiting..."
         sleep 30
     done
     
-    echo "Combining results..."
+    echo "All chunks found. Combining results..."
     python - <<EOF
 import pandas as pd
 import glob
 import os
 
 results_dir = "${RESULTS_DIR}/mecp2_cpg_enrichment_parallel"
-chunks = glob.glob(os.path.join(results_dir, "chunk_*.csv"))
+chunks = sorted(glob.glob(os.path.join(results_dir, "chunk_*.csv")))
+if len(chunks) != 10:  # Changed from 12 to 10
+    raise ValueError(f"Expected 10 chunk files, found {len(chunks)}")
+
 combined = pd.concat([pd.read_csv(f) for f in chunks])
 output_file = os.path.join(results_dir, "mecp2_cpg_enrichment_parallel.csv")
 combined.to_csv(output_file, index=False)

@@ -72,23 +72,41 @@ class MeCP2CpGAnalyzer:
         peaks['signalValue'] = peaks['signalValue'] * (1e6 / depth)  # RPM normalization
         return peaks
 
+    def get_peak_signal(self, peaks_dict: Dict[str, pd.DataFrame], cpg: pd.Series) -> float:
+        """
+        Calculate average signal across replicates for a CpG region
+        
+        Parameters:
+        - peaks_dict: Dictionary of sample names to peak DataFrames
+        - cpg: Series containing CpG island information (chr, start, end)
+        
+        Returns:
+        - Average normalized signal across replicates
+        """
+        signals = []
+        for sample, peaks_df in peaks_dict.items():
+            # Find peaks overlapping with CpG island
+            overlaps = peaks_df[
+                (peaks_df['chr'] == cpg['chr']) &
+                (peaks_df['start'] <= cpg['end']) &
+                (peaks_df['end'] >= cpg['start'])
+            ]
+            
+            # Sum signal values for overlapping peaks
+            signal = overlaps['signalValue'].sum() if not overlaps.empty else 0
+            signals.append(signal)
+        
+        # Return average signal across replicates
+        return np.mean(signals) if signals else 0
+
     def calculate_enrichment(self, 
                            exo_peaks: Dict[str, pd.DataFrame],
                            endo_peaks: Dict[str, pd.DataFrame],
                            cpg_islands: pd.DataFrame,
                            exo_depths: Dict[str, int],
                            endo_depths: Dict[str, int]) -> pd.DataFrame:
-        """
-        Calculate MeCP2 enrichment at CpG islands with depth normalization
-        
-        Parameters:
-        - exo_peaks: Dictionary of exogenous peak DataFrames
-        - endo_peaks: Dictionary of endogenous peak DataFrames
-        - cpg_islands: CpG islands DataFrame
-        - exo_depths: Dictionary of exogenous sample sequencing depths
-        - endo_depths: Dictionary of endogenous sample sequencing depths
-        """
-        # First normalize signals by sequencing depth
+        """Calculate enrichment for all CpG islands"""
+        # Normalize signals by sequencing depth
         normalized_exo = {
             sample: self.normalize_signal(peaks, exo_depths[sample])
             for sample, peaks in exo_peaks.items()
@@ -98,38 +116,24 @@ class MeCP2CpGAnalyzer:
             sample: self.normalize_signal(peaks, endo_depths[sample])
             for sample, peaks in endo_peaks.items()
         }
-
-        def get_peak_signal(peaks_dict: Dict[str, pd.DataFrame], cpg: pd.Series) -> float:
-            """Calculate normalized average signal across replicates for a CpG region"""
-            signals = []
-            
-            for sample, peaks in peaks_dict.items():
-                overlaps = peaks[
-                    (peaks['chr'] == cpg['chr']) &
-                    (peaks['start'].astype(int) <= cpg['end']) &
-                    (peaks['end'].astype(int) >= cpg['start'])
-                ]
-                
-                if not overlaps.empty:
-                    # Get mean normalized signal for this replicate
-                    signals.append(overlaps['signalValue'].mean())
-            
-            return np.mean(signals) if signals else 0
-
+        
         enrichment_data = []
-        for _, cpg in cpg_islands.iterrows():
-            # Calculate depth-normalized signals
-            exo_signal = get_peak_signal(normalized_exo, cpg)
-            endo_signal = get_peak_signal(normalized_endo, cpg)
+        total_cpgs = len(cpg_islands)
+        
+        logger.info(f"Processing {total_cpgs} CpG islands...")
+        
+        for idx, cpg in cpg_islands.iterrows():
+            if idx % 1000 == 0:
+                logger.info(f"Processed {idx}/{total_cpgs} CpG islands...")
             
-            # Calculate enrichment
+            exo_signal = self.get_peak_signal(normalized_exo, cpg)
+            endo_signal = self.get_peak_signal(normalized_endo, cpg)
+            
             enrichment = 0
             if endo_signal > 0:
                 enrichment = exo_signal / endo_signal
             elif exo_signal > 0:
                 enrichment = float('inf')
-            
-            significant = (enrichment >= self.config.min_fold_change) and (exo_signal > self.config.min_signal_threshold)
             
             enrichment_data.append({
                 'chr': cpg['chr'],
@@ -138,11 +142,13 @@ class MeCP2CpGAnalyzer:
                 'exo_signal': exo_signal,
                 'endo_signal': endo_signal,
                 'enrichment': enrichment,
-                'n_exo_peaks': len(exo_peaks),
-                'n_endo_peaks': len(endo_peaks),
-                'significant': significant
+                'significant': (
+                    enrichment >= self.config.min_fold_change and 
+                    exo_signal > self.config.min_signal_threshold
+                )
             })
         
+        logger.info("Enrichment calculation complete")
         return pd.DataFrame(enrichment_data)
 
     def plot_enrichment_results(self, 
