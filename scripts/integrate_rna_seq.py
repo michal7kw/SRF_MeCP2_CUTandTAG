@@ -133,6 +133,36 @@ class RNASeqIntegrator:
         plt.savefig(os.path.join(output_dir, 'mecp2_vs_expression.pdf'))
         plt.close()
 
+def load_gtf(gtf_file: str) -> pd.DataFrame:
+    """Load and parse GTF file, extracting only gene records"""
+    logger.info(f"Loading GTF file: {gtf_file}")
+    
+    # Read GTF file with correct format
+    df = pd.read_csv(gtf_file, sep='\t', comment='#',
+                     names=['chr', 'source', 'feature', 'start', 'end', 
+                           'score', 'strand', 'frame', 'attributes'])
+    
+    # Filter for gene entries only
+    genes = df[df['feature'] == 'gene'].copy()
+    logger.info(f"Found {len(genes)} gene records")
+    
+    # Extract gene_name from attributes
+    def extract_gene_name(attr_str):
+        for attr in attr_str.split('; '):
+            if attr.startswith('gene_name'):
+                return attr.split('"')[1]
+        return None
+    
+    genes['gene_name'] = genes['attributes'].apply(extract_gene_name)
+    
+    # Select required columns
+    result = genes[['chr', 'start', 'end', 'gene_name']].copy()
+    logger.info(f"Processed gene annotations shape: {result.shape}")
+    logger.info("Sample of processed annotations:")
+    logger.info(result.head().to_string())
+    
+    return result
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(description='Integrate MeCP2 enrichment with RNA-seq data')
@@ -150,9 +180,9 @@ def main():
         # Initialize integrator
         integrator = RNASeqIntegrator(args.enrichment_file, args.rna_seq_file)
         
-        # Load gene annotations
+        # Load gene annotations using custom GTF parser
         logger.info("Loading gene annotations...")
-        gene_annotations = pd.read_csv(args.gene_annotations, sep='\t')
+        gene_annotations = load_gtf(args.gene_annotations)
         
         # Integrate data
         logger.info("Integrating MeCP2 enrichment with gene annotations and RNA-seq data...")
