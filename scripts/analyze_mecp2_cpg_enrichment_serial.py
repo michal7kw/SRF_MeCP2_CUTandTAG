@@ -185,7 +185,7 @@ def get_sequencing_depths(bam_dir: str) -> Dict[str, int]:
     - bam_dir: Directory containing BAM files
     
     Returns:
-    - Dictionary mapping sample names (with _peaks suffix) to their sequencing depths
+    - Dictionary mapping sample names to their sequencing depths
     """
     depths = {}
     bam_dir = Path(bam_dir)
@@ -217,9 +217,10 @@ def get_sequencing_depths(bam_dir: str) -> Dict[str, int]:
             # Convert output to integer
             depth = int(result.stdout.strip())
             
-            # Store with _peaks suffix to match peak filenames
-            sample_name = f"{bam_file.stem}_peaks"
-            depths[sample_name] = depth
+            # Store both with and without _narrow suffix to match all peak filenames
+            sample_name = bam_file.stem
+            depths[f"{sample_name}_peaks"] = depth
+            depths[f"{sample_name}_narrow_peaks"] = depth
             
             logger.info(f"Calculated depth for {sample_name}: {depth:,} reads")
             

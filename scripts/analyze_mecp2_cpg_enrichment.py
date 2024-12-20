@@ -182,23 +182,15 @@ class MeCP2CpGAnalyzer:
 
 def get_sequencing_depths(bam_dir: str) -> Dict[str, int]:
     """
-    Calculate sequencing depths from BAM files
-    
-    Parameters:
-    - bam_dir: Directory containing BAM files
-    
-    Returns:
-    - Dictionary mapping sample names (with _peaks suffix) to their sequencing depths
+    Calculate sequencing depths from BAM files and map to all possible peak file names
     """
     depths = {}
     bam_dir = Path(bam_dir)
     
-    # Check if directory exists
     if not bam_dir.exists():
         logger.error(f"BAM directory does not exist: {bam_dir}")
         return depths
         
-    # List all BAM files
     bam_files = list(bam_dir.glob('*.bam'))
     if not bam_files:
         logger.error(f"No BAM files found in {bam_dir}")
@@ -208,23 +200,21 @@ def get_sequencing_depths(bam_dir: str) -> Dict[str, int]:
     
     for bam_file in bam_files:
         try:
-            # Check if BAM index exists
             if not Path(f"{bam_file}.bai").exists():
                 logger.warning(f"BAM index not found for {bam_file}, creating...")
                 subprocess.run(['samtools', 'index', str(bam_file)], check=True)
             
-            # Get mapped reads using samtools
             cmd = ['samtools', 'view', '-c', '-F', '0x904', str(bam_file)]
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             
-            # Convert output to integer
             depth = int(result.stdout.strip())
             
-            # Store with _peaks suffix to match peak filenames
-            sample_name = f"{bam_file.stem}_peaks"
-            depths[sample_name] = depth
+            # Map BAM file depth to all possible peak file names
+            base_name = bam_file.stem
+            depths[f"{base_name}_peaks"] = depth
+            depths[f"{base_name}_narrow_peaks"] = depth
             
-            logger.info(f"Calculated depth for {sample_name}: {depth:,} reads")
+            logger.info(f"Calculated depth for {base_name}: {depth:,} reads")
             
         except subprocess.CalledProcessError as e:
             logger.error(f"samtools error for {bam_file}: {e.stderr}")

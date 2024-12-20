@@ -16,13 +16,35 @@ cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternati
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate
 conda activate snakemake
 
-# Create logs directory if it doesn't exist
-mkdir -p logs
-mkdir -p ${RESULTS_DIR}/mecp2_cpg_enrichment_parallel
-
 WORKING_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative"
 DATA_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/DATA"
 RESULTS_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/analyze_mecp2_cpg_enrichment"
+
+# Create directories
+mkdir -p "${RESULTS_DIR}/exo"
+mkdir -p "${RESULTS_DIR}/endo"
+mkdir -p logs
+mkdir -p ${RESULTS_DIR}/mecp2_cpg_enrichment_parallel
+
+# Clean up any existing peak files to avoid duplicates
+rm -f "${RESULTS_DIR}/exo"/*.narrowPeak
+rm -f "${RESULTS_DIR}/endo"/*.narrowPeak
+
+echo "Copying and organizing peaks from results_2_new_005..."
+
+# Copy exogenous peaks (virus samples)
+for sample in NeuV1 NeuV2 NeuV3 NSCv1 NSCv2 NSCv3; do
+    cp "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/results_2_new_005/peaks/narrow/${sample}_narrow_peaks.narrowPeak" "${RESULTS_DIR}/exo/"
+    # Also create a symlink with the alternative naming
+    ln -sf "${RESULTS_DIR}/exo/${sample}_narrow_peaks.narrowPeak" "${RESULTS_DIR}/exo/${sample}_peaks.narrowPeak"
+done
+
+# Copy endogenous peaks (M samples) 
+for sample in NeuM2 NeuM3 NSCM1 NSCM2 NSCM3; do
+    cp "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/results_2_new_005/peaks/narrow/${sample}_narrow_peaks.narrowPeak" "${RESULTS_DIR}/endo/"
+    # Also create a symlink with the alternative naming
+    ln -sf "${RESULTS_DIR}/endo/${sample}_narrow_peaks.narrowPeak" "${RESULTS_DIR}/endo/${sample}_peaks.narrowPeak"
+done
 
 # Process chunk
 python ../scripts/analyze_mecp2_cpg_enrichment.py \
@@ -38,7 +60,7 @@ python ../scripts/analyze_mecp2_cpg_enrichment.py \
 if [ $SLURM_ARRAY_TASK_ID -eq 9 ]; then
     echo "Waiting for all chunks to complete..."
     
-    # Wait for all 10 chunk files (0-9)
+    # Wait for all chunk files
     expected_files=10
     while true; do
         actual_files=$(ls ${RESULTS_DIR}/mecp2_cpg_enrichment_parallel/chunk_*.csv 2>/dev/null | wc -l)
@@ -57,7 +79,7 @@ import os
 
 results_dir = "${RESULTS_DIR}/mecp2_cpg_enrichment_parallel"
 chunks = sorted(glob.glob(os.path.join(results_dir, "chunk_*.csv")))
-if len(chunks) != 10:  # Changed from 12 to 10
+if len(chunks) != 10:
     raise ValueError(f"Expected 10 chunk files, found {len(chunks)}")
 
 combined = pd.concat([pd.read_csv(f) for f in chunks])

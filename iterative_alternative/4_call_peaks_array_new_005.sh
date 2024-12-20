@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=peaks_macs2_new_005
+#SBATCH --job-name=peaks_new_005
 #SBATCH --account=kubacki.michal
 #SBATCH --mem=16GB
 #SBATCH --time=4:00:00

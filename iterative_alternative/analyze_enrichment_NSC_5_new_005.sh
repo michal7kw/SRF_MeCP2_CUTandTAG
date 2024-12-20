@@ -23,11 +23,20 @@ WORKING_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative
 DATA_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/results_1"
 RESULTS_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/results_5_new_005"
 
-# Copy peaks folder from results_2_new_005 to RESULTS_DIR, overwriting if it exists
-echo "Copying peaks folder from results_2_new_005 to ${RESULTS_DIR}..."
+# Fix the copying and renaming of peak files
+echo "Copying and renaming peaks from results_2_new_005 to ${RESULTS_DIR}..."
 rm -rf "${RESULTS_DIR}/peaks"
-cp -r "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/results_2_new_005/peaks" "${RESULTS_DIR}/"
+mkdir -p "${RESULTS_DIR}/peaks"
 
+# Copy and rename files
+for sample in NSCv1 NSCv2 NSCv3 NSCM1 NSCM2 NSCM3; do
+    if [ -f "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/results_2_new_005/peaks/narrow/${sample}_narrow_peaks.narrowPeak" ]; then
+        cp "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/results_2_new_005/peaks/narrow/${sample}_narrow_peaks.narrowPeak" \
+           "${RESULTS_DIR}/peaks/${sample}_peaks.narrowPeak"
+    else
+        echo "Warning: Source file not found for sample ${sample}"
+    fi
+done
 
 # Run the script with working directory argument and full error traceback
 python -u ../scripts/analyze_enrichment_NSC_5.py \
