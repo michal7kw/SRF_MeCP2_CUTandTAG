@@ -21,6 +21,10 @@ cpg_islands <- read.table("../DATA/cpg_islands.bed",
                          col.names=c("chr", "start", "end", "id", "cpg_label", "cpg_count"),
                          header=FALSE)
 
+# Filter for standard chromosomes only and ensure proper chromosome naming
+standard_chroms <- paste0("chr", c(1:19, "X", "Y", "M"))
+cpg_islands <- cpg_islands[cpg_islands$chr %in% standard_chroms,]
+
 # Function to create windows around regions
 createWindowsAroundRegions <- function(gr, upstream, downstream) {
     # Calculate centers
@@ -44,25 +48,46 @@ cpg_ranges <- GRanges(
     seqnames = cpg_islands$chr,
     ranges = IRanges(start = cpg_islands$start, 
                     end = cpg_islands$end),
-    strand = "*"
+    strand = "*",
+    type = "CpG_island",  # Add type metadata
+    gene_id = paste0("CpG_", seq_len(nrow(cpg_islands))),  # Required for TxDb
+    tx_id = paste0("CpG_", seq_len(nrow(cpg_islands))),    # Required for TxDb
+    tx_name = paste0("CpG_", seq_len(nrow(cpg_islands)))   # Add tx_name to avoid warning
 )
 
-# Create standardized windows around CpG islands
+# Set and keep only standard chromosomes
+seqlevels(cpg_ranges) <- standard_chroms
+seqlevels(cpg_ranges, pruning.mode="coarse") <- standard_chroms
+
+# Create a mock TxDb object for CpG islands
+# First create transcript-like features
+cpg_transcripts <- GRanges(
+    seqnames = seqnames(cpg_ranges),
+    ranges = ranges(cpg_ranges),
+    strand = strand(cpg_ranges),
+    type = "transcript",
+    gene_id = mcols(cpg_ranges)$gene_id,
+    tx_id = mcols(cpg_ranges)$tx_id,
+    tx_name = mcols(cpg_ranges)$tx_name
+)
+
+# Combine features
+all_features <- c(cpg_ranges, cpg_transcripts)
+
+# Create a mock TxDb object for CpG islands
+cpg_txdb <- makeTxDbFromGRanges(all_features)
+
+# Calculate centers of CpG islands and create fixed-width windows
 centers <- (start(cpg_ranges) + end(cpg_ranges)) %/% 2
-cpg_ranges <- GRanges(
+window_size <- 6000  # Total window size (±3000 from center)
+cpg_windows <- GRanges(
     seqnames = seqnames(cpg_ranges),
     ranges = IRanges(
-        start = centers - 3000,
-        end = centers + 3000
+        start = centers - (window_size/2),
+        width = rep(window_size, length(centers))
     ),
-    strand = strand(cpg_ranges),
-    # Add additional metadata that ChIPseeker expects
-    tx_id = seq_along(centers),
-    tx_name = paste0("CpG_", seq_along(centers))
+    strand = strand(cpg_ranges)
 )
-
-# Ensure seqlevels are consistent with the TxDb
-seqlevels(cpg_ranges) <- seqlevels(txdb)
 
 # Function to read peaks and create GRanges object
 read_peaks <- function(peak_file, sample_id) {
@@ -98,18 +123,36 @@ create_tissue_profiles <- function(endo_peaks, exo_peaks, tissue_name, color_sch
         windows <- promoter
         x_label <- "Distance from TSS (bp)"
     } else {
-        windows <- cpg_ranges
+        # Create fixed-width windows centered on CpG islands
+        cpg_centers <- (start(cpg_ranges) + end(cpg_ranges)) %/% 2
+        temp_windows <- GRanges(
+            seqnames = seqnames(cpg_ranges),
+            ranges = IRanges(
+                start = cpg_centers - 3000,
+                end = cpg_centers + 3000
+            ),
+            strand = strand(cpg_ranges)
+        )
+        # Use makeBioRegionFromGranges to create compatible windows
+        windows <- makeBioRegionFromGranges(temp_windows, upstream = 0, downstream = 0)
         x_label <- "Distance from CpG Island Center (bp)"
     }
     
+    # Ensure chromosome naming is consistent
+    seqlevels(windows) <- seqlevels(txdb)
+    
     # Calculate matrices for endogenous peaks
     endo_matrices <- lapply(endo_peaks, function(x) {
+        # Ensure peak chromosomes match window chromosomes
+        seqlevels(x) <- seqlevels(windows)
         getTagMatrix(x, windows=windows)
     })
     endo_mean <- colMeans(do.call(rbind, lapply(endo_matrices, colMeans)))
     
     # Calculate matrices for exogenous peaks
     exo_matrices <- lapply(exo_peaks, function(x) {
+        # Ensure peak chromosomes match window chromosomes
+        seqlevels(x) <- seqlevels(windows)
         getTagMatrix(x, windows=windows)
     })
     exo_mean <- colMeans(do.call(rbind, lapply(exo_matrices, colMeans)))

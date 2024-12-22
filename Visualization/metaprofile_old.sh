@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=metaprofile
+#SBATCH --job-name=metaprofile_old
 #SBATCH --account=kubacki.michal
 #SBATCH --mem=64GB
 #SBATCH --time=24:00:00
@@ -8,8 +8,8 @@
 #SBATCH --mail-type=ALL
 #SBATCH --exclusive
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/metaprofile.err"
-#SBATCH --output="logs/metaprofile.out"
+#SBATCH --error="logs/metaprofile_old.err"
+#SBATCH --output="logs/metaprofile_old.out"
 
 cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/Visualization
 
@@ -19,4 +19,5 @@ conda activate snakemake
 # Create logs directory if it doesn't exist
 mkdir -p logs
 
-Rscript metaprofile_analysis.R
+# Run both analyses
+Rscript metaprofile_analysis_old.R
