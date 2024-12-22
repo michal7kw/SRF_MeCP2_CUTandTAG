@@ -17,22 +17,40 @@ logger = logging.getLogger(__name__)
 
 class RNASeqIntegrator:
     def __init__(self, enrichment_file: str, rna_seq_file: str):
-        """Initialize with enrichment and RNA-seq data files"""
-        logger.info(f"Loading enrichment data from: {enrichment_file}")
-        self.enrichment_df = pd.read_csv(enrichment_file)
-        logger.info(f"Enrichment data shape: {self.enrichment_df.shape}")
-        logger.info(f"Enrichment columns: {self.enrichment_df.columns.tolist()}")
+        """
+        Initialize with pre-calculated enrichment data and RNA-seq results
         
-        logger.info(f"Loading RNA-seq data from: {rna_seq_file}")
+        Args:
+            enrichment_file: Path to the enrichment results from analyze_mecp2_cpg_enrichment.py
+            rna_seq_file: Path to RNA-seq differential expression results
+        """
+        # Load pre-calculated enrichment data
+        self.enrichment_df = pd.read_csv(enrichment_file)
+        logger.info(f"Loaded {len(self.enrichment_df)} CpG regions with enrichment data")
+        
+        # Load RNA-seq data
         self.rna_seq_df = pd.read_csv(rna_seq_file)
-        logger.info(f"RNA-seq data shape: {self.rna_seq_df.shape}")
-        logger.info(f"RNA-seq columns: {self.rna_seq_df.columns.tolist()}")
+        logger.info(f"Loaded {len(self.rna_seq_df)} genes with RNA-seq data")
+        
+        # Verify enrichment data format
+        required_cols = ['chr', 'start', 'end', 'enrichment', 'significant', 
+                        'exo_signal', 'endo_signal', 'binding_type']
+        missing_cols = [col for col in required_cols if col not in self.enrichment_df.columns]
+        if missing_cols:
+            raise ValueError(f"Missing required columns in enrichment data: {missing_cols}")
         
         # Filter for significant MeCP2 enrichment
-        self.significant_regions = self.enrichment_df[self.enrichment_df['significant']]
+        self.significant_regions = self.enrichment_df[
+            (self.enrichment_df['significant']) & 
+            (self.enrichment_df['binding_type'].isin(['both', 'exo_only']))
+        ]
         logger.info(f"Found {len(self.significant_regions)} significantly enriched CpG regions")
-        logger.info("Sample of significant regions:")
-        logger.info(self.significant_regions.head().to_string())
+        
+        # Log binding type distribution
+        binding_counts = self.enrichment_df['binding_type'].value_counts()
+        logger.info("\nBinding type distribution:")
+        for binding_type, count in binding_counts.items():
+            logger.info(f"{binding_type}: {count}")
         
         # Verify RNA-seq data format
         required_cols = ['gene', 'baseMean', 'log2FoldChange', 'padj']
@@ -95,109 +113,94 @@ class RNASeqIntegrator:
         return result_df
     
     def categorize_genes(self, integrated_results: pd.DataFrame) -> Dict[str, pd.DataFrame]:
-        """Categorize genes based on expression and significance"""
-        # Define expression categories based on baseMean and log2FoldChange
+        """Categorize genes based on differential expression status"""
         categories = {}
         
         # Ensure we have expression data
-        mask = ~integrated_results['baseMean'].isna()
+        mask = ~integrated_results['log2FoldChange'].isna()
         expr_data = integrated_results[mask].copy()
         
-        # Define categories based on expression and fold change
-        categories['High Expression'] = expr_data[
-            (expr_data['baseMean'] > expr_data['baseMean'].quantile(0.75))
+        # Define categories based on fold change and significance
+        categories['up-regulated'] = expr_data[
+            (expr_data['log2FoldChange'] > 0.5) &  # log2FC > 0.5
+            (expr_data['padj'] < 0.05)             # significant
         ]
         
-        categories['Medium Expression'] = expr_data[
-            (expr_data['baseMean'] <= expr_data['baseMean'].quantile(0.75)) &
-            (expr_data['baseMean'] > expr_data['baseMean'].quantile(0.25))
+        categories['down-regulated'] = expr_data[
+            (expr_data['log2FoldChange'] < -0.5) & # log2FC < -0.5
+            (expr_data['padj'] < 0.05)             # significant
         ]
         
-        categories['Low Expression'] = expr_data[
-            (expr_data['baseMean'] <= expr_data['baseMean'].quantile(0.25))
+        categories['non-deregulated'] = expr_data[
+            ((expr_data['log2FoldChange'].abs() <= 0.5) |  # small fold change
+             (expr_data['padj'] >= 0.05))                  # not significant
         ]
         
         # Log category sizes
         for category, df in categories.items():
             logger.info(f"{category}: {len(df)} genes")
+            logger.info(f"Mean enrichment: {df['mecp2_enrichment'].mean():.2f}")
         
         return categories
     
     def plot_enrichment_by_category(self, integrated_results: pd.DataFrame, output_dir: str):
-        """Create visualization of enrichment distribution by expression category"""
+        """Create visualization of enrichment distribution by gene category"""
         # Categorize genes
         category_results = self.categorize_genes(integrated_results)
         
         # Create enrichment distribution plot by category
-        plt.figure(figsize=(10, 6))
+        plt.figure(figsize=(12, 7))  # Increased figure size for better readability
+        
+        # Define colors and labels for each category
+        category_specs = {
+            'up-regulated': {
+                'color': 'orange',
+                'label': 'up-regulated'
+            },
+            'down-regulated': {
+                'color': 'green',
+                'label': 'down-regulated'
+            },
+            'non-deregulated': {
+                'color': 'blue',
+                'label': 'non-deregulated'
+            }
+        }
         
         # Plot density for each category
         for category, df in category_results.items():
             if not df.empty:
+                # Calculate the 95th percentile for x-axis limit
+                upper_limit = df['mecp2_enrichment'].quantile(0.95)
+                
+                # Plot the KDE with cleaned data
                 sns.kdeplot(
-                    data=df['mecp2_enrichment'],
-                    label=category,
-                    clip=(0, df['mecp2_enrichment'].quantile(0.99))  # Remove extreme outliers
+                    data=df[df['mecp2_enrichment'] <= upper_limit]['mecp2_enrichment'],
+                    label=category_specs[category]['label'],
+                    color=category_specs[category]['color'],
+                    linewidth=2  # Thicker lines for better visibility
                 )
         
-        plt.xlabel('MeCP2 Enrichment (Exo/Endo)')
-        plt.ylabel('Density')
-        plt.title('MeCP2 Enrichment Distribution by Expression Category')
-        plt.legend()
+        plt.xlabel('MeCP2 Enrichment (Exo/Endo)', fontsize=12)
+        plt.ylabel('Density', fontsize=12)
+        plt.title('MeCP2 Enrichment Distribution by Gene Category', fontsize=14, pad=20)
         
-        # Add statistical annotation
-        # Calculate mean enrichment for each category
-        means = {cat: df['mecp2_enrichment'].mean() 
-                for cat, df in category_results.items()}
+        # Add legend with category sizes
+        legend_labels = [
+            f"{cat} (n={len(df)})" 
+            for cat, df in category_results.items()
+        ]
+        plt.legend(legend_labels, fontsize=10, bbox_to_anchor=(1.05, 1), loc='upper left')
         
-        # Perform Kruskal-Wallis H-test
-        categories_data = [df['mecp2_enrichment'].values 
-                          for df in category_results.values()]
-        h_stat, p_val = stats.kruskal(*categories_data)
-        
-        # Add statistical annotation to plot
-        plt.text(0.02, 0.98, 
-                 f'Kruskal-Wallis test\np-value: {p_val:.2e}',
-                 transform=plt.gca().transAxes,
-                 verticalalignment='top',
-                 bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
-        
+        # Adjust layout to prevent label cutoff
         plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, 'enrichment_distribution_by_category.pdf'))
-        plt.close()
         
-        # Create binding frequency plot
-        plt.figure(figsize=(10, 6))
-        categories_list = []
-        exo_freq = []
-        endo_freq = []
-        both_freq = []
-        
-        for category, df in category_results.items():
-            total_genes = len(df)
-            if total_genes > 0:
-                categories_list.append(category)
-                exo_freq.append(len(df[df['exo_signal'] > 0]) / total_genes * 100)
-                endo_freq.append(len(df[df['endo_signal'] > 0]) / total_genes * 100)
-                both_freq.append(
-                    len(df[(df['exo_signal'] > 0) & (df['endo_signal'] > 0)]) / total_genes * 100
-                )
-        
-        x = np.arange(len(categories_list))
-        width = 0.25
-        
-        plt.bar(x - width, exo_freq, width, label='Exo')
-        plt.bar(x, endo_freq, width, label='Endo')
-        plt.bar(x + width, both_freq, width, label='Both')
-        
-        plt.xlabel('Expression Category')
-        plt.ylabel('Percentage of Genes')
-        plt.title('MeCP2 Binding Frequency by Expression Category')
-        plt.xticks(x, categories_list, rotation=45)
-        plt.legend()
-        
-        plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, 'binding_frequency_by_category.pdf'))
+        # Save plot
+        plt.savefig(
+            os.path.join(output_dir, 'enrichment_distribution_by_category.pdf'),
+            bbox_inches='tight',
+            dpi=300
+        )
         plt.close()
     
     def plot_integration_summary(self, integrated_results: pd.DataFrame, output_dir: str):

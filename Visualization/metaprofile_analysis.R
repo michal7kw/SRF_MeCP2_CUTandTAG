@@ -6,6 +6,7 @@ library(ReactomePA)
 library(org.Mm.eg.db)
 library(ggplot2)
 library(patchwork)
+library(GenomicFeatures)
 
 # Read sample sheets
 endo_samples <- read.csv("DATA/ENDOGENOUS_sample_sheet_1.csv")
@@ -14,6 +15,54 @@ all_samples <- rbind(endo_samples, exo_samples)
 
 # Get TxDb object for mouse mm10
 txdb <- TxDb.Mmusculus.UCSC.mm10.knownGene
+
+# After getting TxDb object, add CpG Islands data
+cpg_islands <- read.table("../DATA/cpg_islands.bed", 
+                         col.names=c("chr", "start", "end", "id", "cpg_label", "cpg_count"),
+                         header=FALSE)
+
+# Function to create windows around regions
+createWindowsAroundRegions <- function(gr, upstream, downstream) {
+    # Calculate centers
+    centers <- (start(gr) + end(gr)) %/% 2
+    
+    # Create new ranges centered on the middle of each region
+    new_ranges <- GRanges(
+        seqnames = seqnames(gr),
+        ranges = IRanges(
+            start = centers - upstream,
+            end = centers + downstream
+        ),
+        strand = strand(gr)
+    )
+    return(new_ranges)
+}
+
+# Create standardized windows around CpG islands
+# Create GRanges for CpG islands with standardized windows
+cpg_ranges <- GRanges(
+    seqnames = cpg_islands$chr,
+    ranges = IRanges(start = cpg_islands$start, 
+                    end = cpg_islands$end),
+    strand = "*"
+)
+
+# Create standardized windows around CpG islands
+centers <- (start(cpg_ranges) + end(cpg_ranges)) %/% 2
+cpg_ranges <- GRanges(
+    seqnames = seqnames(cpg_ranges),
+    ranges = IRanges(
+        start = centers - 3000,
+        end = centers + 3000
+    ),
+    strand = strand(cpg_ranges),
+    # Add additional metadata that ChIPseeker expects
+    tx_id = seq_along(centers),
+    tx_name = paste0("CpG_", seq_along(centers))
+)
+
+# Ensure seqlevels are consistent with the TxDb
+seqlevels(cpg_ranges) <- seqlevels(txdb)
 
 # Function to read peaks and create GRanges object
 read_peaks <- function(peak_file, sample_id) {
@@ -41,19 +90,27 @@ for(i in 1:nrow(all_samples)) {
 promoter <- getPromoters(TxDb=txdb, upstream=3000, downstream=3000)
 
 # Function to create combined profile plots
-create_tissue_profiles <- function(endo_peaks, exo_peaks, tissue_name, color_scheme) {
-    # Combine peaks and calculate matrices
-    message("Calculating TSS profiles for ", tissue_name)
+create_tissue_profiles <- function(endo_peaks, exo_peaks, tissue_name, color_scheme, feature_type = "TSS") {
+    message(paste("Calculating", feature_type, "profiles for", tissue_name))
+    
+    # Select the appropriate windows based on feature type
+    if (feature_type == "TSS") {
+        windows <- promoter
+        x_label <- "Distance from TSS (bp)"
+    } else {
+        windows <- cpg_ranges
+        x_label <- "Distance from CpG Island Center (bp)"
+    }
     
     # Calculate matrices for endogenous peaks
     endo_matrices <- lapply(endo_peaks, function(x) {
-        getTagMatrix(x, windows=promoter)
+        getTagMatrix(x, windows=windows)
     })
     endo_mean <- colMeans(do.call(rbind, lapply(endo_matrices, colMeans)))
     
     # Calculate matrices for exogenous peaks
     exo_matrices <- lapply(exo_peaks, function(x) {
-        getTagMatrix(x, windows=promoter)
+        getTagMatrix(x, windows=windows)
     })
     exo_mean <- colMeans(do.call(rbind, lapply(exo_matrices, colMeans)))
     
@@ -74,12 +131,12 @@ create_tissue_profiles <- function(endo_peaks, exo_peaks, tissue_name, color_sch
     
     # Create plot
     p <- ggplot(df, aes(x = Position, y = Count, color = Type)) +
-        geom_line(size = 1) +
+        geom_line(linewidth = 1) +
         scale_color_manual(values = colors) +
         theme_minimal() +
         labs(
-            title = paste("MeCP2 distribution at TSS\n", tissue_name),
-            x = "Distance from TSS (bp)",
+            title = paste("MeCP2 distribution at", feature_type, "\n", tissue_name),
+            x = x_label,
             y = "Average Signal"
         ) +
         theme(
@@ -103,19 +160,25 @@ nsc_exo <- peak_list[all_samples$Tissue == "NSC" & all_samples$Condition == "Exo
 # Create output directory if it doesn't exist
 dir.create("results", showWarnings = FALSE)
 
-# Create plots for each tissue type
+# Create plots for each tissue type and feature
 message("Creating plots for Neurons")
-neuron_tss_plot <- create_tissue_profiles(neuron_endo, neuron_exo, "Neurons", "blue")
+neuron_tss_plot <- create_tissue_profiles(neuron_endo, neuron_exo, "Neurons", "blue", "TSS")
+neuron_cpg_plot <- create_tissue_profiles(neuron_endo, neuron_exo, "Neurons", "blue", "CpG Islands")
+
 message("Creating plots for NSCs")
-nsc_tss_plot <- create_tissue_profiles(nsc_endo, nsc_exo, "NSCs", "red")
+nsc_tss_plot <- create_tissue_profiles(nsc_endo, nsc_exo, "NSCs", "red", "TSS")
+nsc_cpg_plot <- create_tissue_profiles(nsc_endo, nsc_exo, "NSCs", "red", "CpG Islands")
 
 # Save individual plots
 ggsave("results/neuron_tss_profile.pdf", neuron_tss_plot, width = 6, height = 4)
+ggsave("results/neuron_cpg_profile.pdf", neuron_cpg_plot, width = 6, height = 4)
 ggsave("results/nsc_tss_profile.pdf", nsc_tss_plot, width = 6, height = 4)
+ggsave("results/nsc_cpg_profile.pdf", nsc_cpg_plot, width = 6, height = 4)
 
-# Create combined plot
-combined_plot <- neuron_tss_plot / nsc_tss_plot
-ggsave("results/combined_tss_profiles.pdf", combined_plot, width = 8, height = 8)
+# Create combined plot with both TSS and CpG Islands
+combined_plot <- (neuron_tss_plot + neuron_cpg_plot) / 
+                 (nsc_tss_plot + nsc_cpg_plot)
+ggsave("results/combined_profiles.pdf", combined_plot, width = 12, height = 8)
 
 # Perform peak annotation
 annotate_peaks <- function(peaks, name) {
