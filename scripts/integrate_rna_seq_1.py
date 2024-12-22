@@ -6,7 +6,6 @@ import os
 import logging
 from typing import Dict, List, Tuple
 from pathlib import Path
-import scipy.stats as stats
 
 # Set up more detailed logging
 logging.basicConfig(
@@ -41,170 +40,75 @@ class RNASeqIntegrator:
             raise ValueError(f"Missing required columns in RNA-seq data: {missing_cols}")
         
     def integrate_data(self, gene_annotations: pd.DataFrame) -> pd.DataFrame:
-        """Map significantly enriched CpG regions to genes and integrate with RNA-seq data"""
-        # First, find the nearest gene for each CpG region
-        integrated_data = []
+        """Map significantly enriched CpG regions to nearby genes and integrate with RNA-seq data"""
+        logger.info(f"Gene annotations shape: {gene_annotations.shape}")
+        logger.info(f"Gene annotations columns: {gene_annotations.columns.tolist()}")
+        logger.info("Sample of gene annotations:")
+        logger.info(gene_annotations.head().to_string())
         
+        if not {'chr', 'start', 'end', 'gene_name'}.issubset(gene_annotations.columns):
+            raise ValueError("Gene annotations must contain: chr, start, end, gene_name")
+        
+        integrated_data = []
+        total_regions = len(self.significant_regions)
+        
+        logger.info(f"Processing {total_regions} significant regions...")
         for idx, region in self.significant_regions.iterrows():
-            # Find nearest gene
+            if idx % 100 == 0:
+                logger.info(f"Processing region {idx}/{total_regions}")
+            
             nearby_genes = gene_annotations[
                 (gene_annotations['chr'] == region['chr']) &
                 ((gene_annotations['start'] - 2000 <= region['end']) &
                  (gene_annotations['end'] + 2000 >= region['start']))
             ]
             
-            if nearby_genes.empty:
-                continue
+            if len(nearby_genes) > 0:
+                logger.debug(f"Found {len(nearby_genes)} genes near region {region['chr']}:{region['start']}-{region['end']}")
             
-            # Get nearest gene only
-            distances = nearby_genes.apply(lambda x: min(
-                abs(region['start'] - x['start']),
-                abs(region['end'] - x['end'])
-            ), axis=1)
-            nearest_gene = nearby_genes.iloc[distances.argmin()]
-            
-            gene_data = {
-                'gene': nearest_gene['gene_name'],
-                'chr': region['chr'],
-                'cpg_start': region['start'],
-                'cpg_end': region['end'],
-                'mecp2_enrichment': region['enrichment'],
-                'exo_signal': region['exo_signal'],
-                'endo_signal': region['endo_signal'],
-                'binding_type': region['binding_type'],
-                'distance_to_gene': distances.min()
-            }
-            
-            # Add RNA-seq data if available
-            rna_data = self.rna_seq_df[self.rna_seq_df['gene'] == nearest_gene['gene_name']]
-            if not rna_data.empty:
-                expr = rna_data.iloc[0]
-                gene_data.update({
-                    'baseMean': expr['baseMean'],
-                    'log2FoldChange': expr['log2FoldChange'],
-                    'padj': expr['padj']
-                })
-            
-            integrated_data.append(gene_data)
+            for _, gene in nearby_genes.iterrows():
+                gene_data = {
+                    'gene': gene['gene_name'],
+                    'chr': region['chr'],
+                    'cpg_start': region['start'],
+                    'cpg_end': region['end'],
+                    'mecp2_enrichment': region['enrichment'],
+                    'exo_signal': region['exo_signal'],
+                    'endo_signal': region['endo_signal'],
+                    'distance_to_gene': min(
+                        abs(region['start'] - gene['start']),
+                        abs(region['end'] - gene['end'])
+                    )
+                }
+                
+                # Add RNA-seq data if available
+                rna_data = self.rna_seq_df[self.rna_seq_df['gene'] == gene['gene_name']]
+                if not rna_data.empty:
+                    expr = rna_data.iloc[0]
+                    gene_data.update({
+                        'baseMean': expr['baseMean'],
+                        'log2FoldChange': expr['log2FoldChange'],
+                        'padj': expr['padj']
+                    })
+                else:
+                    gene_data.update({
+                        'baseMean': np.nan,
+                        'log2FoldChange': np.nan,
+                        'padj': np.nan
+                    })
+                
+                integrated_data.append(gene_data)
         
         result_df = pd.DataFrame(integrated_data)
-        
-        # Remove duplicate genes, keeping the closest CpG region
-        result_df = result_df.sort_values('distance_to_gene').groupby('gene').first().reset_index()
-        
+        logger.info(f"Integration complete. Found {len(result_df)} gene-CpG associations")
+        logger.info("Sample of integrated results:")
+        logger.info(result_df.head().to_string())
         return result_df
-    
-    def categorize_genes(self, integrated_results: pd.DataFrame) -> Dict[str, pd.DataFrame]:
-        """Categorize genes based on expression and significance"""
-        # Define expression categories based on baseMean and log2FoldChange
-        categories = {}
-        
-        # Ensure we have expression data
-        mask = ~integrated_results['baseMean'].isna()
-        expr_data = integrated_results[mask].copy()
-        
-        # Define categories based on expression and fold change
-        categories['High Expression'] = expr_data[
-            (expr_data['baseMean'] > expr_data['baseMean'].quantile(0.75))
-        ]
-        
-        categories['Medium Expression'] = expr_data[
-            (expr_data['baseMean'] <= expr_data['baseMean'].quantile(0.75)) &
-            (expr_data['baseMean'] > expr_data['baseMean'].quantile(0.25))
-        ]
-        
-        categories['Low Expression'] = expr_data[
-            (expr_data['baseMean'] <= expr_data['baseMean'].quantile(0.25))
-        ]
-        
-        # Log category sizes
-        for category, df in categories.items():
-            logger.info(f"{category}: {len(df)} genes")
-        
-        return categories
-    
-    def plot_enrichment_by_category(self, integrated_results: pd.DataFrame, output_dir: str):
-        """Create visualization of enrichment distribution by expression category"""
-        # Categorize genes
-        category_results = self.categorize_genes(integrated_results)
-        
-        # Create enrichment distribution plot by category
-        plt.figure(figsize=(10, 6))
-        
-        # Plot density for each category
-        for category, df in category_results.items():
-            if not df.empty:
-                sns.kdeplot(
-                    data=df['mecp2_enrichment'],
-                    label=category,
-                    clip=(0, df['mecp2_enrichment'].quantile(0.99))  # Remove extreme outliers
-                )
-        
-        plt.xlabel('MeCP2 Enrichment (Exo/Endo)')
-        plt.ylabel('Density')
-        plt.title('MeCP2 Enrichment Distribution by Expression Category')
-        plt.legend()
-        
-        # Add statistical annotation
-        # Calculate mean enrichment for each category
-        means = {cat: df['mecp2_enrichment'].mean() 
-                for cat, df in category_results.items()}
-        
-        # Perform Kruskal-Wallis H-test
-        categories_data = [df['mecp2_enrichment'].values 
-                          for df in category_results.values()]
-        h_stat, p_val = stats.kruskal(*categories_data)
-        
-        # Add statistical annotation to plot
-        plt.text(0.02, 0.98, 
-                 f'Kruskal-Wallis test\np-value: {p_val:.2e}',
-                 transform=plt.gca().transAxes,
-                 verticalalignment='top',
-                 bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
-        
-        plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, 'enrichment_distribution_by_category.pdf'))
-        plt.close()
-        
-        # Create binding frequency plot
-        plt.figure(figsize=(10, 6))
-        categories_list = []
-        exo_freq = []
-        endo_freq = []
-        both_freq = []
-        
-        for category, df in category_results.items():
-            total_genes = len(df)
-            if total_genes > 0:
-                categories_list.append(category)
-                exo_freq.append(len(df[df['exo_signal'] > 0]) / total_genes * 100)
-                endo_freq.append(len(df[df['endo_signal'] > 0]) / total_genes * 100)
-                both_freq.append(
-                    len(df[(df['exo_signal'] > 0) & (df['endo_signal'] > 0)]) / total_genes * 100
-                )
-        
-        x = np.arange(len(categories_list))
-        width = 0.25
-        
-        plt.bar(x - width, exo_freq, width, label='Exo')
-        plt.bar(x, endo_freq, width, label='Endo')
-        plt.bar(x + width, both_freq, width, label='Both')
-        
-        plt.xlabel('Expression Category')
-        plt.ylabel('Percentage of Genes')
-        plt.title('MeCP2 Binding Frequency by Expression Category')
-        plt.xticks(x, categories_list, rotation=45)
-        plt.legend()
-        
-        plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, 'binding_frequency_by_category.pdf'))
-        plt.close()
     
     def plot_integration_summary(self, integrated_results: pd.DataFrame, output_dir: str):
         """Create summary plots of the integrated analysis"""
         os.makedirs(output_dir, exist_ok=True)
         
-        # Original plots
         # Plot 1: MeCP2 Enrichment Distribution
         plt.figure(figsize=(10, 6))
         sns.histplot(data=integrated_results, x='mecp2_enrichment', bins=50)
@@ -228,9 +132,6 @@ class RNASeqIntegrator:
         plt.ylabel('MeCP2 Enrichment (Exo/Endo)')
         plt.savefig(os.path.join(output_dir, 'mecp2_vs_expression.pdf'))
         plt.close()
-        
-        # New plot: Enrichment by category
-        self.plot_enrichment_by_category(integrated_results, output_dir)
 
 def load_gtf(gtf_file: str) -> pd.DataFrame:
     """Load and parse GTF file, extracting only gene records"""

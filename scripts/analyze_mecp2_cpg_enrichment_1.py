@@ -113,9 +113,11 @@ class MeCP2CpGAnalyzer:
         start_idx = chunk_id * chunk_size
         end_idx = start_idx + chunk_size if chunk_id < total_chunks - 1 else len(cpg_islands)
         
+        # Get chunk of CpG islands
         cpg_chunk = cpg_islands.iloc[start_idx:end_idx]
+        logger.info(f"Processing chunk {chunk_id + 1}/{total_chunks} ({len(cpg_chunk)} CpG islands)")
         
-        # Normalize signals
+        # Normalize signals by sequencing depth
         normalized_exo = {
             sample: self.normalize_signal(peaks, exo_depths[sample])
             for sample, peaks in exo_peaks.items()
@@ -128,116 +130,27 @@ class MeCP2CpGAnalyzer:
         
         enrichment_data = []
         for _, cpg in cpg_chunk.iterrows():
-            # Get overlapping peaks
-            exo_overlaps = {
-                sample: peaks[
-                    (peaks['chr'] == cpg['chr']) &
-                    (peaks['start'] <= cpg['end']) &
-                    (peaks['end'] >= cpg['start'])
-                ]
-                for sample, peaks in normalized_exo.items()
-            }
+            exo_signal = self.get_peak_signal(normalized_exo, cpg)
+            endo_signal = self.get_peak_signal(normalized_endo, cpg)
             
-            endo_overlaps = {
-                sample: peaks[
-                    (peaks['chr'] == cpg['chr']) &
-                    (peaks['start'] <= cpg['end']) &
-                    (peaks['end'] >= cpg['start'])
-                ]
-                for sample, peaks in normalized_endo.items()
-            }
+            enrichment = 0
+            if endo_signal > 0:
+                enrichment = exo_signal / endo_signal
+            elif exo_signal > 0:
+                enrichment = float('inf')
             
-            # Check if region is bound in either condition
-            has_exo = any(not df.empty for df in exo_overlaps.values())
-            has_endo = any(not df.empty for df in endo_overlaps.values())
-            
-            if not (has_exo or has_endo):
-                continue
-            
-            # Calculate width-weighted signals for each replicate
-            def calculate_weighted_signal(overlaps_dict):
-                signals = []
-                for df in overlaps_dict.values():
-                    if df.empty:
-                        signals.append(0.0)
-                    else:
-                        # Calculate width-weighted signal for each peak and sum
-                        weighted_signal = np.sum(
-                            df['signalValue'] * (df['end'] - df['start'])
-                        )
-                        signals.append(weighted_signal)
-                return np.mean(signals) if signals else 0.0
-            
-            exo_signal = calculate_weighted_signal(exo_overlaps)
-            endo_signal = calculate_weighted_signal(endo_overlaps)
-            
-            # Calculate enrichment only for regions bound in both conditions
-            if has_exo and has_endo:
-                enrichment = exo_signal / endo_signal if endo_signal > 0 else float('inf')
-                
-                # Collect all width-weighted signals for statistical testing
-                all_exo_signals = []
-                all_endo_signals = []
-                
-                for df in exo_overlaps.values():
-                    if not df.empty:
-                        weighted_signals = df['signalValue'] * (df['end'] - df['start'])
-                        all_exo_signals.extend(weighted_signals)
-                
-                for df in endo_overlaps.values():
-                    if not df.empty:
-                        weighted_signals = df['signalValue'] * (df['end'] - df['start'])
-                        all_endo_signals.extend(weighted_signals)
-                
-                if all_exo_signals and all_endo_signals:
-                    _, pvalue = stats.mannwhitneyu(all_exo_signals, all_endo_signals)
-                else:
-                    pvalue = 1.0
-                
-                enrichment_data.append({
-                    'chr': cpg['chr'],
-                    'start': cpg['start'],
-                    'end': cpg['end'],
-                    'exo_signal': exo_signal,
-                    'endo_signal': endo_signal,
-                    'enrichment': enrichment,
-                    'pvalue': pvalue,
-                    'binding_type': 'both',
-                    'peak_width_exo': np.mean([
-                        df['end'].mean() - df['start'].mean() 
-                        for df in exo_overlaps.values() if not df.empty
-                    ]) if has_exo else 0,
-                    'peak_width_endo': np.mean([
-                        df['end'].mean() - df['start'].mean() 
-                        for df in endo_overlaps.values() if not df.empty
-                    ]) if has_endo else 0,
-                    'significant': (
-                        enrichment >= self.config.min_fold_change and 
-                        exo_signal > self.config.min_signal_threshold and
-                        pvalue < 0.05
-                    )
-                })
-            else:
-                # Record regions bound only in one condition
-                enrichment_data.append({
-                    'chr': cpg['chr'],
-                    'start': cpg['start'],
-                    'end': cpg['end'],
-                    'exo_signal': exo_signal,
-                    'endo_signal': endo_signal,
-                    'enrichment': float('inf') if has_exo else 0,
-                    'pvalue': 1.0,
-                    'binding_type': 'exo_only' if has_exo else 'endo_only',
-                    'peak_width_exo': np.mean([
-                        df['end'].mean() - df['start'].mean() 
-                        for df in exo_overlaps.values() if not df.empty
-                    ]) if has_exo else 0,
-                    'peak_width_endo': np.mean([
-                        df['end'].mean() - df['start'].mean() 
-                        for df in endo_overlaps.values() if not df.empty
-                    ]) if has_endo else 0,
-                    'significant': False
-                })
+            enrichment_data.append({
+                'chr': cpg['chr'],
+                'start': cpg['start'],
+                'end': cpg['end'],
+                'exo_signal': exo_signal,
+                'endo_signal': endo_signal,
+                'enrichment': enrichment,
+                'significant': (
+                    enrichment >= self.config.min_fold_change and 
+                    exo_signal > self.config.min_signal_threshold
+                )
+            })
         
         return pd.DataFrame(enrichment_data)
 
