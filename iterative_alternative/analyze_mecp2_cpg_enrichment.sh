@@ -16,6 +16,9 @@ cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternati
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate
 conda activate snakemake
 
+PEAKS_EXPERIMENT="results_2_new_005_align2"
+ALIGNMENT_EXPERIMENT="results_1b"
+
 WORKING_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative"
 DATA_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/DATA"
 RESULTS_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/analyze_mecp2_cpg_enrichment"
@@ -30,18 +33,18 @@ mkdir -p ${RESULTS_DIR}/mecp2_cpg_enrichment_parallel
 rm -f "${RESULTS_DIR}/exo"/*.narrowPeak
 rm -f "${RESULTS_DIR}/endo"/*.narrowPeak
 
-echo "Copying and organizing peaks from results_2_new_005..."
+echo "Copying and organizing peaks from ${PEAKS_EXPERIMENT}..."
 
 # Copy exogenous peaks (virus samples)
 for sample in NeuV1 NeuV2 NeuV3 NSCv1 NSCv2 NSCv3; do
-    cp "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/results_2_new_005/peaks/narrow/${sample}_narrow_peaks.narrowPeak" "${RESULTS_DIR}/exo/"
+    cp "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/${PEAKS_EXPERIMENT}/peaks/narrow/${sample}_narrow_peaks.narrowPeak" "${RESULTS_DIR}/exo/"
     # Also create a symlink with the alternative naming
     ln -sf "${RESULTS_DIR}/exo/${sample}_narrow_peaks.narrowPeak" "${RESULTS_DIR}/exo/${sample}_peaks.narrowPeak"
 done
 
 # Copy endogenous peaks (M samples) 
 for sample in NeuM2 NeuM3 NSCM1 NSCM2 NSCM3; do
-    cp "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/results_2_new_005/peaks/narrow/${sample}_narrow_peaks.narrowPeak" "${RESULTS_DIR}/endo/"
+    cp "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/${PEAKS_EXPERIMENT}/peaks/narrow/${sample}_narrow_peaks.narrowPeak" "${RESULTS_DIR}/endo/"
     # Also create a symlink with the alternative naming
     ln -sf "${RESULTS_DIR}/endo/${sample}_narrow_peaks.narrowPeak" "${RESULTS_DIR}/endo/${sample}_peaks.narrowPeak"
 done
@@ -52,7 +55,7 @@ python ../scripts/analyze_mecp2_cpg_enrichment.py \
     --endo-peaks-dir ${RESULTS_DIR}/endo \
     --cpg-islands ${DATA_DIR}/cpg_islands.bed \
     --output-dir ${RESULTS_DIR}/mecp2_cpg_enrichment_parallel \
-    --bam-dir ${WORKING_DIR}/results_1/aligned \
+    --bam-dir ${WORKING_DIR}/${ALIGNMENT_EXPERIMENT}/aligned \
     --chunk-id $SLURM_ARRAY_TASK_ID \
     --total-chunks 10
 

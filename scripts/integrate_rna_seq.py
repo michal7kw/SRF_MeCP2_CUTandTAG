@@ -233,7 +233,7 @@ class RNASeqIntegrator:
         plt.close()
         
         # New plot: Enrichment by category
-        self.plot_enrichment_by_category(integrated_results, output_dir)
+        # self.plot_enrichment_by_category(integrated_results, output_dir)
 
 def load_gtf(gtf_file: str) -> pd.DataFrame:
     """Load and parse GTF file, extracting only gene records"""
