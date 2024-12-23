@@ -24,7 +24,7 @@ This code analyzes the enrichment of MeCP2 at CpG islands by comparing exogenous
    - Generates statistical analysis and visualizations
 
 **Flow Diagram:**
-![alt text](image.png)
+![Flow diagram showing MeCP2 enrichment analysis process](image.png)
 
 **Detailed Analysis Process:**
 
