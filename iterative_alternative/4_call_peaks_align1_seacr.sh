@@ -16,7 +16,8 @@
 BASE_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative"
 cd $BASE_DIR || exit 1
 
-RESULTS_DIR="results_1"
+INPUT_DIR="results_1"
+RESULTS_DIR="results_2_align1_seacr"
 
 # Load conda environment
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate /beegfs/scratch/ric.broccoli/kubacki.michal/conda_envs/snakemake

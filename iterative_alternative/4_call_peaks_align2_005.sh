@@ -1,15 +1,15 @@
 #!/bin/bash
-#SBATCH --job-name=peaks_new_005
+#SBATCH --job-name=align2_peaks_new_005
 #SBATCH --account=kubacki.michal
 #SBATCH --mem=16GB
-#SBATCH --time=4:00:00
+#SBATCH --time=12:00:00
 #SBATCH --nodes=1
-#SBATCH --ntasks=16
-#SBATCH --ntasks-per-node=16
+#SBATCH --ntasks=32
+#SBATCH --ntasks-per-node=32
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/peaks_new_005.err"
-#SBATCH --output="logs/peaks_new_005.out"
+#SBATCH --error="logs/peaks_new_005_align2.err"
+#SBATCH --output="logs/peaks_new_005_align2.out"
 #SBATCH --array=0-10  # Excluding IgM controls
 
 # Set working directory
@@ -17,8 +17,8 @@ BASE_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_al
 cd $BASE_DIR || exit 1
 
 # Set results directory
-INPUT_DIR="results_1"
-RESULTS_DIR="results_2_new_005"
+INPUT_DIR="results_1b"
+RESULTS_DIR="results_2_align2_005"
 
 # Create required directories
 mkdir -p ${RESULTS_DIR}/{peaks/{broad,narrow},qc,logs,reports}
@@ -69,7 +69,7 @@ SAMPLE=${SAMPLES[$SLURM_ARRAY_TASK_ID]}
 # Define paths
 INPUT_BAM="${INPUT_DIR}/aligned/${SAMPLE}.bam"
 CONTROL_BAM="${INPUT_DIR}/aligned/IgM.bam"
-BLACKLIST="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/DATA/mm10-blacklist.bed"  # Update with actual blacklist path
+BLACKLIST="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/DATA/mm10-blacklist.bed"
 QC_DIR="${RESULTS_DIR}/qc/${SAMPLE}"
 mkdir -p "$QC_DIR"
 
@@ -171,7 +171,7 @@ main() {
     generate_fragment_dist "$INPUT_BAM"
 
     # Call peaks
-    call_peaks "broad"
+    # call_peaks "broad"
     call_peaks "narrow"
 
     # Post-processing QC

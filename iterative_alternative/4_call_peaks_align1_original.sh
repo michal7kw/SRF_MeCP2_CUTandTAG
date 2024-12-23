@@ -18,7 +18,7 @@ cd $BASE_DIR || exit 1
 
 # Set results directory
 INPUT_DIR="results_1"
-RESULTS_DIR="results_2_original"
+RESULTS_DIR="results_2_align1_original"
 
 # Create required directories
 mkdir -p ${RESULTS_DIR}/peaks

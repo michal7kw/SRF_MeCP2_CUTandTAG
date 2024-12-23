@@ -15,7 +15,13 @@
 BASE_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG"
 WORKING_DIR="${BASE_DIR}/iterative_alternative"
 DATA_DIR="${BASE_DIR}/DATA"
-RESULTS_DIR="${WORKING_DIR}/analyze_mecp2_cpg_enrichment"
+EXPERIMENT="align1_005"
+RESULTS_DIR="${WORKING_DIR}/analyze_mecp2_cpg_enrichment_${EXPERIMENT}"
+
+# Define input files
+ENRICHMENT_FILE="${RESULTS_DIR}/mecp2_cpg_enrichment_parallel/mecp2_cpg_enrichment_parallel.csv"
+RNA_SEQ_FILE="${WORKING_DIR}/DATA/DEA_NSC_filtered.csv"
+GTF_FILE="${DATA_DIR}/gencode.vM10.annotation.gtf"
 
 cd ${WORKING_DIR}
 
@@ -26,11 +32,6 @@ mkdir -p ${RESULTS_DIR}/integrated
 # Activate conda environment
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate
 conda activate snakemake
-
-# Define input files
-ENRICHMENT_FILE="${RESULTS_DIR}/mecp2_cpg_enrichment_parallel/mecp2_cpg_enrichment_parallel.csv"
-RNA_SEQ_FILE="${WORKING_DIR}/analyze_mecp2_cpg_enrichment/integrated/DEA_NEU_filtered.csv"
-GTF_FILE="${DATA_DIR}/gencode.vM10.annotation.gtf"
 
 # Validate input files
 echo "Validating input files..."

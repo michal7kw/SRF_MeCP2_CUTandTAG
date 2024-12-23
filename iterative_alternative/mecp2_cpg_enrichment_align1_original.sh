@@ -16,12 +16,13 @@ cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternati
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate
 conda activate snakemake
 
-PEAKS_EXPERIMENT="results_2_new_005_align2"
-ALIGNMENT_EXPERIMENT="results_1b"
+EXPERIMENT="align1_original"
+PEAKS_EXPERIMENT="results_2_${EXPERIMENT}"
+ALIGNMENT_EXPERIMENT="results_1"
 
 WORKING_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative"
 DATA_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/DATA"
-RESULTS_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/analyze_mecp2_cpg_enrichment"
+RESULTS_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/analyze_mecp2_cpg_enrichment_align1_original"
 
 # Create directories
 mkdir -p "${RESULTS_DIR}/exo"

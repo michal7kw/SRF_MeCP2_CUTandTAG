@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=peaks_new_001
+#SBATCH --job-name=peaks_new_005
 #SBATCH --account=kubacki.michal
 #SBATCH --mem=16GB
 #SBATCH --time=4:00:00
@@ -8,8 +8,8 @@
 #SBATCH --ntasks-per-node=16
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/peaks_new_001.err"
-#SBATCH --output="logs/peaks_new_001.out"
+#SBATCH --error="logs/peaks_new_005.err"
+#SBATCH --output="logs/peaks_new_005.out"
 #SBATCH --array=0-10  # Excluding IgM controls
 
 # Set working directory
@@ -18,8 +18,7 @@ cd $BASE_DIR || exit 1
 
 # Set results directory
 INPUT_DIR="results_1"
-RESULTS_DIR="results_2_new_001"
-
+RESULTS_DIR="results_2_align1_005"
 
 # Create required directories
 mkdir -p ${RESULTS_DIR}/{peaks/{broad,narrow},qc,logs,reports}
@@ -124,7 +123,7 @@ call_peaks() {
         -f BAMPE
         --nomodel
         --nolambda
-        -q 0.01
+        -q 0.05
         --keep-dup all
         --extsize 200
     )
@@ -132,7 +131,7 @@ call_peaks() {
     if [ "$peak_type" = "broad" ]; then
         macs2 callpeak "${common_params[@]}" \
             --broad \
-            --broad-cutoff 0.01
+            --broad-cutoff 0.05
     else
         macs2 callpeak "${common_params[@]}"
     fi

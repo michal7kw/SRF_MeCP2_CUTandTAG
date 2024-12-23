@@ -24,7 +24,7 @@ This code analyzes the enrichment of MeCP2 at CpG islands by comparing exogenous
    - Generates statistical analysis and visualizations
 
 **Flow Diagram:**
-![Flow diagram showing MeCP2 enrichment analysis process](image.png)
+![Flow diagram showing MeCP2 enrichment analysis process](./images/image.png)
 
 **Detailed Analysis Process:**
 
@@ -170,7 +170,7 @@ The final signal for a region is the *mean of these weighted signals across all 
 This code integrates RNA-seq differential expression data with MeCP2 binding data to understand the relationship between MeCP2 enrichment at CpG islands and gene expression changes.
 
 **Flow Diagram:**
-![alt text](image-1.png)
+![Flow diagram showing RNA-seq integration with MeCP2 enrichment results](./images/image-1.png)
 
 **Integration with MeCP2 Enrichment Results:**
 
