@@ -10,7 +10,7 @@
 #SBATCH --error="logs/analyze_cpg_integration.err"
 #SBATCH --output="logs/analyze_cpg_integration.out"
 
-EXPERIMENT="align2_005"
+EXPERIMENT="align1_005"
 
 # Set working directory
 cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/analyze_mecp2_cpg_enrichment_${EXPERIMENT}

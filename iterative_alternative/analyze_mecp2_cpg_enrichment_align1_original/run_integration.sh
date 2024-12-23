@@ -17,14 +17,14 @@ cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternati
 
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate /beegfs/scratch/ric.broccoli/kubacki.michal/conda_envs/snakemake
 
-# # Check if experiment name is provided
-# if [ $# -eq 0 ]; then
-#     echo "Error: No experiment name provided"
-#     echo "Usage: ./run_integration.sh <experiment_name>"
-#     exit 1
-# fi
+# Check if experiment name is provided
+if [ $# -eq 0 ]; then
+    echo "Error: No experiment name provided"
+    echo "Usage: ./run_integration.sh <experiment_name>"
+    exit 1
+fi
 
-# EXPERIMENT=$1
+EXPERIMENT=$1
 
 # Run the Python script with the experiment name
 python analyze_cpg_integration.py "$EXPERIMENT" 
