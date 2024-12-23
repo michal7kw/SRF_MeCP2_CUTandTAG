@@ -17,6 +17,7 @@ BASE_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_al
 cd $BASE_DIR || exit 1
 
 # Set results directory
+INPUT_DIR="results_1b"
 RESULTS_DIR="results_2_new_005_align2"
 
 # Create required directories
@@ -66,9 +67,9 @@ SAMPLES=(
 SAMPLE=${SAMPLES[$SLURM_ARRAY_TASK_ID]}
 
 # Define paths
-INPUT_BAM="results_1b/aligned/${SAMPLE}.bam"
-CONTROL_BAM="results_1b/aligned/IgM.bam"
-BLACKLIST="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/DATA/mm10-blacklist.bed"  # Update with actual blacklist path
+INPUT_BAM="${INPUT_DIR}/aligned/${SAMPLE}.bam"
+CONTROL_BAM="${INPUT_DIR}/aligned/IgM.bam"
+BLACKLIST="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/DATA/mm10-blacklist.bed"
 QC_DIR="${RESULTS_DIR}/qc/${SAMPLE}"
 mkdir -p "$QC_DIR"
 
@@ -170,7 +171,7 @@ main() {
     generate_fragment_dist "$INPUT_BAM"
 
     # Call peaks
-    call_peaks "broad"
+    # call_peaks "broad"
     call_peaks "narrow"
 
     # Post-processing QC

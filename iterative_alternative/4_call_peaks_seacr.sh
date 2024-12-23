@@ -16,11 +16,13 @@
 BASE_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative"
 cd $BASE_DIR || exit 1
 
+RESULTS_DIR="results_1"
+
 # Load conda environment
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate /beegfs/scratch/ric.broccoli/kubacki.michal/conda_envs/snakemake
 
 # Create directories
-mkdir -p results_1/peaks/seacr/{auc,no_control} results_1/bedgraph results_1/peaks || exit 1
+mkdir -p ${RESULTS_DIR}/peaks/seacr/{auc,no_control} ${RESULTS_DIR}/bedgraph ${RESULTS_DIR}/peaks || exit 1
 
 # Configuration
 SEACR="$BASE_DIR/SEACR-master/SEACR_1.3.sh"
@@ -32,9 +34,9 @@ seacr_to_narrowpeak() {
 }
 
 # Process IgM control
-if [ ! -f "results_1/bedgraph/IgM.bedgraph" ]; then
+if [ ! -f "${INPUT_DIR}/bedgraph/IgM.bedgraph" ]; then
     echo "Processing IgM control..."
-    bedtools genomecov -bg -ibam results_1/aligned/IgM.bam > results_1/bedgraph/IgM.bedgraph
+    bedtools genomecov -bg -ibam "${INPUT_DIR}/aligned/IgM.bam" > "${INPUT_DIR}/bedgraph/IgM.bedgraph"
 fi
 
 # Get sample names and current sample
@@ -42,13 +44,13 @@ SAMPLES=($(ls ../DATA/{EXOGENOUS,ENDOGENOUS}/*_R1_001.fastq.gz | xargs -n 1 base
 SAMPLE=${SAMPLES[$SLURM_ARRAY_TASK_ID]}
 
 # Create bedgraph if needed
-if [ ! -f "results_1/bedgraph/${SAMPLE}.bedgraph" ]; then
+if [ ! -f "${INPUT_DIR}/bedgraph/${SAMPLE}.bedgraph" ]; then
     echo "Creating bedgraph for ${SAMPLE}..."
-    bedtools genomecov -bg -ibam "results_1/aligned/${SAMPLE}.bam" > "results_1/bedgraph/${SAMPLE}.bedgraph"
+    bedtools genomecov -bg -ibam "${INPUT_DIR}/aligned/${SAMPLE}.bam" > "${INPUT_DIR}/bedgraph/${SAMPLE}.bedgraph"
 fi
 
 # Create temporary directory
-TEMP_DIR=$(mktemp -d -p results_1/peaks/seacr/auc)
+TEMP_DIR=$(mktemp -d -p ${RESULTS_DIR}/peaks/seacr/auc)
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
 # Copy SEACR files to temp directory
@@ -58,21 +60,21 @@ cd "$TEMP_DIR" || exit 1
 # Run SEACR with IgM control
 echo "Running SEACR with IgM control for ${SAMPLE}..."
 timeout $TIMEOUT ./SEACR_1.3.sh \
-    "$BASE_DIR/results_1/bedgraph/${SAMPLE}.bedgraph" \
-    "$BASE_DIR/results_1/bedgraph/IgM.bedgraph" \
+    "${INPUT_DIR}/bedgraph/${SAMPLE}.bedgraph" \
+    "${INPUT_DIR}/bedgraph/IgM.bedgraph" \
     non \
     stringent \
-    "$BASE_DIR/results_1/peaks/seacr/${SAMPLE}"
+    "${RESULTS_DIR}/peaks/seacr/${SAMPLE}"
 
 if [ $? -eq 0 ]; then
     # Convert to narrowPeak if successful
     seacr_to_narrowpeak \
-        "$BASE_DIR/results_1/peaks/seacr/${SAMPLE}.stringent.bed" \
-        "$BASE_DIR/results_1/peaks/seacr/${SAMPLE}.stringent.narrowPeak"
+        "${RESULTS_DIR}/peaks/seacr/${SAMPLE}.stringent.bed" \
+        "${RESULTS_DIR}/peaks/seacr/${SAMPLE}.stringent.narrowPeak"
     
     # Copy to final location
-    cp "$BASE_DIR/results_1/peaks/seacr/${SAMPLE}.stringent.narrowPeak" \
-       "$BASE_DIR/results_1/peaks/${SAMPLE}_peaks.narrowPeak"
+    cp "${RESULTS_DIR}/peaks/seacr/${SAMPLE}.stringent.narrowPeak" \
+       "${RESULTS_DIR}/peaks/${SAMPLE}_peaks.narrowPeak"
 else
     echo "Error: SEACR failed for ${SAMPLE} with IgM control"
     exit 1
@@ -81,25 +83,25 @@ fi
 # Run SEACR without control
 echo "Running SEACR without control for ${SAMPLE}..."
 timeout $TIMEOUT ./SEACR_1.3.sh \
-    "$BASE_DIR/results_1/bedgraph/${SAMPLE}.bedgraph" \
+    "${INPUT_DIR}/bedgraph/${SAMPLE}.bedgraph" \
     0.05 \
     non \
     stringent \
-    "$BASE_DIR/results_1/peaks/seacr/${SAMPLE}_no_control"
+    "${RESULTS_DIR}/peaks/seacr/${SAMPLE}_no_control"
 
 if [ $? -eq 0 ]; then
     # Convert to narrowPeak if successful
     seacr_to_narrowpeak \
-        "$BASE_DIR/results_1/peaks/seacr/${SAMPLE}_no_control.stringent.bed" \
-        "$BASE_DIR/results_1/peaks/seacr/${SAMPLE}_no_control.stringent.narrowPeak"
+        "${RESULTS_DIR}/peaks/seacr/${SAMPLE}_no_control.stringent.bed" \
+        "${RESULTS_DIR}/peaks/seacr/${SAMPLE}_no_control.stringent.narrowPeak"
     
     # Move to no_control directory
-    mv "$BASE_DIR/results_1/peaks/seacr/${SAMPLE}_no_control.stringent."* \
-       "$BASE_DIR/results_1/peaks/seacr/no_control/"
+    mv "${RESULTS_DIR}/peaks/seacr/${SAMPLE}_no_control.stringent."* \
+       "${RESULTS_DIR}/peaks/seacr/no_control/"
 else
     echo "Error: SEACR failed for ${SAMPLE} without control"
     exit 1
 fi
 
 # Move AUC files to final location
-mv *.auc.bed "$BASE_DIR/results_1/peaks/seacr/auc/" 2>/dev/null || true
+mv *.auc.bed "${RESULTS_DIR}/peaks/seacr/auc/" 2>/dev/null || true

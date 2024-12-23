@@ -17,6 +17,7 @@ BASE_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_al
 cd $BASE_DIR || exit 1
 
 # Set results directory
+INPUT_DIR="results_1"
 RESULTS_DIR="results_2_original"
 
 # Create required directories
@@ -76,8 +77,8 @@ SAMPLES=(
 SAMPLE=${SAMPLES[$SLURM_ARRAY_TASK_ID]}
 
 # Define input and control files
-INPUT_BAM="results_1/aligned/${SAMPLE}.bam"
-CONTROL_BAM="results_1/aligned/IgM.bam"
+INPUT_BAM="${INPUT_DIR}/aligned/${SAMPLE}.bam"
+CONTROL_BAM="${INPUT_DIR}/aligned/IgM.bam"
 
 # Run MACS2 for broad peaks
 echo "Running MACS2 broad peak calling for ${SAMPLE}..."

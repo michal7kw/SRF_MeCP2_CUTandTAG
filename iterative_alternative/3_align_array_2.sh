@@ -17,11 +17,14 @@ log_progress() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
 }
 
+INPUT_DIR="results_1"
+RESULTS_DIR="results_1b"
+
 # Function to validate input files
 validate_inputs() {
     local sample=$1
-    local r1="results_1/trimmed/${sample}_R1_001_val_1.fq.gz"
-    local r2="results_1/trimmed/${sample}_R2_001_val_2.fq.gz"
+    local r1="${INPUT_DIR}/trimmed/${sample}_R1_001_val_1.fq.gz"
+    local r2="${INPUT_DIR}/trimmed/${sample}_R2_001_val_2.fq.gz"
     [[ -f "$r1" && -f "$r2" ]] || return 1
 }
 
@@ -38,10 +41,10 @@ if ! source /opt/common/tools/ric.cosr/miniconda3/bin/activate /beegfs/scratch/r
 fi
 
 # Create required directories
-mkdir -p results_1b/aligned logs
+mkdir -p ${RESULTS_DIR}/aligned logs
 
 # Get sample names from trimmed files (more reliable than fastqc results)
-ALL_SAMPLES=($(find results_1/trimmed -name "*_R1_001_val_1.fq.gz" -type f | sed 's|results_1/trimmed/||;s|_R1_001_val_1.fq.gz||' | sort))
+ALL_SAMPLES=($(find ${INPUT_DIR}/trimmed -name "*_R1_001_val_1.fq.gz" -type f | sed 's|${INPUT_DIR}/trimmed/||;s|_R1_001_val_1.fq.gz||' | sort))
 
 # Verify we have samples before continuing
 if [ ${#ALL_SAMPLES[@]} -eq 0 ]; then
@@ -107,8 +110,8 @@ else
     if ! bowtie2 \
         -p $THREADS \
         -x $GENOME_INDEX \
-        -1 results_1/trimmed/${SAMPLE}_R1_001_val_1.fq.gz \
-        -2 results_1/trimmed/${SAMPLE}_R2_001_val_2.fq.gz \
+        -1 ${INPUT_DIR}/trimmed/${SAMPLE}_R1_001_val_1.fq.gz \
+        -2 ${INPUT_DIR}/trimmed/${SAMPLE}_R2_001_val_2.fq.gz \
         --local --very-sensitive-local \
         --no-mixed --no-discordant \
         --maxins $MAX_FRAGMENT \
@@ -116,9 +119,9 @@ else
         --dovetail \
         --mm \
         -S "$TEMP_DIR/${SAMPLE}.sam" \
-        2> logs/align_${SAMPLE}.log; then
+        2> ${RESULTS_DIR}/logs/align_${SAMPLE}.log; then
         echo "Error: Bowtie2 alignment failed for ${SAMPLE}"
-        echo "Check logs/align_${SAMPLE}.log for details"
+        echo "Check ${RESULTS_DIR}/logs/align_${SAMPLE}.log for details"
         exit 1
     fi
 fi
@@ -154,29 +157,29 @@ log_progress "Analyzing fragment size distribution..."
 samtools view -@ "$THREADS" "$TEMP_DIR/${SAMPLE}.temp2.bam" | \
     awk '{print sqrt($9^2)}' | \
     sort -n | \
-    uniq -c > results_1b/aligned/${SAMPLE}.fragment_sizes.txt
+    uniq -c > ${RESULTS_DIR}/aligned/${SAMPLE}.fragment_sizes.txt
 
 # Add more detailed QC metrics
 log_progress "Generating detailed QC metrics..."
 # Calculate percentage of reads in peaks (FRIP)
-if [ -f "results_1/peaks/${SAMPLE}_peaks.narrowPeak" ]; then
+if [ -f "${INPUT_DIR}/peaks/${SAMPLE}_peaks.narrowPeak" ]; then
     bedtools intersect -a "$TEMP_DIR/${SAMPLE}.temp2.bam" \
-        -b "results_1/peaks/${SAMPLE}_peaks.narrowPeak" \
-        -bed -c > results_1b/aligned/${SAMPLE}.frip.txt
+        -b "${INPUT_DIR}/peaks/${SAMPLE}_peaks.narrowPeak" \
+        -bed -c > ${RESULTS_DIR}/aligned/${SAMPLE}.frip.txt
 fi
 
 # Generate insert size metrics
 picard CollectInsertSizeMetrics \
     I="$TEMP_DIR/${SAMPLE}.temp2.bam" \
-    O=results_1b/aligned/${SAMPLE}.insert_metrics.txt \
-    H=results_1b/aligned/${SAMPLE}.insert_histogram.pdf
+    O=${RESULTS_DIR}/aligned/${SAMPLE}.insert_metrics.txt \
+    H=${RESULTS_DIR}/aligned/${SAMPLE}.insert_histogram.pdf
 
 # Remove or comment out the phantompeakqualtools section since it's not installed
 # If you need this tool, you should install it first through conda or other means
 # phantompeakqualtools run \
 #     -c="$TEMP_DIR/${SAMPLE}.temp2.bam" \
 #     -p=$THREADS \
-#     -out=results_1b/aligned/${SAMPLE}.cc.qc
+#     -out=${RESULTS_DIR}/aligned/${SAMPLE}.cc.qc
 
 # Create comprehensive QC report with error checking
 {
@@ -184,28 +187,28 @@ picard CollectInsertSizeMetrics \
     echo "Date: $(date)"
     
     # Alignment rate
-    if [ -f "logs/align_${SAMPLE}.log" ]; then
-        echo "Alignment Rate: $(grep "overall alignment rate" logs/align_${SAMPLE}.log | tail -n1)"
+    if [ -f "${RESULTS_DIR}/logs/align_${SAMPLE}.log" ]; then
+        echo "Alignment Rate: $(grep "overall alignment rate" ${RESULTS_DIR}/logs/align_${SAMPLE}.log | tail -n1)"
     else
         echo "Alignment Rate: Not available"
     fi
     
     # Fragment Size Statistics
     echo "Fragment Size Statistics:"
-    if [ -f "results_1b/aligned/${SAMPLE}.insert_metrics.txt" ]; then
-        awk 'BEGIN{OFS="\t"} NR==1,NR==5{print $1, $2}' "results_1b/aligned/${SAMPLE}.insert_metrics.txt"
+    if [ -f "${RESULTS_DIR}/aligned/${SAMPLE}.insert_metrics.txt" ]; then
+        awk 'BEGIN{OFS="\t"} NR==1,NR==5{print $1, $2}' "${RESULTS_DIR}/aligned/${SAMPLE}.insert_metrics.txt"
     else
         echo "Not available"
     fi
     
     # Library Complexity
     echo "Library Complexity:"
-    if [ -f "results_1b/aligned/${SAMPLE}.complexity_estimates.txt" ]; then
-        head -n 5 "results_1b/aligned/${SAMPLE}.complexity_estimates.txt"
+    if [ -f "${RESULTS_DIR}/aligned/${SAMPLE}.complexity_estimates.txt" ]; then
+        head -n 5 "${RESULTS_DIR}/aligned/${SAMPLE}.complexity_estimates.txt"
     else
         echo "Not available"
     fi
-} > "results_1b/aligned/${SAMPLE}.qc_report.txt"
+} > "${RESULTS_DIR}/aligned/${SAMPLE}.qc_report.txt"
 
 log_progress "Sorting BAM file..."
 
@@ -216,40 +219,40 @@ if ! samtools sort \
     -T "$TMP_DIR/${SAMPLE}" \
     --write-index \
     "$TMP_DIR/${SAMPLE}/${SAMPLE}.temp2.bam" \
-    -o results_1b/aligned/${SAMPLE}.bam; then
+    -o ${RESULTS_DIR}/aligned/${SAMPLE}.bam; then
     log_progress "Error: BAM sorting failed for ${SAMPLE}"
     exit 1
 fi
 
 log_progress "Indexing BAM file..."
-samtools index -@ $THREADS results_1b/aligned/${SAMPLE}.bam
+samtools index -@ $THREADS ${RESULTS_DIR}/aligned/${SAMPLE}.bam
 
 log_progress "Removing PCR duplicates..."
 # Remove duplicates and save metrics
 if ! samtools markdup -@ $THREADS -r \
-    results_1b/aligned/${SAMPLE}.bam \
-    results_1b/aligned/${SAMPLE}.dedup.bam \
-    2> results_1b/aligned/${SAMPLE}.markdup_metrics; then
+    ${RESULTS_DIR}/aligned/${SAMPLE}.bam \
+    ${RESULTS_DIR}/aligned/${SAMPLE}.dedup.bam \
+    2> ${RESULTS_DIR}/aligned/${SAMPLE}.markdup_metrics; then
     log_progress "Error: Duplicate marking failed for ${SAMPLE}"
     exit 1
 fi
 
 # Index the deduplicated BAM
-samtools index -@ $THREADS results_1b/aligned/${SAMPLE}.dedup.bam
+samtools index -@ $THREADS ${RESULTS_DIR}/aligned/${SAMPLE}.dedup.bam
 
 log_progress "Generating QC metrics..."
 # Generate comprehensive QC metrics
-samtools flagstat results_1b/aligned/${SAMPLE}.dedup.bam > results_1b/aligned/${SAMPLE}.flagstat
-samtools idxstats results_1b/aligned/${SAMPLE}.dedup.bam > results_1b/aligned/${SAMPLE}.idxstats
-samtools stats results_1b/aligned/${SAMPLE}.dedup.bam > results_1b/aligned/${SAMPLE}.stats
+samtools flagstat ${RESULTS_DIR}/aligned/${SAMPLE}.dedup.bam > ${RESULTS_DIR}/aligned/${SAMPLE}.flagstat
+samtools idxstats ${RESULTS_DIR}/aligned/${SAMPLE}.dedup.bam > ${RESULTS_DIR}/aligned/${SAMPLE}.idxstats
+samtools stats ${RESULTS_DIR}/aligned/${SAMPLE}.dedup.bam > ${RESULTS_DIR}/aligned/${SAMPLE}.stats
 
 # Calculate alignment rate from bowtie2 logs
-alignment_rate=$(grep "overall alignment rate" logs/align_${SAMPLE}.log | tail -n1 | awk '{print $1}')
-echo "Overall alignment rate: ${alignment_rate}" >> results_1b/aligned/${SAMPLE}.alignment_summary
+alignment_rate=$(grep "overall alignment rate" ${RESULTS_DIR}/logs/align_${SAMPLE}.log | tail -n1 | awk '{print $1}')
+echo "Overall alignment rate: ${alignment_rate}" >> ${RESULTS_DIR}/aligned/${SAMPLE}.alignment_summary
 
 log_progress "Calculating library complexity metrics..."
-preseq lc_extrap -B results_1b/aligned/${SAMPLE}.dedup.bam \
-    -o results_1b/aligned/${SAMPLE}.complexity_estimates.txt
+preseq lc_extrap -B ${RESULTS_DIR}/aligned/${SAMPLE}.dedup.bam \
+    -o ${RESULTS_DIR}/aligned/${SAMPLE}.complexity_estimates.txt
 
 # log_progress "Cleaning up intermediate files..."
 # rm -f "$TEMP_DIR/${SAMPLE}.filtered.bam"

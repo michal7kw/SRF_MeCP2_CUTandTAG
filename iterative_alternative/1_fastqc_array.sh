@@ -15,11 +15,9 @@
 # Set working directory
 cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative
 
-source /opt/common/tools/ric.cosr/miniconda3/bin/activate /beegfs/scratch/ric.broccoli/kubacki.michal/conda_envs/snakemake
+RESULTS_DIR="results_1"
 
-# Source modules
-# source /etc/profile.d/modules.sh
-# module load fastqc/0.11.9
+source /opt/common/tools/ric.cosr/miniconda3/bin/activate /beegfs/scratch/ric.broccoli/kubacki.michal/conda_envs/snakemake
 
 # Get sample names
 EXOGENOUS_SAMPLES=($(ls ../DATA/EXOGENOUS/*_R1_001.fastq.gz | xargs -n 1 basename | sed 's/_R1_001.fastq.gz//'))
@@ -37,11 +35,11 @@ else
 fi
 
 # Create output directory
-mkdir -p results_1/fastqc
+mkdir -p ${RESULTS_DIR}/fastqc
 
 # Run FastQC
 fastqc \
     ${INPUT_DIR}/${SAMPLE}_R1_001.fastq.gz \
     ${INPUT_DIR}/${SAMPLE}_R2_001.fastq.gz \
-    --outdir=results_1/fastqc \
+    --outdir=${RESULTS_DIR}/fastqc \
     --threads=4

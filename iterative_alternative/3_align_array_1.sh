@@ -17,11 +17,13 @@ log_progress() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
 }
 
+RESULTS_DIR="results_1"
+
 # Function to validate input files
 validate_inputs() {
     local sample=$1
-    local r1="results_1/trimmed/${sample}_R1_001_val_1.fq.gz"
-    local r2="results_1/trimmed/${sample}_R2_001_val_2.fq.gz"
+    local r1="${RESULTS_DIR}/trimmed/${sample}_R1_001_val_1.fq.gz"
+    local r2="${RESULTS_DIR}/trimmed/${sample}_R2_001_val_2.fq.gz"
     [[ -f "$r1" && -f "$r2" ]] || return 1
 }
 
@@ -38,10 +40,10 @@ if ! source /opt/common/tools/ric.cosr/miniconda3/bin/activate /beegfs/scratch/r
 fi
 
 # Create required directories
-mkdir -p results_1/aligned logs
+mkdir -p ${RESULTS_DIR}/aligned ${RESULTS_DIR}/logs
 
 # Get sample names from trimmed files (more reliable than fastqc results)
-ALL_SAMPLES=($(find results_1/trimmed -name "*_R1_001_val_1.fq.gz" -type f | sed 's|results_1/trimmed/||;s|_R1_001_val_1.fq.gz||' | sort))
+ALL_SAMPLES=($(find ${RESULTS_DIR}/trimmed -name "*_R1_001_val_1.fq.gz" -type f | sed 's|${RESULTS_DIR}/trimmed/||;s|_R1_001_val_1.fq.gz||' | sort))
 
 # Verify we have samples before continuing
 if [ ${#ALL_SAMPLES[@]} -eq 0 ]; then
@@ -105,16 +107,16 @@ else
     if ! bowtie2 \
         -p 32 \
         -x $GENOME_INDEX \
-        -1 results_1/trimmed/${SAMPLE}_R1_001_val_1.fq.gz \
-        -2 results_1/trimmed/${SAMPLE}_R2_001_val_2.fq.gz \
+        -1 ${RESULTS_DIR}/trimmed/${SAMPLE}_R1_001_val_1.fq.gz \
+        -2 ${RESULTS_DIR}/trimmed/${SAMPLE}_R2_001_val_2.fq.gz \
         --local --very-sensitive-local \
         --no-mixed --no-discordant \
         --maxins $MAX_FRAGMENT \
         --mm \
         -S "$TEMP_DIR/${SAMPLE}.sam" \
-        2> logs/align_${SAMPLE}.log; then
+        2> ${RESULTS_DIR}/logs/align_${SAMPLE}.log; then
         echo "Error: Bowtie2 alignment failed for ${SAMPLE}"
-        echo "Check logs/align_${SAMPLE}.log for details"
+        echo "Check ${RESULTS_DIR}/logs/align_${SAMPLE}.log for details"
         exit 1
     fi
 fi
@@ -157,40 +159,40 @@ if ! samtools sort \
     -m $SORT_MEMORY \
     -T "$TEMP_DIR/${SAMPLE}" \
     "$TEMP_DIR/${SAMPLE}.filtered.bam" \
-    -o results_1/aligned/${SAMPLE}.bam; then
+    -o ${RESULTS_DIR}/aligned/${SAMPLE}.bam; then
     log_progress "Error: BAM sorting failed for ${SAMPLE}"
     exit 1
 fi
 
 log_progress "Indexing BAM file..."
-samtools index -@ $THREADS results_1/aligned/${SAMPLE}.bam
+samtools index -@ $THREADS ${RESULTS_DIR}/aligned/${SAMPLE}.bam
 
 log_progress "Removing PCR duplicates..."
 # Remove duplicates and save metrics
 if ! samtools markdup -@ $THREADS -r \
-    results_1/aligned/${SAMPLE}.bam \
-    results_1/aligned/${SAMPLE}.dedup.bam \
-    2> results_1/aligned/${SAMPLE}.markdup_metrics; then
+    ${RESULTS_DIR}/aligned/${SAMPLE}.bam \
+    ${RESULTS_DIR}/aligned/${SAMPLE}.dedup.bam \
+    2> ${RESULTS_DIR}/aligned/${SAMPLE}.markdup_metrics; then
     log_progress "Error: Duplicate marking failed for ${SAMPLE}"
     exit 1
 fi
 
 # Index the deduplicated BAM
-samtools index -@ $THREADS results_1/aligned/${SAMPLE}.dedup.bam
+samtools index -@ $THREADS ${RESULTS_DIR}/aligned/${SAMPLE}.dedup.bam
 
 log_progress "Generating QC metrics..."
 # Generate comprehensive QC metrics
-samtools flagstat results_1/aligned/${SAMPLE}.dedup.bam > results_1/aligned/${SAMPLE}.flagstat
-samtools idxstats results_1/aligned/${SAMPLE}.dedup.bam > results_1/aligned/${SAMPLE}.idxstats
-samtools stats results_1/aligned/${SAMPLE}.dedup.bam > results_1/aligned/${SAMPLE}.stats
+samtools flagstat ${RESULTS_DIR}/aligned/${SAMPLE}.dedup.bam > ${RESULTS_DIR}/aligned/${SAMPLE}.flagstat
+samtools idxstats ${RESULTS_DIR}/aligned/${SAMPLE}.dedup.bam > ${RESULTS_DIR}/aligned/${SAMPLE}.idxstats
+samtools stats ${RESULTS_DIR}/aligned/${SAMPLE}.dedup.bam > ${RESULTS_DIR}/aligned/${SAMPLE}.stats
 
 # Calculate alignment rate from bowtie2 logs
-alignment_rate=$(grep "overall alignment rate" logs/align_${SAMPLE}.log | tail -n1 | awk '{print $1}')
-echo "Overall alignment rate: ${alignment_rate}" >> results_1/aligned/${SAMPLE}.alignment_summary
+alignment_rate=$(grep "overall alignment rate" ${RESULTS_DIR}/logs/align_${SAMPLE}.log | tail -n1 | awk '{print $1}')
+echo "Overall alignment rate: ${alignment_rate}" >> ${RESULTS_DIR}/aligned/${SAMPLE}.alignment_summary
 
 log_progress "Calculating library complexity metrics..."
-preseq lc_extrap -B results_1/aligned/${SAMPLE}.dedup.bam \
-    -o results_1/aligned/${SAMPLE}.complexity_estimates.txt
+preseq lc_extrap -B ${RESULTS_DIR}/aligned/${SAMPLE}.dedup.bam \
+    -o ${RESULTS_DIR}/aligned/${SAMPLE}.complexity_estimates.txt
 
 # log_progress "Cleaning up intermediate files..."
 # rm -f "$TEMP_DIR/${SAMPLE}.filtered.bam"

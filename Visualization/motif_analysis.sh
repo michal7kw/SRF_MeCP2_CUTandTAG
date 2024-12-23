@@ -14,15 +14,10 @@
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate
 conda activate snakemake
 
-
-# Define input directory
-INPUT_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/results_5_new_005"
-
-# Define output directory
-OUTPUT_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/Visualization/results/"
-
-
-DATA_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/DATA"
+ROOT_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative"
+INPUT_DIR="${ROOT_DIR}/results_5_new_005_align2"
+OUTPUT_DIR="${ROOT_DIR}/Visualization/results/"
+DATA_DIR="${ROOT_DIR}/../DATA"
 
 # Create output directory if it doesn't exist
 mkdir -p $OUTPUT_DIR
