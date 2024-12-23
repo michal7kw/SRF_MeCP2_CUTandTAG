@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=mecp2_cpg_parallel
+#SBATCH --job-name=cpg_enrichment_align1_seacr
 #SBATCH --account=kubacki.michal
 #SBATCH --mem=32GB
 #SBATCH --time=24:00:00
@@ -7,8 +7,8 @@
 #SBATCH --ntasks=16
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/mecp2_cpg_parallel.err"
-#SBATCH --output="logs/mecp2_cpg_parallel.out"
+#SBATCH --error="logs/mecp2_cpg_enrichment_align1_seacr.err"
+#SBATCH --output="logs/mecp2_cpg_enrichment_align1_seacr.out"
 #SBATCH --array=0-9  # Process in 10 chunks
 
 cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative

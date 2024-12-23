@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=mecp2_integrate
+#SBATCH --job-name=cpg_integrate_align1_seacr
 #SBATCH --account=kubacki.michal
 #SBATCH --mem=32GB
 #SBATCH --time=24:00:00
@@ -8,8 +8,8 @@
 #SBATCH --mail-type=ALL
 #SBATCH --exclusive
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/mecp2_integrate.err"
-#SBATCH --output="logs/mecp2_integrate.out"
+#SBATCH --error="logs/cpg_integrate_align1_seacr.err"
+#SBATCH --output="logs/cpg_integrate_align1_seacr.out"
 
 # Set base directories
 BASE_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG"

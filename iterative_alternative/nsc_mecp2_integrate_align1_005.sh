@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=cpg_integrate_align1_005
+#SBATCH --job-name=nsc_integrate_align1_005
 #SBATCH --account=kubacki.michal
 #SBATCH --mem=32GB
 #SBATCH --time=24:00:00
@@ -8,19 +8,20 @@
 #SBATCH --mail-type=ALL
 #SBATCH --exclusive
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/cpg_integrate_align1_005.err"
-#SBATCH --output="logs/cpg_integrate_align1_005.out"
+#SBATCH --error="logs/nsc_integrate_align1_005.err"
+#SBATCH --output="logs/nsc_integrate_align1_005.out"
 
 # Set base directories
 BASE_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG"
 WORKING_DIR="${BASE_DIR}/iterative_alternative"
 DATA_DIR="${BASE_DIR}/DATA"
-EXPERIMENT="align1_original"
-RESULTS_DIR="${WORKING_DIR}/analyze_mecp2_cpg_enrichment_${EXPERIMENT}"
+EXPERIMENT="align1_005"
+CELL_LINE="NSC"
+RESULTS_DIR="${WORKING_DIR}/analyze_mecp2_cpg_enrichment_${EXPERIMENT}/${CELL_LINE}"
 
 # Define input files
 ENRICHMENT_FILE="${RESULTS_DIR}/mecp2_cpg_enrichment_parallel/mecp2_cpg_enrichment_parallel.csv"
-RNA_SEQ_FILE="${WORKING_DIR}/DATA/DEA_NSC_filtered.csv"
+RNA_SEQ_FILE="${WORKING_DIR}/DATA/DEA_${CELL_LINE}_filtered.csv"
 GTF_FILE="${DATA_DIR}/gencode.vM10.annotation.gtf"
 
 cd ${WORKING_DIR}

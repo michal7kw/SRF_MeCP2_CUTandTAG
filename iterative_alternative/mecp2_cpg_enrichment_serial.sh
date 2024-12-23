@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=mecp2_cpg_enrichment
+#SBATCH --job-name=cpg_enrichment_serial
 #SBATCH --account=kubacki.michal
 #SBATCH --mem=32GB
 #SBATCH --time=24:00:00
@@ -8,8 +8,8 @@
 #SBATCH --mail-type=ALL
 #SBATCH --exclusive
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/mecp2_cpg_enrichment.err"
-#SBATCH --output="logs/mecp2_cpg_enrichment.out"
+#SBATCH --error="logs/cpg_enrichment_serial.err"
+#SBATCH --output="logs/cpg_enrichment_serial.out"
 
 cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative
 

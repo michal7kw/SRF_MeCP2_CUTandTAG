@@ -23,10 +23,10 @@ This code analyzes the enrichment of MeCP2 at CpG islands by comparing exogenous
    - Compares binding patterns between exo and endo samples
    - Generates statistical analysis and visualizations
 
-**Flow Diagram:**
+## Flow Diagram:
 ![Flow diagram showing MeCP2 enrichment analysis process](./images/image.png)
 
-**Detailed Analysis Process:**
+## Detailed Analysis Process:
 
 1. **Data Loading:**
    - Reads narrowPeak files
