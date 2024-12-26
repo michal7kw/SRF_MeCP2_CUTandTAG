@@ -8,10 +8,12 @@ library(clusterProfiler)
 library(org.Hs.eg.db)
 
 # Set working directory
-setwd("/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/custom_pipeline")
+setwd("/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative")
+
+RESULTS_DIR="results_1"
 
 # Create output directory
-dir.create("results_1/differential", recursive = TRUE)
+dir.create("${RESULTS_DIR}/differential", recursive = TRUE)
 
 # Function to create count matrix
 create_count_matrix <- function(peaks, bam_files, sample_names) {
@@ -78,11 +80,11 @@ main <- function() {
     )
     
     # Get BAM files
-    bam_files <- file.path("results_1/aligned", 
+    bam_files <- file.path("${RESULTS_DIR}/aligned", 
                           paste0(samples$sample, ".bam"))
     
     # Create consensus peak set
-    consensus_peaks <- "results_1/peaks/consensus_peaks.bed"
+    consensus_peaks <- "${RESULTS_DIR}/peaks/consensus_peaks.bed"
     
     # Create count matrix
     counts <- create_count_matrix(consensus_peaks, bam_files, samples$sample)
@@ -92,12 +94,12 @@ main <- function() {
     
     # Save results
     write.csv(as.data.frame(diff_results$res),
-              file="results_1/differential/differential_peaks.csv")
+              file="${RESULTS_DIR}/differential/differential_peaks.csv")
     
     # Run pathway analysis for significant peaks
     sig_peaks <- diff_results$res[which(diff_results$res$padj < 0.05),]
     pathway_results <- run_pathway_analysis(sig_peaks,
-                                          "results_1/differential/pathway_analysis")
+                                          "${RESULTS_DIR}/differential/pathway_analysis")
 }
 
 main() 

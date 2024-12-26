@@ -28,7 +28,7 @@ WILD_TYPE_NSC=("NSCv1" "NSCv2" "NSCv3")
 MUTANT_NSC=("NSCM1" "NSCM2" "NSCM3")
 
 # Path to CpG islands
-CpG_ISLANDS="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/DATA/cpg_islands.bed"
+CpG_ISLANDS="${BASE_DIR}/DATA/cpg_islands.bed"
 
 # Function to merge peaks from replicates
 merge_peaks() {

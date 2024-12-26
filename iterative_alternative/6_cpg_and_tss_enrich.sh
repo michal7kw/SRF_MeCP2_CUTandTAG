@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=mecp2_dist
+#SBATCH --job-name=tss_and_cpg_enrich
 #SBATCH --account=kubacki.michal
 #SBATCH --mem=32GB
 #SBATCH --time=8:00:00
@@ -8,15 +8,21 @@
 #SBATCH --ntasks-per-node=8
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/mecp2_distribution.err"
-#SBATCH --output="logs/mecp2_distribution.out"
+#SBATCH --error="logs/tss_and_cpg_enrich.err"
+#SBATCH --output="logs/tss_and_cpg_enrich.out"
+
+# This Bash script generates and plots the distribution of MeCP2 binding (both exogenous and endogenous) 
+# around CpG islands and TSS (Transcription Start Sites) regions for two cell types (Neurons and NSCs) 
+# using deepTools' computeMatrix and plotProfile commands.
+
 
 # Set working directory
 cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate /beegfs/scratch/ric.broccoli/kubacki.michal/conda_envs/snakemake
 
 # Create output directories
-mkdir -p results_1/qc/distribution_plots
+RESULTS_DIR="results_1"
+mkdir -p ${RESULTS_DIR}/qc/distribution_plots
 
 # Get sample lists for Neurons
 NEURONS_EXO=($(ls ../DATA/EXOGENOUS/NeuV*_R1_001.fastq.gz | xargs -n 1 basename | sed 's/_R1_001.fastq.gz//'))
@@ -38,13 +44,13 @@ generate_matrices() {
     # Process exogenous samples
     exo_bigwigs=""
     for sample in "${exo_samples[@]}"; do
-        exo_bigwigs="$exo_bigwigs results_1/bigwig/${sample}.bw"
+        exo_bigwigs="$exo_bigwigs ${RESULTS_DIR}/bigwig/${sample}.bw"
     done
     
     # Process endogenous samples
     endo_bigwigs=""
     for sample in "${endo_samples[@]}"; do
-        endo_bigwigs="$endo_bigwigs results_1/bigwig/${sample}.bw"
+        endo_bigwigs="$endo_bigwigs ${RESULTS_DIR}/bigwig/${sample}.bw"
     done
     
     # Generate matrices
@@ -55,12 +61,12 @@ generate_matrices() {
         -S $exo_bigwigs $endo_bigwigs \
         --skipZeros \
         --numberOfProcessors 8 \
-        -o results_1/qc/distribution_plots/${output_prefix}_matrix.gz
+        -o ${RESULTS_DIR}/qc/distribution_plots/${output_prefix}_matrix.gz
     
     # Plot profile
     plotProfile \
-        -m results_1/qc/distribution_plots/${output_prefix}_matrix.gz \
-        -o results_1/qc/distribution_plots/${output_prefix}_profile.png \
+        -m ${RESULTS_DIR}/qc/distribution_plots/${output_prefix}_matrix.gz \
+        -o ${RESULTS_DIR}/qc/distribution_plots/${output_prefix}_profile.png \
         --plotTitle "MeCP2 distribution at ${region} (${cell_type})" \
         --averageType mean \
         --perGroup \
@@ -73,27 +79,27 @@ generate_matrices() {
 }
 
 # Generate plots for Neurons
-if [ -s "../DATA/mm10_cpg_islands.bed" ]; then
-    generate_matrices "Neurons" "CpG Islands" "../DATA/mm10_cpg_islands.bed" "neurons_cpg_islands" NEURONS_EXO[@] NEURONS_ENDO[@]
+if [ -s "./DATA/cpg_islands.bed" ]; then
+    generate_matrices "Neurons" "CpG Islands" "./DATA/cpg_islands.bed" "neurons_cpg_islands" NEURONS_EXO[@] NEURONS_ENDO[@]
 else
     echo "Error: CpG islands bed file is missing or empty"
 fi
 
-if [ -s "../DATA/mm10_TSS.bed" ]; then
-    generate_matrices "Neurons" "TSS" "../DATA/mm10_TSS.bed" "neurons_tss" NEURONS_EXO[@] NEURONS_ENDO[@]
+if [ -s "./DATA/mm10_TSS.bed" ]; then
+    generate_matrices "Neurons" "TSS" "./DATA/mm10_TSS.bed" "neurons_tss" NEURONS_EXO[@] NEURONS_ENDO[@]
 else
     echo "Error: TSS bed file is missing or empty"
 fi
 
 # Generate plots for NSCs
-if [ -s "../DATA/mm10_cpg_islands.bed" ]; then
-    generate_matrices "NSCs" "CpG Islands" "../DATA/mm10_cpg_islands.bed" "nscs_cpg_islands" NSC_EXO[@] NSC_ENDO[@]
+if [ -s "./DATA/cpg_islands.bed" ]; then
+    generate_matrices "NSCs" "CpG Islands" "./DATA/cpg_islands.bed" "nscs_cpg_islands" NSC_EXO[@] NSC_ENDO[@]
 else
     echo "Error: CpG islands bed file is missing or empty"
 fi
 
-if [ -s "../DATA/mm10_TSS.bed" ]; then
-    generate_matrices "NSCs" "TSS" "../DATA/mm10_TSS.bed" "nscs_tss" NSC_EXO[@] NSC_ENDO[@]
+if [ -s "./DATA/mm10_TSS.bed" ]; then
+    generate_matrices "NSCs" "TSS" "./DATA/mm10_TSS.bed" "nscs_tss" NSC_EXO[@] NSC_ENDO[@]
 else
     echo "Error: TSS bed file is missing or empty"
 fi

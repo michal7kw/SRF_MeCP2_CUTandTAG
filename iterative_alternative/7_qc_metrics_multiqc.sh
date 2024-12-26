@@ -15,11 +15,11 @@
 cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate /beegfs/scratch/ric.broccoli/kubacki.michal/conda_envs/snakemake
 
-ALIGNED_DIR="results_1b/aligned"
-PEAKS_DIR="results_2_new_005_align2/peaks"
-QC_DIR="results_1/qc"
-LOGS_DIR="results_1/logs"
 RESULTS_DIR="results_1"
+ALIGNED_DIR="${RESULTS_DIR}/aligned"
+PEAKS_DIR="${RESULTS_DIR}/peaks"
+QC_DIR="${RESULTS_DIR}/qc"
+LOGS_DIR="${RESULTS_DIR}/logs"
 
 # Create output directory for MultiQC
 mkdir -p ${RESULTS_DIR}/multiqc

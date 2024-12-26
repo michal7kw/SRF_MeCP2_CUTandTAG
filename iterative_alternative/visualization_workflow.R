@@ -10,19 +10,21 @@ library(circlize)
 library(ChIPseeker)
 library(TxDb.Hsapiens.UCSC.hg38.knownGene)
 
+
+RESULTS_DIR="results_1"
 # Set working directory
-setwd("/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/custom_pipeline")
+setwd("/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative")
 
 # Create visualization directories
-dir.create("results_1/visualization", recursive = TRUE)
-dir.create("results_1/visualization/heatmaps", recursive = TRUE)
-dir.create("results_1/visualization/profiles", recursive = TRUE)
-dir.create("results_1/visualization/peak_analysis", recursive = TRUE)
+dir.create("${RESULTS_DIR}/visualization", recursive = TRUE)
+dir.create("${RESULTS_DIR}/visualization/heatmaps", recursive = TRUE)
+dir.create("${RESULTS_DIR}/visualization/profiles", recursive = TRUE)
+dir.create("${RESULTS_DIR}/visualization/peak_analysis", recursive = TRUE)
 
 # 1. Fragment Size Distribution Analysis
 plot_fragment_distribution <- function() {
     # Read fragment sizes
-    frag_sizes <- read.table("results_1/qc/fragment_sizes_combined.txt", header=TRUE)
+    frag_sizes <- read.table("${RESULTS_DIR}/qc/fragment_sizes_combined.txt", header=TRUE)
     
     # Create nucleosome periodicity plot
     p <- ggplot(frag_sizes, aes(x=size, y=count, color=sample)) +
@@ -35,14 +37,14 @@ plot_fragment_distribution <- function() {
              subtitle="Shows nucleosome periodicity") +
         theme(legend.position="bottom")
     
-    ggsave("results_1/visualization/fragment_size_distribution.pdf", p, width=10, height=6)
+    ggsave("${RESULTS_DIR}/visualization/fragment_size_distribution.pdf", p, width=10, height=6)
 }
 
 # 2. Peak Profile Heatmaps
 generate_peak_heatmaps <- function() {
     # Read bigWig files and peak files
-    samples <- list.files("results_1/bigwig", pattern="*.bw$")
-    peaks <- list.files("results_1/peaks/seacr", pattern="*.stringent.bed$")
+    samples <- list.files("${RESULTS_DIR}/bigwig", pattern="*.bw$")
+    peaks <- list.files("${RESULTS_DIR}/peaks/seacr", pattern="*.stringent.bed$")
     
     # Generate heatmap matrix
     computeMatrix <- function(bw, peaks, outfile) {
@@ -68,7 +70,7 @@ generate_peak_heatmaps <- function() {
 # 3. TSS Enrichment Analysis
 plot_tss_enrichment <- function() {
     # Read TSS enrichment scores
-    tss_scores <- read.table("results_1/qc/tss_enrichment_combined.txt", header=TRUE)
+    tss_scores <- read.table("${RESULTS_DIR}/qc/tss_enrichment_combined.txt", header=TRUE)
     
     p <- ggplot(tss_scores, aes(x=position, y=signal, color=sample)) +
         geom_line(size=1) +
@@ -78,7 +80,7 @@ plot_tss_enrichment <- function() {
              title="TSS Enrichment Profile") +
         theme(legend.position="bottom")
     
-    ggsave("results_1/visualization/tss_enrichment_profile.pdf", p, width=10, height=6)
+    ggsave("${RESULTS_DIR}/visualization/tss_enrichment_profile.pdf", p, width=10, height=6)
 }
 
 # 4. Peak Annotation
@@ -86,7 +88,7 @@ annotate_peaks <- function() {
     txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene
     
     # Read peaks
-    peaks <- list.files("results_1/peaks/seacr", pattern="*.stringent.bed$")
+    peaks <- list.files("${RESULTS_DIR}/peaks/seacr", pattern="*.stringent.bed$")
     
     for(peak in peaks) {
         # Convert to GRanges
@@ -98,7 +100,7 @@ annotate_peaks <- function() {
                                  tssRegion=c(-3000, 3000))
         
         # Plot annotation
-        pdf(paste0("results_1/visualization/peak_analysis/", 
+        pdf(paste0("${RESULTS_DIR}/visualization/peak_analysis/", 
                   gsub(".bed", "_annotation.pdf", basename(peak))))
         plotAnnoPie(peak_annot)
         plotDistToTSS(peak_annot)
@@ -109,7 +111,7 @@ annotate_peaks <- function() {
 # 5. Differential Binding Analysis Visualization
 plot_differential_binding <- function() {
     # Read differential binding results
-    diff_peaks <- read.table("results_1/differential/differential_peaks.txt", header=TRUE)
+    diff_peaks <- read.table("${RESULTS_DIR}/differential/differential_peaks.txt", header=TRUE)
     
     # MA plot
     p1 <- ggplot(diff_peaks, aes(x=baseMean, y=log2FoldChange, color=padj < 0.05)) +
@@ -128,8 +130,8 @@ plot_differential_binding <- function() {
              y="-log10 adjusted p-value",
              title="Volcano Plot")
     
-    ggsave("results_1/visualization/differential_MA_plot.pdf", p1, width=8, height=6)
-    ggsave("results_1/visualization/differential_volcano_plot.pdf", p2, width=8, height=6)
+    ggsave("${RESULTS_DIR}/visualization/differential_MA_plot.pdf", p1, width=8, height=6)
+    ggsave("${RESULTS_DIR}/visualization/differential_volcano_plot.pdf", p2, width=8, height=6)
 }
 
 # Main execution
