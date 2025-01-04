@@ -1066,9 +1066,12 @@ mecp2_dir = "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative
 mecp2_file = "mecp2_cpg_enrichment_parallel.csv"
 medip_dir = "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeDIP/output_old/bigwig"
 cpg_islands_file = "../DATA/cpg_islands.bed"
-rnaseq_files = {'NEU': '../iterative_alternative/DATA/DEA_NEU_filtered.csv', 'NSC': '../iterative_alternative/DATA/DEA_NSC_filtered.csv'}
+# rnaseq_files = {'NEU': '../iterative_alternative/DATA/DEA_NEU_filtered.csv', 'NSC': '../iterative_alternative/DATA/DEA_NSC_filtered.csv'}
+# Differentialy expressed genes
+rnaseq_files = {'NEU': '../iterative_alternative/DATA/DEA_NEU.csv', 'NSC': '../iterative_alternative/DATA/DEA_NSC.csv'}
 genome_fasta = "../DATA/mm10.fa"
-output_dir = "plots"
+# output_dir = "plots"
+output_dir = "plots_unfiltered"
 gtf_file = "../DATA/gencode.vM10.annotation.gtf"
 
 #set working directory
