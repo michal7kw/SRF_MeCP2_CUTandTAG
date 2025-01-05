@@ -682,57 +682,6 @@ def debug_regulated_genes_filtering(results: Dict[str, pd.DataFrame]):
             print(bound_regulated[sample_cols].head())
 
 
-#%% Debug data merging
-def debug_merge_issues():
-    """Debug the data merging issues"""
-    # Load data
-    genes_df, gene_name_to_id = load_gene_annotations(PATHS['gtf_file'])  # Get both return values
-    expression_data = load_expression_data(PATHS['rnaseq'], gene_name_to_id)  # Pass the mapping
-    mecp2_binding = pd.read_csv(os.path.join(PATHS['mecp2_dir'], PATHS['mecp2_file']))
-    
-    # Print sample data from each DataFrame
-    print("\nGene annotations sample:")
-    print("Shape:", genes_df.shape)
-    print("Sample gene_ids:", genes_df['gene_id'].head().tolist())
-    print("\nColumns:", genes_df.columns.tolist())
-    
-    # Print sample of gene name mapping
-    print("\nSample of gene name mapping:")
-    sample_mapping = dict(list(gene_name_to_id.items())[:5])
-    print(sample_mapping)
-    
-    for cell_type, expr_df in expression_data.items():
-        print(f"\n{cell_type} expression data:")
-        print("Shape:", expr_df.shape)
-        print("Sample gene_ids:", expr_df['gene_id'].head().tolist())
-        print("Columns:", expr_df.columns.tolist())
-    
-    print("\nMeCP2 binding data:")
-    print("Shape:", mecp2_binding.shape)
-    print("Columns:", mecp2_binding.columns.tolist())
-    
-    # Check for common gene_ids
-    for cell_type, expr_df in expression_data.items():
-        common_genes = set(genes_df['gene_id']) & set(expr_df['gene_id'])
-        print(f"\nNumber of common genes between annotations and {cell_type}:", len(common_genes))
-        if len(common_genes) > 0:
-            print("Sample common genes:", list(common_genes)[:5])
-    
-    # Test merge with a single cell type
-    cell_type = 'NEU'
-    expr_df = expression_data[cell_type]
-    
-    # Try merge and print intermediate results
-    merged_df = genes_df.merge(expr_df, on='gene_id', how='inner')
-    print(f"\nMerged DataFrame for {cell_type}:")
-    print("Shape:", merged_df.shape)
-    if merged_df.shape[0] > 0:
-        print("Sample rows:")
-        print(merged_df[['gene_id', 'gene_name', 'log2FoldChange', 'padj']].head())
-    
-    return genes_df, expression_data, mecp2_binding
-
-
 #%% Modified statistical test functions
 def perform_statistical_tests(up_data: pd.Series, down_data: pd.Series, metric_name: str) -> Dict:
     """Perform statistical tests with proper error handling"""
@@ -2075,26 +2024,6 @@ def validate_methylation_patterns(df: pd.DataFrame) -> pd.DataFrame:
     
     return df
 
-def calculate_coverage_uniformity(df: pd.DataFrame) -> pd.Series:
-    """Calculate coverage uniformity score"""
-    try:
-        # For now, return a simple placeholder score
-        # This should be improved with actual coverage calculations
-        return pd.Series(0.8, index=df.index)
-    except Exception as e:
-        logger.warning(f"Error calculating coverage uniformity: {str(e)}")
-        return pd.Series(1.0, index=df.index)
-
-def calculate_signal_to_noise(df: pd.DataFrame) -> pd.Series:
-    """Calculate signal-to-noise ratio"""
-    try:
-        # For now, return a simple placeholder score
-        # This should be improved with actual signal calculations
-        return pd.Series(2.5, index=df.index)
-    except Exception as e:
-        logger.warning(f"Error calculating signal-to-noise ratio: {str(e)}")
-        return pd.Series(2.0, index=df.index)
-
 def create_binding_pattern_plots(df: pd.DataFrame, cell_type: str, output_dir: str):
     """Create plots for binding patterns with empty data handling"""
     try:
@@ -2291,8 +2220,8 @@ def analyze_single_cell_type(df, cell_type, output_dir):
     """Analyze binding enrichment for a single cell type"""
     results = {}
     
-    # Check required columns
-    required_columns = ['binding_status', 'expression_status', 
+    # Check required columns - updated to match available columns
+    required_columns = ['binding_type', 'expression_status', 
                        'promoter_methylation', 'gene_body_methylation']
     
     if not all(col in df.columns for col in required_columns):
@@ -2300,13 +2229,13 @@ def analyze_single_cell_type(df, cell_type, output_dir):
                       f"Available columns: {df.columns.tolist()}")
         return None
     
-    # Define binding groups using binding_status column
+    # Define binding groups using binding_type column
     binding_groups = {
         'all_genes': df,
-        'mecp2_bound': df[df['binding_status'].isin(['both', 'exo', 'endo'])],
-        'exo_enriched': df[df['binding_status'] == 'exo'],
-        'endo_enriched': df[df['binding_status'] == 'endo'],
-        'common_bound': df[df['binding_status'] == 'both']
+        'mecp2_bound': df[df['mecp2_bound']],
+        'exo_enriched': df[df['binding_type'].isin(['exo', 'both'])],
+        'endo_only': df[df['binding_type'] == 'endo'],
+        'non_enriched': df[~df['mecp2_bound']]
     }
     
     # Analyze each group
@@ -2972,3 +2901,201 @@ def save_analysis_results(results, cell_type, output_dir):
         f.write(f"Exo occupancy: {occ['exo_occupancy']:.2%}\n\n")
         
         # Save detailed gene lists and additional statistics...
+
+def create_tss_analysis_plots(results: dict, cell_type: str, output_dir: str):
+    """Create visualizations for TSS binding analysis"""
+    
+    # 1. Regulation distribution plot
+    plt.figure(figsize=(12, 6))
+    
+    # Prepare data for plotting
+    categories = []
+    not_dereg = []
+    up = []
+    down = []
+    
+    for category, stats in results.items():
+        categories.append(category)
+        not_dereg.append(stats.get('not_deregulated', {}).get('count', 0))
+        up.append(stats.get('upregulated', {}).get('count', 0))
+        down.append(stats.get('downregulated', {}).get('count', 0))
+    
+    # Create stacked bar plot
+    width = 0.35
+    fig, ax = plt.subplots(figsize=(12, 6))
+    
+    ax.bar(categories, not_dereg, width, label='Not Deregulated')
+    ax.bar(categories, up, width, bottom=not_dereg, label='Upregulated')
+    ax.bar(categories, down, width, bottom=[i+j for i,j in zip(not_dereg, up)], 
+           label='Downregulated')
+    
+    plt.title(f'{cell_type} - Gene Regulation by Binding Category')
+    plt.xlabel('Binding Category')
+    plt.ylabel('Number of Genes')
+    plt.legend()
+    plt.xticks(rotation=45)
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, 'regulation_distribution.pdf'))
+    plt.close()
+    
+    # 2. Methylation comparison plot
+    create_methylation_comparison_plot(results, cell_type, output_dir)
+
+def create_methylation_comparison_plot(results: dict, cell_type: str, output_dir: str):
+    """Create methylation comparison plots for different binding categories with statistics"""
+    
+    # Prepare data for plotting
+    plot_data = {
+        'Category': [],
+        'Regulation': [],
+        'Region': [],
+        'Methylation': [],
+        'StdDev': []
+    }
+    
+    for category, stats in results.items():
+        for reg_status, reg_stats in stats.items():
+            # Promoter methylation
+            plot_data['Category'].append(category)
+            plot_data['Regulation'].append(reg_status)
+            plot_data['Region'].append('Promoter')
+            plot_data['Methylation'].append(
+                reg_stats['promoter_methylation']['mean']
+            )
+            plot_data['StdDev'].append(
+                reg_stats['promoter_methylation']['std']
+            )
+            
+            # Gene body methylation
+            plot_data['Category'].append(category)
+            plot_data['Regulation'].append(reg_status)
+            plot_data['Region'].append('Gene Body')
+            plot_data['Methylation'].append(
+                reg_stats['gene_body_methylation']['mean']
+            )
+            plot_data['StdDev'].append(
+                reg_stats['gene_body_methylation']['std']
+            )
+    
+    df = pd.DataFrame(plot_data)
+    
+    # Create separate plots for Promoter and Gene Body
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 8))
+    
+    # Promoter methylation plot
+    promoter_data = df[df['Region'] == 'Promoter']
+    sns.barplot(data=promoter_data, x='Category', y='Methylation',
+                hue='Regulation', ax=ax1)
+    ax1.set_title(f'{cell_type} - Promoter Methylation')
+    ax1.set_xlabel('Binding Category')
+    ax1.set_ylabel('Methylation Level (%)')
+    ax1.tick_params(axis='x', rotation=45)
+    
+    # Gene body methylation plot
+    gene_body_data = df[df['Region'] == 'Gene Body']
+    sns.barplot(data=gene_body_data, x='Category', y='Methylation',
+                hue='Regulation', ax=ax2)
+    ax2.set_title(f'{cell_type} - Gene Body Methylation')
+    ax2.set_xlabel('Binding Category')
+    ax2.set_ylabel('Methylation Level (%)')
+    ax2.tick_params(axis='x', rotation=45)
+    
+    # Add statistical significance
+    for ax, data in [(ax1, promoter_data), (ax2, gene_body_data)]:
+        for i, category in enumerate(data['Category'].unique()):
+            category_data = data[data['Category'] == category]
+            
+            # Compare upregulated vs downregulated
+            up_data = category_data[category_data['Regulation'] == 'upregulated']
+            down_data = category_data[category_data['Regulation'] == 'downregulated']
+            
+            if len(up_data) > 0 and len(down_data) > 0:
+                stats = calculate_group_significance(
+                    up_data['Methylation'],
+                    down_data['Methylation'],
+                    'upregulated',
+                    'downregulated'
+                )
+                
+                if stats and stats['pvalue'] < 0.05:
+                    y_max = max(up_data['Methylation'].max(), down_data['Methylation'].max())
+                    ax.text(i, y_max + 2,
+                           f"p={stats['pvalue']:.2e}",
+                           ha='center')
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, 'methylation_comparison.pdf'))
+    plt.close()
+
+def calculate_group_significance(group1: pd.Series, group2: pd.Series, 
+                               label1: str, label2: str) -> Dict:
+    """Calculate statistical significance between two groups with improved handling of small samples"""
+    try:
+        # Remove NaN values
+        group1_clean = group1.dropna()
+        group2_clean = group2.dropna()
+        
+        # Check if we have enough samples (at least 3 per group for statistical validity)
+        if len(group1_clean) < 3 or len(group2_clean) < 3:
+            logger.debug(f"Insufficient samples for statistical test: {label1}={len(group1_clean)}, {label2}={len(group2_clean)}")
+            return None
+            
+        # Perform Mann-Whitney U test
+        stat, pval = stats.mannwhitneyu(group1_clean, group2_clean, alternative='two-sided')
+        
+        # Calculate effect size only if we have enough samples
+        if len(group1_clean) >= 3 and len(group2_clean) >= 3:
+            d = (group1_clean.mean() - group2_clean.mean()) / np.sqrt(
+                ((group1_clean.std() ** 2 + group2_clean.std() ** 2) / 2)
+            )
+        else:
+            d = None
+        
+        return {
+            'test': 'Mann-Whitney U',
+            'statistic': stat,
+            'pvalue': pval,
+            'cohens_d': d,
+            'group1_mean': group1_clean.mean(),
+            'group2_mean': group2_clean.mean(),
+            'group1_n': len(group1_clean),
+            'group2_n': len(group2_clean)
+        }
+    except Exception as e:
+        logger.debug(f"Error calculating significance between {label1} and {label2}: {str(e)}")
+        return None
+
+def summarize_binding_analysis(results: Dict[str, pd.DataFrame], output_dir: str):
+    """Create a summary of the binding analysis results"""
+    summary_file = os.path.join(output_dir, 'binding_analysis_summary.txt')
+    
+    with open(summary_file, 'w') as f:
+        f.write("MeCP2 Binding Analysis Summary\n")
+        f.write("="*50 + "\n\n")
+        
+        for cell_type, df in results.items():
+            f.write(f"\n{cell_type} Analysis\n")
+            f.write("-"*30 + "\n")
+            
+            # Overall statistics
+            f.write(f"Total genes analyzed: {len(df)}\n")
+            f.write(f"MeCP2-bound genes: {df['mecp2_bound'].sum()}\n")
+            
+            # Binding type distribution
+            if 'binding_type' in df.columns:
+                f.write("\nBinding type distribution:\n")
+                f.write(df['binding_type'].value_counts().to_string())
+                
+            # Expression status distribution
+            f.write("\n\nExpression status distribution:\n")
+            f.write(df['expression_status'].value_counts().to_string())
+            
+            # Methylation statistics
+            f.write("\n\nMethylation statistics:\n")
+            for region in ['promoter', 'gene_body']:
+                f.write(f"\n{region.title()} methylation:\n")
+                f.write(f"Mean: {df[f'{region}_methylation'].mean():.2f}\n")
+                f.write(f"Std: {df[f'{region}_methylation'].std():.2f}\n")
+            
+            f.write("\n" + "="*50 + "\n")
