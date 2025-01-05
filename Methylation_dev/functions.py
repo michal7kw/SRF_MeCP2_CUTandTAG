@@ -8,10 +8,10 @@ import os
 import pyBigWig
 import pysam
 import logging
-from typing import Dict, List, Tuple, Any, Union
+from typing import Dict, List, Tuple, Any, Optional, Union
 import pyranges as pr
 from functools import partial
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 import time
 import argparse
@@ -49,50 +49,120 @@ def get_gene_body_region(gene_start: int, gene_end: int, strand: str) -> Tuple[i
         return (gene_start, gene_end - CONFIG['genomic_regions']['gene_body_start']) 
 
 #%% Analyze methylation patterns
-def analyze_methylation_patterns(genes_df: pd.DataFrame, 
-                               expression_data: Dict[str, pd.DataFrame],
-                               mecp2_binding: pd.DataFrame,
-                               medip_dir: str,
-                               genome_fasta: str,
-                               use_cache: bool = True) -> Dict[str, pd.DataFrame]:
-    """Improved methylation pattern analysis"""
-    results = {}
+def analyze_methylation_patterns(args):
+    """
+    Main analysis function
+    """
+    # Load binding data
+    binding_df = load_binding_data(PATHS['binding_data'])
+    if binding_df is None:
+        logger.error("Failed to load binding data")
+        return {}
     
-    for cell_type, expr_df in expression_data.items():
-        logger.info(f"Analyzing {cell_type} methylation patterns...")
-        
-        # Try to load from cache if enabled
-        cache_key = f"methylation_patterns_{cell_type}"
-        if use_cache and CONFIG['cache']['enabled']:
-            cached_result = load_from_cache(cache_key)
-            if cached_result is not None:
-                results[cell_type] = cached_result
+    results = {}
+    for cell_type in args.cell_types:
+        try:
+            # Load required data
+            genes_df = load_gene_data(cell_type)
+            expr_df = load_expression_data(cell_type) 
+            cpg_associations = load_cpg_associations(cell_type)
+            
+            # Check if all data loaded successfully
+            if any(x is None for x in [genes_df, expr_df, cpg_associations]):
+                logger.error(f"Failed to load required data for {cell_type}")
+                continue
+            
+            # Merge data
+            merged_df = merge_analysis_data(genes_df, expr_df, cpg_associations)
+            
+            if merged_df is None or len(merged_df) == 0:
+                logger.warning(f"No valid data for {cell_type}")
                 continue
         
-        # Merge data with proper validation
-        merged_df = validate_and_merge_data(genes_df, expr_df, mecp2_binding)
+            # Assign binding types
+            merged_df = assign_binding_types(merged_df, binding_df)
+            
+            # Store results
+            results[cell_type] = merged_df
+            
+        except Exception as e:
+            logger.error(f"Error analyzing {cell_type}: {str(e)}")
+            continue
+            
+    return results
+
+def assign_binding_types(genes_df: pd.DataFrame, binding_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Assign binding types to genes based on overlapping binding regions
+    """
+    if binding_df is None:
+        logger.warning("No binding data provided - setting all binding types to 'none'")
+        genes_df['binding_type'] = 'none'
+        genes_df['exo_signal'] = None
+        genes_df['endo_signal'] = None
+        genes_df['mecp2_bound'] = False
+        return genes_df
+
+    # Set index for faster lookups
+    genes_df = genes_df.set_index(['chromosome', 'start', 'end'])
+
+    # Convert to PyRanges for efficient overlap detection
+    genes_pr = pr.PyRanges(
+        chromosomes=genes_df.reset_index()['chromosome'],
+        starts=genes_df.reset_index()['start'],
+        ends=genes_df.reset_index()['end'],
+        strands=genes_df['strand']
+    )
+    
+    binding_pr = pr.PyRanges(
+        chromosomes=binding_df['chr'],
+        starts=binding_df['start'],
+        ends=binding_df['end'],
+        strands=None
+    )
+
+    # Find overlaps
+    overlaps = genes_pr.join(binding_pr).as_df()
+    
+    # Initialize columns
+    genes_df['binding_type'] = 'none'
+    genes_df['exo_signal'] = 0.0
+    genes_df['endo_signal'] = 0.0
+    genes_df['mecp2_bound'] = False
+
+    # Process overlaps more efficiently
+    for _, overlap in overlaps.iterrows():
+        idx = (overlap['Chromosome'], overlap['Start'], overlap['End'])
         
-        # Calculate methylation with biological context
-        methylation_results = calculate_contextual_methylation(
-            merged_df,
-            medip_dir,
-            cell_type,
-            genome_fasta
+        current_type = genes_df.at[idx, 'binding_type']
+        new_type = overlap['binding_type']
+        
+        # Update binding type
+        if current_type == 'none':
+            genes_df.at[idx, 'binding_type'] = new_type
+        elif current_type != new_type and new_type != 'none':
+            genes_df.at[idx, 'binding_type'] = 'both'
+        
+        # Update signals (take maximum value)
+        genes_df.at[idx, 'exo_signal'] = max(
+            genes_df.at[idx, 'exo_signal'],
+            overlap['exo_signal']
+        )
+        genes_df.at[idx, 'endo_signal'] = max(
+            genes_df.at[idx, 'endo_signal'],
+            overlap['endo_signal']
         )
         
-        # Add genomic context analysis
-        methylation_results = add_genomic_context(methylation_results)
-        
-        # Validate results against known biological patterns
-        methylation_results = validate_methylation_patterns(methylation_results)
-        
-        results[cell_type] = methylation_results
-        
-        # Cache results if enabled
-        if CONFIG['cache']['enabled']:
-            save_to_cache(methylation_results, cache_key)
+        genes_df.at[idx, 'mecp2_bound'] = True
+
+    # Reset index for consistency with rest of pipeline
+    genes_df = genes_df.reset_index()
+
+    # Log results
+    logger.info("\nBinding type distribution after assignment:")
+    logger.info(genes_df['binding_type'].value_counts())
     
-    return results
+    return genes_df
 
 # Add a function to run the complete analysis pipeline
 def run_analysis_pipeline(force_recompute: bool = False) -> Dict[str, Any]:
@@ -1487,51 +1557,64 @@ def analyze_methylation_patterns_detailed(results: Dict[str, pd.DataFrame], outp
         except Exception as e:
             logger.error(f"Error analyzing {cell_type}: {str(e)}")
             continue
-
-def analyze_methylation_distribution(df: pd.DataFrame, cell_type: str, output_dir: str):
-    """Analyze the distribution of methylation levels in different regions"""
+def analyze_methylation_distribution(df, cell_type, output_dir):
+    """Analyze methylation distribution patterns"""
     try:
+        if not isinstance(df, pd.DataFrame):
+            logger.error(f"Expected DataFrame, got {type(df)}")
+            return None
+            
+        if len(df) == 0:
+            logger.warning(f"No data to analyze for {cell_type}")
+            return None
+            
+        # Create output directory
+        plot_dir = os.path.join(output_dir, 'methylation_analysis', cell_type)
+        os.makedirs(plot_dir, exist_ok=True)
+        
         # Create violin plots for methylation distribution
         plt.figure(figsize=(12, 6))
         
         # Plot methylation levels for promoters and gene bodies
-        data_to_plot = pd.melt(df, 
+        data_to_plot = pd.melt(
+            df,
                               value_vars=['promoter_methylation', 'gene_body_methylation'],
-                              var_name='Region', value_name='Methylation Level')
+            var_name='Region',
+            value_name='Methylation Level'
+        )
         
         sns.violinplot(data=data_to_plot, x='Region', y='Methylation Level')
         plt.title(f'{cell_type}: Distribution of Methylation Levels')
-        plt.savefig(os.path.join(output_dir, f'{cell_type}_methylation_distribution.pdf'))
+        plt.savefig(os.path.join(plot_dir, 'methylation_distribution.pdf'))
         plt.close()
         
-        # Calculate and save statistics
-        stats_dict = {
+        # Calculate and return statistics
+        return {
             'promoter': df['promoter_methylation'].describe(),
-            'gene_body': df['gene_body_methylation'].describe()
+            'gene_body': df['gene_body_methylation'].describe(),
+            'correlation': calculate_methylation_correlation(df)
         }
         
-        # Calculate correlation between promoter and gene body methylation
+    except Exception as e:
+        logger.error(f"Error in methylation distribution analysis: {str(e)}")
+        return None
+
+def calculate_methylation_correlation(df):
+    """Calculate correlation between promoter and gene body methylation"""
         try:
             valid_data = df[['promoter_methylation', 'gene_body_methylation']].dropna()
             if len(valid_data) > 1:
-                correlation = stats.spearmanr(valid_data['promoter_methylation'],
-                                           valid_data['gene_body_methylation'])
-                stats_dict['correlation'] = {
+            correlation = stats.spearmanr(
+                valid_data['promoter_methylation'],
+                valid_data['gene_body_methylation']
+            )
+            return {
                     'rho': correlation.statistic,
                     'pvalue': correlation.pvalue,
                     'n': len(valid_data)
                 }
-            else:
-                stats_dict['correlation'] = None
-                logger.warning(f"{cell_type}: Insufficient data for correlation calculation")
         except Exception as e:
-            stats_dict['correlation'] = None
-            logger.warning(f"{cell_type}: Error calculating correlation: {str(e)}")
-        
-        return stats_dict
-    
-    except Exception as e:
-        logger.error(f"Error in methylation distribution analysis for {cell_type}: {str(e)}")
+        logger.error(f"Error calculating correlation: {str(e)}")
         return None
 
 def analyze_methylation_expression_relationship(df: pd.DataFrame, cell_type: str, output_dir: str):
@@ -1579,55 +1662,23 @@ def analyze_methylation_expression_relationship(df: pd.DataFrame, cell_type: str
         logger.error(f"Error in methylation-expression analysis for {cell_type}: {str(e)}")
         return None
 
-def analyze_binding_patterns(df: pd.DataFrame, cell_type: str, output_dir: str):
-    """Analyze the relationship between methylation and MeCP2 binding"""
+def analyze_binding_patterns(df, cell_type, output_dir):
+    """Analyze binding patterns"""
     try:
-        # Create plots for binding analysis
-        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 12))
-        
-        # 1. Methylation levels by binding type
-        sns.boxplot(data=df, x='binding_type', y='promoter_methylation', ax=ax1)
-        ax1.set_title('Promoter Methylation by Binding Type')
-        
-        sns.boxplot(data=df, x='binding_type', y='gene_body_methylation', ax=ax2)
-        ax2.set_title('Gene Body Methylation by Binding Type')
-        
-        # 2. Expression changes by binding type
-        sns.boxplot(data=df, x='binding_type', y='log2FoldChange', ax=ax3)
-        ax3.set_title('Expression Changes by Binding Type')
-        
-        # 3. CpG density by binding type
-        sns.boxplot(data=df, x='binding_type', y='promoter_cpg_count', ax=ax4)
-        ax4.set_title('CpG Density by Binding Type')
-        
-        plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, f'{cell_type}_binding_patterns.pdf'))
-        plt.close()
-        
-        # Calculate statistics
-        stats = {}
-        for binding_type in df['binding_type'].dropna().unique():
-            if pd.isna(binding_type):
-                continue
-            subset = df[df['binding_type'] == binding_type]
-            stats[binding_type] = {
-                'count': len(subset),
-                'methylation': {
-                    'promoter': subset['promoter_methylation'].describe(),
-                    'gene_body': subset['gene_body_methylation'].describe()
-                },
-                'expression': subset['log2FoldChange'].describe(),
-                'cpg_density': {
-                    'promoter': subset['promoter_cpg_count'].describe(),
-                    'gene_body': subset['gene_body_cpg_count'].describe()
-                }
-            }
-        
-        return stats
+        if not isinstance(df, pd.DataFrame):
+            logger.error(f"Expected DataFrame, got {type(df)}")
+            return
+            
+        required_cols = ['binding_type', 'expression_status']
+        missing_cols = [col for col in required_cols if col not in df.columns]
+        if missing_cols:
+            logger.error(f"Missing required columns: {missing_cols}")
+            return
+            
+        # Rest of the function...
     
     except Exception as e:
-        logger.error(f"Error in binding pattern analysis for {cell_type}: {str(e)}")
-        return None
+        logger.error(f"Error in binding pattern analysis: {str(e)}")
 
 def generate_methylation_report(df: pd.DataFrame, cell_type: str, output_dir: str):
     """Generate a comprehensive report of the methylation analysis"""
@@ -1924,65 +1975,42 @@ def map_binding_to_genes(mecp2_binding: pd.DataFrame, genes_df: pd.DataFrame) ->
         logger.error(f"Error in map_binding_to_genes: {str(e)}")
         raise
 
-def validate_and_merge_data(genes_df: pd.DataFrame, expr_df: pd.DataFrame, 
-                          mecp2_binding: pd.DataFrame) -> pd.DataFrame:
-    """Validate and merge gene annotations with expression data"""
+def validate_and_merge_data(genes_df, expr_df, cpg_associations):
+    """Validate and merge data with better error handling"""
     try:
-        # Merge gene annotations with expression data
+        # Validate input data
+        for df, name in [(genes_df, 'genes_df'), (expr_df, 'expr_df'), 
+                        (cpg_associations, 'cpg_associations')]:
+            if df is None or len(df) == 0:
+                raise ValueError(f"Empty or None {name}")
+        
+        # First merge: gene annotations with expression data
         merged_df = genes_df.merge(expr_df, on='gene_id', how='inner')
-        logger.info(f"Merged gene annotations with expression data. Shape: {merged_df.shape}")
+        logger.info(f"Initial merge shape: {merged_df.shape}")
         
-        # Debug chromosome formats
-        logger.info("\nChromosome format check:")
-        logger.info(f"Genes chromosomes: {merged_df['chr'].head().tolist()}")
-        logger.info(f"Binding chromosomes: {mecp2_binding['chr'].head().tolist()}")
-        
-        # Standardize chromosome format
-        merged_df = merged_df.copy()
-        mecp2_binding = mecp2_binding.copy()
-        
-        # Ensure 'chr' prefix consistency
-        merged_df['chr'] = merged_df['chr'].astype(str)
-        mecp2_binding['chr'] = mecp2_binding['chr'].astype(str)
-        
-        if not merged_df['chr'].str.startswith('chr').all():
-            merged_df['chr'] = 'chr' + merged_df['chr']
-        if not mecp2_binding['chr'].str.startswith('chr').all():
-            mecp2_binding['chr'] = 'chr' + mecp2_binding['chr']
+        if len(merged_df) == 0:
+            raise ValueError("No matches between genes and expression data")
             
-        logger.info("\nAfter standardization:")
-        logger.info(f"Genes chromosomes: {merged_df['chr'].head().tolist()}")
-        logger.info(f"Binding chromosomes: {mecp2_binding['chr'].head().tolist()}")
+        # Add binding information
+        merged_df['binding_type'] = 'none'  # Default value
         
-        # Map binding regions to genes
-        binding_data = map_binding_to_genes(mecp2_binding, merged_df)
+        # Add CpG associations
+        final_df = merged_df.merge(cpg_associations, on='gene_id', how='left')
+        logger.info(f"Final merge shape: {final_df.shape}")
         
-        # Add binding information to merged data
-        if len(binding_data) > 0:
-            merged_df = merged_df.merge(binding_data, on='gene_id', how='left')
-            merged_df['mecp2_bound'] = ~merged_df['binding_type'].isna()
-        else:
-            merged_df['mecp2_bound'] = False
-            merged_df['binding_type'] = None
-            merged_df['exo_signal'] = None
-            merged_df['endo_signal'] = None
-        
-        # Debug final data
-        logger.info("\nFinal data check:")
-        logger.info(f"Total genes: {len(merged_df)}")
-        logger.info(f"MeCP2-bound genes: {merged_df['mecp2_bound'].sum()}")
-        if merged_df['mecp2_bound'].any():
-            logger.info("Sample of bound genes:")
-            logger.info(merged_df[merged_df['mecp2_bound']][
-                ['gene_id', 'chr', 'binding_type']
-            ].head())
-        
-        return merged_df
+        # Validate final data
+        if len(final_df) == 0:
+            raise ValueError("No data after all merges")
+            
+        return final_df
         
     except Exception as e:
         logger.error(f"Error in validate_and_merge_data: {str(e)}")
-        logger.error(f"MeCP2 binding data shape: {mecp2_binding.shape}")
-        logger.error(f"MeCP2 binding columns: {mecp2_binding.columns.tolist()}")
+        logger.error("Available columns:")
+        for df, name in [(genes_df, 'genes_df'), (expr_df, 'expr_df'),
+                        (cpg_associations, 'cpg_associations')]:
+            if df is not None:
+                logger.error(f"{name}: {df.columns.tolist()}")
         raise
 
 def calculate_contextual_methylation(merged_df: pd.DataFrame,
@@ -2238,195 +2266,225 @@ def calculate_methylation_levels_parallel(region_df: pd.DataFrame,
     
     return pd.concat(results, ignore_index=True)
 
-def analyze_methylation_patterns_parallel(results: Dict[str, pd.DataFrame], 
-                                        output_dir: str,
-                                        n_processes: int = None):
+def process_task_wrapper(args):
+    """Wrapper function to unpack arguments for process_analysis_task"""
+    return process_analysis_task(*args)
+
+def analyze_methylation_patterns_parallel(results, output_dir, n_processes=None):
     """Parallel version of methylation pattern analysis"""
     if n_processes is None:
         n_processes = max(1, multiprocessing.cpu_count() - 1)
 
+    logger.info(f"Running analysis with {n_processes} processes")
+
     # Create tasks for parallel processing
     tasks = []
-    for cell_type, df in results.items():
-        tasks.extend([
-            (df, cell_type, output_dir, 'distribution'),
-            (df, cell_type, output_dir, 'expression'),
-            (df, cell_type, output_dir, 'binding')
-        ])
-
+    for cell_type, cell_results in results.items():
+        methylation_df = cell_results.get('methylation')
+        if isinstance(methylation_df, pd.DataFrame) and len(methylation_df) > 0:
+            tasks.extend([
+                (methylation_df, cell_type, output_dir, 'distribution'),
+                (methylation_df, cell_type, output_dir, 'expression'),
+                (methylation_df, cell_type, output_dir, 'binding')
+            ])
+        else:
+            logger.warning(f"No valid methylation data for {cell_type}")
+    
+    if not tasks:
+        logger.warning("No valid tasks for parallel analysis")
+        return {}
+    
     # Process tasks in parallel
+    analysis_results = {}
     with ProcessPoolExecutor(max_workers=n_processes) as executor:
-        futures = []
-        for task in tasks:
-            if task[3] == 'distribution':
-                futures.append(executor.submit(analyze_methylation_distribution, *task[:-1]))
-            elif task[3] == 'expression':
-                futures.append(executor.submit(analyze_methylation_expression_relationship, *task[:-1]))
-            else:
-                futures.append(executor.submit(analyze_binding_patterns, *task[:-1]))
-
-        # Wait for all tasks to complete
-        for future in tqdm(futures, desc="Analyzing methylation patterns"):
+        futures = {executor.submit(run_analysis_task, task): task for task in tasks}
+        
+        for future in tqdm(
+            as_completed(futures), 
+            total=len(futures),
+            desc="Analyzing methylation patterns"
+        ):
+            task = futures[future]
             try:
-                future.result()
+                result = future.result()
+                if result is not None:
+                    cell_type = task[1]
+                    analysis_type = task[3]
+                    if cell_type not in analysis_results:
+                        analysis_results[cell_type] = {}
+                    analysis_results[cell_type][analysis_type] = result
             except Exception as e:
-                logger.error(f"Error in parallel analysis: {str(e)}")
+                logger.error(f"Error processing task {task}: {str(e)}")
+    
+    return analysis_results
 
-def analyze_binding_enrichment_groups(results, output_dir):
-    """Analyze binding enrichment patterns across different groups"""
-    
-    # Handle the case where results is a dictionary of cell types
-    if isinstance(results, dict):
-        all_results = {}
-        for cell_type, df in results.items():
-            cell_results = analyze_single_cell_type(df, cell_type, output_dir)
-            if cell_results:
-                all_results[cell_type] = cell_results
-        return all_results
-    else:
-        # Handle single DataFrame case
-        return analyze_single_cell_type(results, 'combined', output_dir)
+def determine_binding_type(row):
+    """Determine binding type based on exo and endo signals"""
+    try:
+        exo = float(row['exo_signal'])
+        endo = float(row['endo_signal'])
+        
+        # Define thresholds (you may need to adjust these)
+        signal_threshold = 1.0
+        
+        if exo > signal_threshold and endo > signal_threshold:
+            return 'common'
+        elif exo > signal_threshold:
+            return 'exo_enriched'
+        elif endo > signal_threshold:
+            return 'endo_only'
+        else:
+            return 'none'
+    except (ValueError, TypeError):
+        logger.warning(f"Invalid signal values: exo={row['exo_signal']}, endo={row['endo_signal']}")
+        return 'none'
 
-def analyze_single_cell_type(df, cell_type, output_dir):
-    """Analyze binding enrichment for a single cell type"""
-    results = {}
-    
-    # Check required columns
-    required_columns = ['binding_status', 'expression_status', 
-                       'promoter_methylation', 'gene_body_methylation']
-    
-    if not all(col in df.columns for col in required_columns):
-        logger.warning(f"Missing required columns for {cell_type}. "
-                      f"Available columns: {df.columns.tolist()}")
-        return None
-    
-    # Define binding groups using binding_status column
-    binding_groups = {
-        'all_genes': df,
-        'mecp2_bound': df[df['binding_status'].isin(['both', 'exo', 'endo'])],
-        'exo_enriched': df[df['binding_status'] == 'exo'],
-        'endo_enriched': df[df['binding_status'] == 'endo'],
-        'common_bound': df[df['binding_status'] == 'both']
-    }
-    
-    # Analyze each group
-    for group_name, group_df in binding_groups.items():
-        if len(group_df) == 0:
-            logger.warning(f"No genes found in group: {group_name} for {cell_type}")
-            continue
+def analyze_binding_enrichment_groups(methylation_df, output_dir):
+    """Analyze binding enrichment with improved validation and signal-based categorization"""
+    try:
+        if not isinstance(methylation_df, pd.DataFrame):
+            logger.error(f"Expected DataFrame, got {type(methylation_df)}")
+            return None
             
-        # Calculate regulation counts
-        regulation_counts = group_df['expression_status'].value_counts()
+        # Debug information about the DataFrame
+        logger.info(f"DataFrame shape: {methylation_df.shape}")
+        logger.info(f"Columns available: {methylation_df.columns.tolist()}")
         
-        # Calculate methylation statistics
-        methylation_stats = group_df.groupby('expression_status').agg({
-            'promoter_methylation': ['mean', 'std', 'count'],
-            'gene_body_methylation': ['mean', 'std', 'count']
-        })
+        # Determine binding types based on signal values
+        if 'exo_signal' in methylation_df.columns and 'endo_signal' in methylation_df.columns:
+            logger.info("Determining binding types from signal values...")
+            
+            # Log signal value distributions
+            logger.info("\nExo signal distribution:")
+            logger.info(methylation_df['exo_signal'].describe())
+            logger.info("\nEndo signal distribution:")
+            logger.info(methylation_df['endo_signal'].describe())
+            
+            # Assign binding types based on signals
+            methylation_df['binding_type'] = methylation_df.apply(determine_binding_type, axis=1)
+            
+        binding_counts = methylation_df['binding_type'].value_counts()
+        logger.info(f"\nBinding type counts:\n{binding_counts}")
         
-        # Store results
-        results[group_name] = {
-            'regulation_counts': regulation_counts,
-            'methylation_stats': methylation_stats
+        # Sample of data for each binding type
+        for binding_type in methylation_df['binding_type'].unique():
+            subset = methylation_df[methylation_df['binding_type'] == binding_type].head()
+            logger.info(f"\nSample of {binding_type} genes:")
+            sample_cols = ['gene_id', 'gene_name', 'binding_type', 'exo_signal', 'endo_signal']
+            logger.info(subset[sample_cols])
+        
+        # Rest of the function remains the same...
+        binding_categories = {
+            'exo_enriched': methylation_df[
+                methylation_df['binding_type'] == 'exo_enriched'
+            ],
+            'endo_only': methylation_df[
+                methylation_df['binding_type'] == 'endo_only'
+            ],
+            'common': methylation_df[
+                methylation_df['binding_type'] == 'common'
+            ]
         }
         
-        # Create visualizations
-        create_group_visualizations(group_df, group_name, cell_type, output_dir)
-    
-    # Save summary to file
-    summary_file = os.path.join(output_dir, 'binding_enrichment', cell_type,
-                               f'binding_enrichment_summary.txt')
+        results = {}
+        for category, subset in binding_categories.items():
+            if len(subset) == 0:
+                logger.warning(f"No genes in {category} (from {len(methylation_df)} total genes)")
+                continue
+                
+            logger.info(f"Found {len(subset)} genes in {category}")
+            results[category] = {
+                'gene_list': subset,
+                'regulation_distribution': subset['expression_status'].value_counts(),
+                'methylation_stats': {
+                    'promoter': subset['promoter_methylation'].describe(),
+                    'gene_body': subset['gene_body_methylation'].describe()
+                }
+            }
+            
+        if not results:
+            logger.warning("No binding categories had data")
+            return None
+            
+        return results
+        
+    except Exception as e:
+        logger.error(f"Error in binding analysis: {str(e)}")
+        logger.error(f"Full error: {str(e.__class__.__name__)}: {str(e)}")
+        import traceback
+        logger.error(f"Traceback:\n{traceback.format_exc()}")
+        return None
+
+def save_category_summary(category, regulation_dist, methylation_stats, subset, output_dir):
+    """Save summary for a binding category"""
+    summary_file = os.path.join(output_dir, 'binding_enrichment', 
+                               f'{category}_analysis.txt')
     os.makedirs(os.path.dirname(summary_file), exist_ok=True)
     
     with open(summary_file, 'w') as f:
-        f.write(f"Binding Enrichment Analysis Summary - {cell_type}\n")
-        f.write("="*40 + "\n\n")
+        f.write(f"{category.upper()} ANALYSIS\n")
+        f.write("="*50 + "\n\n")
         
-        for group_name, group_results in results.items():
-            f.write(f"\n{group_name.upper()}\n")
-            f.write("-"*30 + "\n")
-            f.write("Regulation distribution:\n")
-            f.write(group_results['regulation_counts'].to_string())
-            f.write("\n\nMethylation statistics:\n")
-            f.write(group_results['methylation_stats'].to_string())
-            f.write("\n" + "="*40 + "\n")
-    
-    return results
+        f.write("Regulation Distribution:\n")
+        f.write("-"*30 + "\n")
+        f.write(regulation_dist.to_string())
+        f.write("\n\n")
+        
+        f.write("Methylation Statistics:\n")
+        f.write("-"*30 + "\n")
+        f.write(methylation_stats.to_string())
+        f.write("\n\n")
+        
+        # Save gene lists by regulation status
+        for status in ['not_regulated', 'upregulated', 'downregulated']:
+            status_genes = subset[subset['expression_status'] == status]
+            if len(status_genes) > 0:
+                f.write(f"\n{status.upper()} GENES:\n")
+                f.write("-"*30 + "\n")
+                for _, gene in status_genes.iterrows():
+                    f.write(f"Gene: {gene['gene_name']}\n")
+                    f.write(f"Promoter methylation: {gene['promoter_methylation']:.2f}\n")
+                    f.write(f"Gene body methylation: {gene['gene_body_methylation']:.2f}\n")
+                    f.write("-"*20 + "\n")
 
-def create_group_visualizations(df, group_name, cell_type, output_dir):
-    """Create visualizations for binding enrichment group analysis"""
-    plot_dir = os.path.join(output_dir, 'binding_enrichment', cell_type, 'plots')
-    os.makedirs(plot_dir, exist_ok=True)
-    
-    # Set style for better readability
-    sns.set_style("whitegrid")
-    sns.set_context("paper", font_scale=1.2)
-    
-    # 1. Combined methylation visualization
-    plt.figure(figsize=(12, 6))
-    
-    # Reshape data for paired visualization
-    plot_data = pd.melt(
-        df,
-        value_vars=['promoter_methylation', 'gene_body_methylation'],
-        id_vars=['expression_status'],
-        var_name='Region',
-        value_name='Methylation'
-    )
-    
-    # Create violin plot with individual points
-    sns.violinplot(
-        data=plot_data,
-        x='expression_status',
-        y='Methylation',
-        hue='Region',
-        split=True,
-        inner='quartile',
-        cut=0
-    )
-    
-    plt.title(f'{cell_type} - {group_name}\nMethylation Patterns')
-    plt.xlabel('Expression Status')
-    plt.ylabel('Methylation Level (%)')
-    plt.xticks(rotation=45)
-    
-    # Adjust legend
-    plt.legend(title='Region', bbox_to_anchor=(1.05, 1), loc='upper left')
-    
-    plt.tight_layout()
-    plt.savefig(os.path.join(plot_dir, f'{cell_type}_{group_name}_methylation.pdf'),
-                bbox_inches='tight', dpi=300)
-    plt.close()
-    
-    # 2. Regulation distribution - horizontal bars for better readability
-    plt.figure(figsize=(8, 6))
-    regulation_counts = df['expression_status'].value_counts()
-    
-    # Create horizontal bar plot with custom colors
-    colors = {'upregulated': '#2ecc71', 'downregulated': '#e74c3c', 'unchanged': '#3498db'}
-    bars = plt.barh(regulation_counts.index, regulation_counts.values,
-                   color=[colors.get(x, '#95a5a6') for x in regulation_counts.index])
-    
-    # Add value labels with offset instead of padding
-    for bar in bars:
-        width = bar.get_width()
-        plt.text(width + width * 0.02,  # Add 2% of width as offset
-                bar.get_y() + bar.get_height()/2,
-                f'{int(width):,}',
-                ha='left', va='center',
-                fontsize=10,
-                fontweight='bold')
-    
-    plt.title(f'{cell_type} - {group_name}\nGene Regulation Distribution')
-    plt.xlabel('Number of Genes')
-    
-    # Add some padding to the x-axis to prevent label cutoff
-    plt.margins(x=0.2)
-    
-    plt.tight_layout()
-    plt.savefig(os.path.join(plot_dir, f'{cell_type}_{group_name}_regulation.pdf'),
-                bbox_inches='tight', dpi=300)
-    plt.close()
+def create_group_visualizations(df, category, cell_type, output_dir):
+    """Create visualizations for a binding category"""
+    try:
+        # Set default style
+        plt.style.use('default')
+        
+        # Create output directory
+        plot_dir = os.path.join(output_dir, 'visualizations', cell_type, category)
+        os.makedirs(plot_dir, exist_ok=True)
+        
+        # Methylation patterns
+        plt.figure(figsize=(12, 6))
+        sns.set_style("whitegrid")
+        
+        # Create violin plots
+        plot_data = pd.melt(
+            df,
+            value_vars=['promoter_methylation', 'gene_body_methylation'],
+            id_vars=['expression_status'],
+            var_name='Region',
+            value_name='Methylation'
+        )
+        
+        sns.violinplot(
+            data=plot_data,
+            x='expression_status',
+            y='Methylation',
+            hue='Region',
+            split=True
+        )
+        
+        plt.title(f'{cell_type} - {category}\nMethylation Patterns')
+        plt.tight_layout()
+        plt.savefig(os.path.join(plot_dir, 'methylation_patterns.pdf'))
+        plt.close()
+        
+    except Exception as e:
+        logger.error(f"Error creating visualizations for {category} in {cell_type}: {str(e)}")
 
 def save_gene_lists(df: pd.DataFrame, group_name: str, cell_type: str, output_dir: str):
     """Save gene lists for each regulation category"""
@@ -2863,112 +2921,1245 @@ def analyze_mecp2_binding_patterns(df: pd.DataFrame, cell_type: str, output_dir:
     
     return results
 
-def create_analysis_visualizations(results, cell_type, output_dir):
-    """Create comprehensive visualizations for the analysis"""
-    plot_dir = os.path.join(output_dir, 'mecp2_analysis', cell_type, 'plots')
-    os.makedirs(plot_dir, exist_ok=True)
-    
-    # Set style
-    plt.style.use('seaborn')
-    sns.set_theme(style="whitegrid")
-    sns.set_context("paper", font_scale=1.2)
-    
-    # 1. Methylation by binding type and expression status
-    plt.figure(figsize=(12, 7))
-    
-    # Use violin plots for better distribution visualization
-    sns.violinplot(
-        data=results['methylation_data'],
-        x='binding_type',
-        y='gene_body_methylation',
-        hue='expression_status',
-        split=True,
-        inner='quartile',
-        cut=0
-    )
-    
-    plt.title(f'{cell_type} - Gene Body Methylation by Binding Type')
-    plt.xlabel('Binding Type')
-    plt.ylabel('Gene Body Methylation (%)')
-    plt.xticks(rotation=0)
-    
-    # Adjust legend
-    plt.legend(title='Expression Status', bbox_to_anchor=(1.05, 1), loc='upper left')
-    
-    plt.tight_layout()
-    plt.savefig(os.path.join(plot_dir, 'methylation_by_binding.pdf'),
-                bbox_inches='tight', dpi=300)
-    plt.close()
-    
-    # 2. Binding patterns - use horizontal bars for better label readability
-    plt.figure(figsize=(10, 6))
-    occupancy = results['occupancy']['binding_competition']
-    
-    # Sort values for better visualization
-    categories = ['Both', 'Exo Only', 'Endo Only']
-    values = [occupancy['both'], occupancy['exo_only'], occupancy['endo_only']]
-    
-    # Create horizontal bar plot
-    bars = plt.barh(categories, values)
-    
-    # Add value labels on the bars
-    for bar in bars:
-        width = bar.get_width()
-        plt.text(width, bar.get_y() + bar.get_height()/2,
-                f'{int(width):,}',
-                ha='left', va='center', fontsize=10)
-    
-    plt.title(f'{cell_type} - MeCP2 Binding Patterns')
-    plt.xlabel('Number of Regions')
-    
-    plt.tight_layout()
-    plt.savefig(os.path.join(plot_dir, 'binding_patterns.pdf'))
-    plt.close()
-    
-    # 3. Methylation distribution comparison
-    if 'methylation_comparison' in results:
+def create_analysis_visualizations(df, cell_type, output_dir):
+    """Create detailed analysis visualizations"""
+    try:
+        # Set default style
+        plt.style.use('default')
+        
+        # Create output directory
+        plot_dir = os.path.join(output_dir, 'visualizations', cell_type, 'analysis')
+        os.makedirs(plot_dir, exist_ok=True)
+        
+        # 1. Methylation distribution
         plt.figure(figsize=(10, 6))
+        sns.set_style("whitegrid")
         
-        # Use kernel density estimation for smooth distribution visualization
-        for binding_type in ['endo_only', 'exo_only', 'both']:
-            data = results['methylation_comparison'][binding_type]
-            sns.kdeplot(
-                data=data,
-                label=binding_type.replace('_', ' ').title(),
-                common_norm=False
-            )
-        
-        plt.title(f'{cell_type} - Methylation Distribution by Binding Type')
-        plt.xlabel('Methylation Level (%)')
-        plt.ylabel('Density')
-        plt.legend(title='Binding Type')
-        
+        sns.boxplot(data=df, x='binding_type', y='promoter_methylation')
+        plt.title(f'{cell_type} - Promoter Methylation by Binding Type')
         plt.tight_layout()
-        plt.savefig(os.path.join(plot_dir, 'methylation_distribution.pdf'))
+        plt.savefig(os.path.join(plot_dir, 'promoter_methylation.pdf'))
         plt.close()
+        
+        # 2. Expression relationship
+        plt.figure(figsize=(10, 6))
+        sns.scatterplot(
+            data=df,
+            x='promoter_methylation',
+            y='log2FoldChange',
+            hue='binding_type',
+            alpha=0.6
+        )
+        plt.title(f'{cell_type} - Expression vs Methylation')
+        plt.tight_layout()
+        plt.savefig(os.path.join(plot_dir, 'expression_methylation.pdf'))
+        plt.close()
+        
+    except Exception as e:
+        logger.error(f"Error creating analysis visualizations for {cell_type}: {str(e)}")
 
 def save_analysis_results(results, cell_type, output_dir):
-    """Save detailed analysis results"""
-    results_dir = os.path.join(output_dir, 'mecp2_analysis', cell_type, 'results')
-    os.makedirs(results_dir, exist_ok=True)
+    """Save analysis results with better error handling"""
+    try:
+        # Create output directory
+        analysis_dir = os.path.join(output_dir, 'analysis_results', cell_type)
+        os.makedirs(analysis_dir, exist_ok=True)
+        
+        # Save methylation results
+        if results.get('methylation') is not None:
+            pd.DataFrame(results['methylation']).to_csv(
+                os.path.join(analysis_dir, 'methylation_results.csv'),
+                index=False
+            )
+        
+        # Save binding results
+        if results.get('binding') is not None:
+            with open(os.path.join(analysis_dir, 'binding_results.txt'), 'w') as f:
+                f.write(f"Binding Analysis Results - {cell_type}\n")
+                f.write("="*50 + "\n\n")
+                for category, data in results['binding'].items():
+                    f.write(f"\n{category.upper()}:\n")
+                    f.write("-"*30 + "\n")
+                    if isinstance(data, dict):
+                        for key, value in data.items():
+                            f.write(f"\n{key}:\n{value}\n")
+        
+        # Save CpG analysis results
+        if results.get('cpg') is not None:
+            with open(os.path.join(analysis_dir, 'cpg_analysis.txt'), 'w') as f:
+                f.write(f"CpG Analysis Results - {cell_type}\n")
+                f.write("="*50 + "\n\n")
+                for key, value in results['cpg'].items():
+                    f.write(f"\n{key}:\n{value}\n")
+        
+    except Exception as e:
+        logger.error(f"Error saving results for {cell_type}: {str(e)}")
+
+def plot_methylation_comparison(results, output_dir):
+    """Create comparative plots of methylation patterns"""
+    if not results:  # Add check for None
+        logger.warning("No results available for methylation comparison")
+        return
     
-    with open(os.path.join(results_dir, 'analysis_summary.txt'), 'w') as f:
-        f.write(f"MeCP2 Binding Analysis - {cell_type}\n")
+    try:
+        plt.figure(figsize=(12, 6))
+        for category, data in results.items():
+            if 'gene_list' not in data:
+                continue
+                
+            df = data['gene_list']
+            sns.boxplot(
+                data=df,
+                x='expression_status',
+                y='promoter_methylation',
+                label=category
+            )
+        
+        plt.title('Methylation Patterns by Expression Status')
+        plt.tight_layout()
+        plt.savefig(os.path.join(output_dir, 'methylation_comparison.pdf'))
+        plt.close()
+        
+    except Exception as e:
+        logger.error(f"Error in plot_methylation_comparison: {str(e)}")
+
+def identify_promoter_cpg_islands(genes_df, cpg_islands_bed, upstream_distance=2000, downstream_distance=500):
+    """
+    Identify CpG islands in promoter regions of genes
+    """
+    try:
+        # Validate input data
+        required_columns = ['chr', 'start', 'end', 'strand', 'gene_id']
+        if not all(col in genes_df.columns for col in required_columns):
+            missing = [col for col in required_columns if col not in genes_df.columns]
+            raise ValueError(f"Missing required columns in genes_df: {missing}")
+        
+        if not os.path.exists(cpg_islands_bed):
+            raise FileNotFoundError(f"CpG islands BED file not found: {cpg_islands_bed}")
+        
+        # Create DataFrame in correct format for PyRanges
+        pr_df = pd.DataFrame({
+            'Chromosome': genes_df['chr'],
+            'Start': genes_df['start'],
+            'End': genes_df['end'],
+            'Strand': genes_df['strand'],
+            'gene_id': genes_df['gene_id']
+        })
+        
+        # Convert to PyRanges using from_dict
+        genes_pr = pr.from_dict(pr_df.to_dict('list'))
+        
+        logger.info(f"Created PyRanges object with {len(genes_df)} genes")
+        
+        # Load CpG islands
+        cpg_islands = pr.read_bed(cpg_islands_bed)
+        logger.info(f"Loaded {len(cpg_islands.df)} CpG islands from BED file")
+        
+        # Define promoter regions based on strand
+        promoter_regions = []
+        for _, gene in genes_df.iterrows():
+            if gene['strand'] == '+':
+                start = max(0, gene['start'] - upstream_distance)
+                end = gene['start'] + downstream_distance
+            else:
+                start = gene['end'] - downstream_distance
+                end = gene['end'] + upstream_distance
+                
+            promoter_regions.append({
+                'Chromosome': gene['chr'],
+                'Start': start,
+                'End': end,
+                'gene_id': gene['gene_id'],
+                'Strand': gene['strand']
+            })
+        
+        # Convert promoter regions to PyRanges
+        promoters_pr = pr.from_dict(pd.DataFrame(promoter_regions).to_dict('list'))
+        
+        # Find overlaps between promoters and CpG islands
+        overlaps = promoters_pr.join(cpg_islands)
+        
+        # Calculate overlap characteristics
+        cpg_gene_associations = []
+        for _, overlap in overlaps.df.iterrows():
+            overlap_size = overlap.End - overlap.Start
+            distance_to_tss = min(
+                abs(overlap.Start - overlap.Start_b),
+                abs(overlap.End - overlap.Start_b)
+            )
+            
+            cpg_gene_associations.append({
+                'gene_id': overlap.gene_id,  # Using gene_id instead of Name
+                'cpg_chr': overlap.Chromosome,
+                'cpg_start': overlap.Start,
+                'cpg_end': overlap.End,
+                'overlap_size': overlap_size,
+                'distance_to_tss': distance_to_tss,
+                'gc_content': calculate_gc_content(overlap.Chromosome, overlap.Start, overlap.End)
+            })
+        
+        result_df = pd.DataFrame(cpg_gene_associations)
+        logger.info(f"Found {len(result_df)} CpG island-gene associations")
+        
+        return result_df
+        
+    except Exception as e:
+        logger.error(f"Error in identify_promoter_cpg_islands: {str(e)}")
+        raise
+
+def calculate_gc_content(chromosome, start, end, genome_fasta=PATHS['genome_fasta']):
+    """Calculate GC content for a given genomic region"""
+    with pysam.FastaFile(genome_fasta) as fasta:
+        sequence = fasta.fetch(chromosome, start, end)
+        gc_count = sequence.count('G') + sequence.count('C')
+        total = len(sequence)
+        return (gc_count / total) * 100 if total > 0 else 0
+
+def analyze_cpg_methylation_patterns(methylation_df, cpg_associations):
+    """Analyze CpG methylation patterns"""
+    try:
+        if not isinstance(methylation_df, pd.DataFrame):
+            logger.error(f"Expected DataFrame, got {type(methylation_df)}")
+            return None
+            
+        if len(methylation_df) == 0:
+            logger.warning("Empty methylation data")
+            return None
+            
+        # Analyze CpG patterns
+        cpg_results = {
+            'cpg_targeting': analyze_cpg_targeting(methylation_df),
+            'methylation_levels': analyze_methylation_levels(methylation_df),
+            'regulation_patterns': analyze_regulation_patterns(methylation_df)
+        }
+        
+        return cpg_results
+        
+    except Exception as e:
+        logger.error(f"Error in CpG methylation analysis: {str(e)}")
+        return None
+
+def analyze_cpg_targeting(methylation_df):
+    """Analyze CpG island targeting patterns"""
+    # Implement CpG island targeting analysis logic
+    # This is a placeholder and should be replaced with actual implementation
+    return {
+        'exo_only': methylation_df[methylation_df['binding_type'] == 'exo_only'],
+        'common_targets': methylation_df[methylation_df['binding_type'] == 'both'],
+        'exo_enriched': methylation_df[methylation_df['binding_type'] == 'exo_enriched']
+    }
+
+def analyze_methylation_levels(methylation_df):
+    """Analyze methylation levels"""
+    # Implement methylation levels analysis logic
+    # This is a placeholder and should be replaced with actual implementation
+    return {
+        'mean': methylation_df['methylation'].mean(),
+        'std': methylation_df['methylation'].std(),
+        'median': methylation_df['methylation'].median(),
+        'q1': methylation_df['methylation'].quantile(0.25),
+        'q3': methylation_df['methylation'].quantile(0.75)
+    }
+
+def analyze_regulation_patterns(methylation_df):
+    """Analyze regulation patterns"""
+    # Implement regulation patterns analysis logic
+    # This is a placeholder and should be replaced with actual implementation
+    return {
+        'upregulated': methylation_df[methylation_df['expression_status'] == 'upregulated'],
+        'downregulated': methylation_df[methylation_df['expression_status'] == 'downregulated'],
+        'unchanged': methylation_df[methylation_df['expression_status'] == 'unchanged']
+    }
+
+def analyze_cpg_methylation_patterns(df, cpg_associations):
+    """
+    Analyze methylation patterns in relation to CpG islands and gene regulation
+    
+    Parameters:
+    -----------
+    df : pd.DataFrame
+        DataFrame with gene expression and methylation data
+    cpg_associations : pd.DataFrame
+        DataFrame with CpG island associations
+    """
+    # Merge gene data with CpG associations
+    merged_data = df.merge(cpg_associations, on='gene_id', how='inner')
+    
+    # Categorize genes based on CpG island characteristics
+    merged_data['cpg_category'] = merged_data.apply(
+        lambda x: categorize_cpg_region(
+            x['gc_content'], 
+            x['overlap_size'], 
+            x['distance_to_tss']
+        ), 
+        axis=1
+    )
+    
+    # Analyze regulation patterns for each category
+    categories = ['high_cpg', 'intermediate_cpg', 'low_cpg']
+    results = {}
+    
+    for category in categories:
+        subset = merged_data[merged_data['cpg_category'] == category]
+        results[category] = {
+            'regulation_counts': subset['expression_status'].value_counts(),
+            'methylation_stats': subset.groupby('expression_status').agg({
+                'promoter_methylation': ['mean', 'std', 'count'],
+                'gene_body_methylation': ['mean', 'std', 'count']
+            })
+        }
+    
+    return results
+
+def categorize_cpg_region(gc_content, size, distance_to_tss):
+    """Categorize CpG regions based on their characteristics"""
+    if (gc_content >= 50 and 
+        size >= 200 and 
+        distance_to_tss <= 1000):
+        return 'high_cpg'
+    elif (gc_content >= 40 and 
+          size >= 100 and 
+          distance_to_tss <= 1500):
+        return 'intermediate_cpg'
+    else:
+        return 'low_cpg'
+
+# Core analysis functions
+def analyze_methylation_patterns_parallel(results, output_dir, n_processes=None):
+    """Parallel version of methylation pattern analysis"""
+    if n_processes is None:
+        n_processes = max(1, multiprocessing.cpu_count() - 1)
+    
+    logger.info(f"Running analysis with {n_processes} processes")
+    
+    # Create tasks for parallel processing
+    tasks = []
+    for cell_type, cell_results in results.items():
+        methylation_df = cell_results.get('methylation')
+        if isinstance(methylation_df, pd.DataFrame) and len(methylation_df) > 0:
+        tasks.extend([
+                (methylation_df, cell_type, output_dir, 'distribution'),
+                (methylation_df, cell_type, output_dir, 'expression'),
+                (methylation_df, cell_type, output_dir, 'binding')
+            ])
+        else:
+            logger.warning(f"No valid methylation data for {cell_type}")
+    
+    if not tasks:
+        logger.warning("No valid tasks for parallel analysis")
+        return {}
+
+    # Process tasks in parallel
+    analysis_results = {}
+    with ProcessPoolExecutor(max_workers=n_processes) as executor:
+        futures = {executor.submit(run_analysis_task, task): task for task in tasks}
+        
+        for future in tqdm(
+            as_completed(futures), 
+            total=len(futures),
+            desc="Analyzing methylation patterns"
+        ):
+            task = futures[future]
+            try:
+                result = future.result()
+                if result is not None:
+                    cell_type = task[1]
+                    analysis_type = task[3]
+                    if cell_type not in analysis_results:
+                        analysis_results[cell_type] = {}
+                    analysis_results[cell_type][analysis_type] = result
+            except Exception as e:
+                logger.error(f"Error processing task {task}: {str(e)}")
+    
+    return analysis_results
+
+def process_analysis_task(df, cell_type, output_dir, analysis_type):
+    """Process individual analysis tasks"""
+    try:
+        if not isinstance(df, pd.DataFrame):
+            logger.error(f"Expected DataFrame for {analysis_type}, got {type(df)}")
+            return
+            
+        required_cols = {
+            'distribution': ['promoter_methylation', 'gene_body_methylation'],
+            'expression': ['promoter_methylation', 'gene_body_methylation', 'log2FoldChange'],
+            'binding': ['binding_type', 'expression_status']
+        }
+        
+        missing = [col for col in required_cols.get(analysis_type, []) 
+                  if col not in df.columns]
+        if missing:
+            logger.error(f"Missing required columns for {analysis_type}: {missing}")
+            return
+            
+        if analysis_type == 'distribution':
+            analyze_methylation_distribution(df, cell_type, output_dir)
+        elif analysis_type == 'expression':
+            analyze_methylation_expression_relationship(df, cell_type, output_dir)
+        elif analysis_type == 'binding':
+            analyze_binding_patterns(df, cell_type, output_dir)
+            
+    except Exception as e:
+        logger.error(f"Error in {analysis_type} analysis for {cell_type}: {str(e)}")
+
+def analyze_cell_types(genes_df, expression_data, cpg_associations, args):
+    """Analyze methylation patterns for each cell type"""
+    results = {}
+    
+    if not expression_data:
+        logger.error("No expression data provided")
+        return results
+        
+    for cell_type, expr_df in expression_data.items():
+        logger.info(f"\nAnalyzing {cell_type}...")
+        
+        try:
+            # Merge data
+            merged_df = merge_analysis_data(genes_df, expr_df, cpg_associations)
+            
+            if merged_df is None or len(merged_df) == 0:
+                logger.warning(f"No valid data for {cell_type}")
+                continue
+            
+            # Calculate signal values
+            bigwig_files = {
+                'exo': [f for f in os.listdir(PATHS['bigwig_dir']) if 'exo' in f.lower()],
+                'endo': [f for f in os.listdir(PATHS['bigwig_dir']) if 'endo' in f.lower()]
+            }
+            
+            merged_df = calculate_signal_values(merged_df, bigwig_files)
+            
+            # Calculate methylation levels
+            methylation_df = calculate_methylation_levels(merged_df, args)
+            
+            results[cell_type] = {
+                'methylation': methylation_df,
+                'binding': analyze_binding_enrichment_groups(methylation_df, PATHS['output_dir']),
+                'cpg': analyze_cpg_methylation_patterns(methylation_df, cpg_associations)
+            }
+            
+        except Exception as e:
+            logger.error(f"Error analyzing {cell_type}: {str(e)}")
+            continue
+    
+    return results
+def print_summary_statistics(cell_type, binding_analysis, cpg_analysis):
+    """Print summary statistics for a cell type analysis"""
+    print(f"\n{cell_type.upper()} ANALYSIS SUMMARY")
+    print("="*50)
+    
+    # Binding analysis summary
+    print("\nBinding Analysis:")
+    print("-"*30)
+    if binding_analysis:
+        for category, data in binding_analysis.items():
+            print(f"\n{category.upper()}:")
+            if 'regulation_distribution' in data:
+                print("\nRegulation Distribution:")
+                print(data['regulation_distribution'])
+            if 'methylation_stats' in data:
+                print("\nMethylation Statistics:")
+                print(data['methylation_stats'])
+            else:
+        print("No binding analysis results available")
+    
+    # CpG analysis summary
+    print("\nCpG Analysis:")
+    print("-"*30)
+    if cpg_analysis:
+        for category, data in cpg_analysis.items():
+            print(f"\n{category.upper()}:")
+            if 'regulation_counts' in data:
+                print("\nRegulation Counts:")
+                print(data['regulation_counts'])
+            if 'methylation_stats' in data:
+                print("\nMethylation Statistics:")
+                print(data['methylation_stats'])
+    else:
+        print("No CpG analysis results available")
+
+def store_and_visualize_results(methylation_results, binding_analysis, 
+                              cpg_analysis, cell_type):
+    """Store results and create initial visualizations"""
+    results = {
+        'methylation': methylation_results,
+        'binding': binding_analysis,
+        'cpg': cpg_analysis
+    }
+    
+    # Create initial visualizations only if we have binding analysis results
+    if binding_analysis:
+        plot_methylation_comparison(binding_analysis, PATHS['output_dir'])
+    
+    # Print summary statistics
+    print_summary_statistics(cell_type, binding_analysis, cpg_analysis)
+    
+    return results
+
+def analyze_category(subset):
+    """Analyze a single binding category"""
+    return {
+        'regulation_distribution': subset['expression_status'].value_counts(),
+        'methylation_stats': subset.groupby('expression_status').agg({
+            'promoter_methylation': ['mean', 'std', 'count'],
+            'gene_body_methylation': ['mean', 'std', 'count']
+        }),
+        'gene_list': subset[['gene_name', 'expression_status', 
+                           'promoter_methylation', 'gene_body_methylation']]
+    }
+
+def analyze_exo_enriched_genes(results):
+    """
+    Analyze genes enriched in Exo binding, focusing on their regulation and methylation patterns
+    
+    Parameters:
+    -----------
+    results : dict
+        Dictionary containing analysis results for each cell type
+    """
+    logger.info("\nAnalyzing exo-enriched genes...")
+    
+    if not results:
+        logger.warning("No results available for exo-enriched analysis")
+        return
+    
+    for cell_type, cell_results in results.items():
+        methylation_data = cell_results.get('methylation')
+        binding_data = cell_results.get('binding')
+        
+        try:
+            if not methylation_data is not None or binding_data is None:
+                logger.warning(f"Missing required data for {cell_type}")
+                continue
+            
+            # Filter for exo-enriched genes
+            exo_genes = methylation_data[
+                methylation_data['binding_type'] == 'exo_only'
+            ].copy()
+            
+            if len(exo_genes) == 0:
+                logger.warning(f"No exo-enriched genes found for {cell_type}")
+                continue
+            
+            # Analyze regulation distribution
+            regulation_dist = exo_genes['expression_status'].value_counts()
+            logger.info(f"\n{cell_type} - Regulation distribution of exo-enriched genes:")
+            logger.info(regulation_dist)
+            
+            # Analyze methylation patterns by regulation status
+            methylation_stats = exo_genes.groupby('expression_status').agg({
+                'promoter_methylation': ['mean', 'std', 'count'],
+                'gene_body_methylation': ['mean', 'std', 'count']
+            })
+            logger.info(f"\nMethylation statistics:")
+            logger.info(methylation_stats)
+            
+            # Save detailed results
+            save_exo_enriched_analysis(
+                cell_type,
+                exo_genes,
+                regulation_dist,
+                methylation_stats,
+                PATHS['output_dir']
+            )
+            
+            # Create visualizations
+            create_exo_enriched_visualizations(
+                exo_genes,
+                cell_type,
+                PATHS['output_dir']
+            )
+            
+            except Exception as e:
+            logger.error(f"Error analyzing exo-enriched genes for {cell_type}: {str(e)}")
+            continue
+
+def save_exo_enriched_analysis(cell_type, exo_genes, regulation_dist, 
+                             methylation_stats, output_dir):
+    """Save detailed analysis of exo-enriched genes"""
+    output_dir = os.path.join(output_dir, 'exo_enriched_analysis')
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Save summary file
+    summary_file = os.path.join(output_dir, f'{cell_type}_exo_enriched_summary.txt')
+    with open(summary_file, 'w') as f:
+        f.write(f"EXO-ENRICHED GENES ANALYSIS - {cell_type}\n")
         f.write("="*50 + "\n\n")
         
-        # CpG island targeting
-        f.write("CpG ISLAND TARGETING\n")
+        f.write("Regulation Distribution:\n")
         f.write("-"*30 + "\n")
-        cpg_results = results['cpg_targeting']
-        f.write(f"Exo-only targets: {len(cpg_results['exo_only'])}\n")
-        f.write(f"Common targets: {len(cpg_results['common_targets'])}\n")
-        f.write(f"Exo-enriched targets: {len(cpg_results['exo_enriched'])}\n\n")
+        f.write(regulation_dist.to_string())
+        f.write("\n\n")
         
-        # Occupancy patterns
-        f.write("OCCUPANCY PATTERNS\n")
+        f.write("Methylation Statistics:\n")
         f.write("-"*30 + "\n")
-        occ = results['occupancy']
-        f.write(f"Endo occupancy: {occ['endo_occupancy']:.2%}\n")
-        f.write(f"Exo occupancy: {occ['exo_occupancy']:.2%}\n\n")
+        f.write(methylation_stats.to_string())
+        f.write("\n\n")
         
-        # Save detailed gene lists and additional statistics...
+        # Write gene lists by regulation status
+        for status in ['not_regulated', 'upregulated', 'downregulated']:
+            status_genes = exo_genes[exo_genes['expression_status'] == status]
+            if len(status_genes) > 0:
+                f.write(f"\n{status.upper()} GENES:\n")
+                f.write("-"*30 + "\n")
+                for _, gene in status_genes.iterrows():
+                    f.write(f"Gene: {gene['gene_name']}\n")
+                    f.write(f"Promoter methylation: {gene['promoter_methylation']:.2f}\n")
+                    f.write(f"Gene body methylation: {gene['gene_body_methylation']:.2f}\n")
+                    f.write("-"*20 + "\n")
+    
+    # Save detailed gene list
+    exo_genes.to_csv(
+        os.path.join(output_dir, f'{cell_type}_exo_enriched_genes.csv'),
+        index=False
+    )
+
+def create_exo_enriched_visualizations(exo_genes, cell_type, output_dir):
+    """Create visualizations for exo-enriched genes analysis"""
+    plot_dir = os.path.join(output_dir, 'exo_enriched_analysis', 'plots')
+    os.makedirs(plot_dir, exist_ok=True)
+    
+    try:
+        # 1. Methylation patterns by regulation status
+        plt.figure(figsize=(12, 6))
+        
+        # Create violin plots for promoter and gene body methylation
+        plot_data = pd.melt(
+            exo_genes,
+            value_vars=['promoter_methylation', 'gene_body_methylation'],
+            id_vars=['expression_status'],
+            var_name='Region',
+            value_name='Methylation'
+        )
+        
+        sns.violinplot(
+            data=plot_data,
+            x='expression_status',
+            y='Methylation',
+            hue='Region',
+            split=True
+        )
+        
+        plt.title(f'{cell_type} - Exo-enriched Genes\nMethylation Patterns')
+        plt.xlabel('Expression Status')
+        plt.ylabel('Methylation Level (%)')
+        
+        plt.tight_layout()
+        plt.savefig(
+            os.path.join(plot_dir, f'{cell_type}_exo_enriched_methylation.pdf'),
+            bbox_inches='tight'
+        )
+        plt.close()
+        
+        # 2. Regulation distribution
+        plt.figure(figsize=(8, 6))
+        regulation_counts = exo_genes['expression_status'].value_counts()
+        
+        sns.barplot(x=regulation_counts.index, y=regulation_counts.values)
+        plt.title(f'{cell_type} - Exo-enriched Genes\nRegulation Distribution')
+        plt.xlabel('Expression Status')
+        plt.ylabel('Number of Genes')
+        
+        plt.tight_layout()
+        plt.savefig(
+            os.path.join(plot_dir, f'{cell_type}_exo_enriched_regulation.pdf'),
+            bbox_inches='tight'
+        )
+        plt.close()
+        
+    except Exception as e:
+        logger.error(f"Error creating exo-enriched visualizations: {str(e)}")
+
+def run_analysis_task(task):
+    """Run a single analysis task"""
+    df, cell_type, output_dir, analysis_type = task
+    try:
+        if not isinstance(df, pd.DataFrame):
+            logger.error(f"Expected DataFrame for {analysis_type}, got {type(df)}")
+            return None
+            
+        if analysis_type == 'distribution':
+            return analyze_methylation_distribution(df, cell_type, output_dir)
+        elif analysis_type == 'expression':
+            return analyze_methylation_expression_relationship(df, cell_type, output_dir)
+        elif analysis_type == 'binding':
+            return analyze_binding_patterns(df, cell_type, output_dir)
+            
+    except Exception as e:
+        logger.error(f"Error in {analysis_type} analysis for {cell_type}: {str(e)}")
+        return None
+
+def analyze_methylation_patterns_parallel(results, output_dir, n_processes=None):
+    """Parallel version of methylation pattern analysis"""
+    if n_processes is None:
+        n_processes = max(1, multiprocessing.cpu_count() - 1)
+    
+    logger.info(f"Running analysis with {n_processes} processes")
+    
+    # Create tasks for parallel processing
+    tasks = []
+    for cell_type, cell_results in results.items():
+        methylation_df = cell_results.get('methylation')
+        if isinstance(methylation_df, pd.DataFrame) and len(methylation_df) > 0:
+            tasks.extend([
+                (methylation_df, cell_type, output_dir, 'distribution'),
+                (methylation_df, cell_type, output_dir, 'expression'),
+                (methylation_df, cell_type, output_dir, 'binding')
+            ])
+        else:
+            logger.warning(f"No valid methylation data for {cell_type}")
+    
+    if not tasks:
+        logger.warning("No valid tasks for parallel analysis")
+        return {}
+    
+    # Process tasks in parallel
+    analysis_results = {}
+    with ProcessPoolExecutor(max_workers=n_processes) as executor:
+        futures = {executor.submit(run_analysis_task, task): task for task in tasks}
+        
+        for future in tqdm(
+            as_completed(futures), 
+            total=len(futures),
+            desc="Analyzing methylation patterns"
+        ):
+            task = futures[future]
+            try:
+                result = future.result()
+                if result is not None:
+                    cell_type = task[1]
+                    analysis_type = task[3]
+                    if cell_type not in analysis_results:
+                        analysis_results[cell_type] = {}
+                    analysis_results[cell_type][analysis_type] = result
+            except Exception as e:
+                logger.error(f"Error processing task {task}: {str(e)}")
+    
+    return analysis_results
+
+def calculate_signal_values(gene_df: pd.DataFrame, bigwig_files: Dict[str, str]) -> pd.DataFrame:
+    """Calculate exo and endo signal values for each gene"""
+    logger.info("Calculating signal values from bigwig files...")
+    
+    try:
+        # Initialize signal columns
+        gene_df['exo_signal'] = 0.0
+        gene_df['endo_signal'] = 0.0
+        
+        # Get file paths
+        exo_files = [f for f in bigwig_files.values() if 'exo' in f.lower()]
+        endo_files = [f for f in bigwig_files.values() if 'endo' in f.lower()]
+        
+        if not exo_files or not endo_files:
+            logger.error("Missing exo or endo bigwig files")
+            return gene_df
+            
+        logger.info(f"Found {len(exo_files)} exo files and {len(endo_files)} endo files")
+        
+        # Calculate signals for each gene
+        for idx, row in gene_df.iterrows():
+            try:
+                # Get gene coordinates
+                chrom = row['chromosome']
+                start = int(row['start'])
+                end = int(row['end'])
+                
+                # Calculate exo signal
+                exo_values = []
+                for bw_file in exo_files:
+                    with pyBigWig.open(bw_file) as bw:
+                        try:
+                            values = bw.values(chrom, start, end)
+                            values = [v for v in values if v is not None]
+                            if values:
+                                exo_values.append(np.mean(values))
+                        except RuntimeError:
+                            continue
+                
+                # Calculate endo signal
+                endo_values = []
+                for bw_file in endo_files:
+                    with pyBigWig.open(bw_file) as bw:
+                        try:
+                            values = bw.values(chrom, start, end)
+                            values = [v for v in values if v is not None]
+                            if values:
+                                endo_values.append(np.mean(values))
+                        except RuntimeError:
+                            continue
+                
+                # Update signal values
+                gene_df.at[idx, 'exo_signal'] = np.mean(exo_values) if exo_values else 0.0
+                gene_df.at[idx, 'endo_signal'] = np.mean(endo_values) if endo_values else 0.0
+                
+            except Exception as e:
+                logger.warning(f"Error calculating signals for gene {row['gene_id']}: {str(e)}")
+                continue
+        
+        # Log signal value distributions
+        logger.info("\nExo signal distribution:")
+        logger.info(gene_df['exo_signal'].describe())
+        logger.info("\nEndo signal distribution:")
+        logger.info(gene_df['endo_signal'].describe())
+        
+        return gene_df
+        
+    except Exception as e:
+        logger.error(f"Error in signal calculation: {str(e)}")
+        return gene_df
+
+def analyze_cell_types(genes_df, expression_data, cpg_associations, args):
+    """Analyze methylation patterns for each cell type"""
+    results = {}
+    
+    if not expression_data:
+        logger.error("No expression data provided")
+        return results
+        
+    for cell_type, expr_df in expression_data.items():
+        logger.info(f"\nAnalyzing {cell_type}...")
+        
+        try:
+            # Merge data
+            merged_df = merge_analysis_data(genes_df, expr_df, cpg_associations)
+            
+            if merged_df is None or len(merged_df) == 0:
+                logger.warning(f"No valid data for {cell_type}")
+                continue
+            
+            # Calculate signal values
+            bigwig_files = {
+                'exo': [f for f in os.listdir(PATHS['bigwig_dir']) if 'exo' in f.lower()],
+                'endo': [f for f in os.listdir(PATHS['bigwig_dir']) if 'endo' in f.lower()]
+            }
+            
+            merged_df = calculate_signal_values(merged_df, bigwig_files)
+            
+            # Calculate methylation levels
+            methylation_df = calculate_methylation_levels(merged_df, args)
+            
+            results[cell_type] = {
+                'methylation': methylation_df,
+                'binding': analyze_binding_enrichment_groups(methylation_df, PATHS['output_dir']),
+                'cpg': analyze_cpg_methylation_patterns(methylation_df, cpg_associations)
+            }
+            
+        except Exception as e:
+            logger.error(f"Error analyzing {cell_type}: {str(e)}")
+            continue
+    
+    return results
+
+def load_mecp2_binding_data(chromosome: str = None) -> pd.DataFrame:
+    """Load MeCP2 binding data from CSV file"""
+    try:
+        binding_file = os.path.join(PATHS['data_dir'], 'mecp2_cpg_enrichment_parallel.csv')
+        binding_df = pd.read_csv(binding_file)
+        
+        # Filter for chromosome if specified
+        if chromosome:
+            binding_df = binding_df[binding_df['chr'] == chromosome].copy()
+            
+        logger.info(f"Loaded {len(binding_df)} MeCP2 binding regions")
+        logger.info(f"Binding types distribution:\n{binding_df['binding_type'].value_counts()}")
+        
+        return binding_df
+    except Exception as e:
+        logger.error(f"Error loading MeCP2 binding data: {str(e)}")
+        return None
+
+def assign_binding_types(df: pd.DataFrame, binding_df: pd.DataFrame, thresholds: Dict[str, float]) -> pd.DataFrame:
+    """
+    Assign binding types based on MeCP2 signal data using calculated thresholds
+    """
+    logger.info("Determining binding types from signal values...")
+    
+    if binding_df is None or binding_df.empty:
+        logger.warning("No binding data provided - setting all binding types to 'none'")
+        df['binding_type'] = 'none'
+        df['exo_signal'] = None 
+        df['endo_signal'] = None
+        df['mecp2_bound'] = False
+        return df
+
+    # Merge binding data with gene data
+    merged = pd.merge(df, binding_df, on='gene_id', how='left')
+    
+    # Use calculated thresholds
+    exo_threshold = thresholds['exo']
+    endo_threshold = thresholds['endo']
+    
+    logger.info(f"Using thresholds - Exo: {exo_threshold:.2f}, Endo: {endo_threshold:.2f}")
+    
+    # Calculate binding types
+    conditions = [
+        (merged['exo_signal'] >= exo_threshold) & (merged['endo_signal'] >= endo_threshold),
+        (merged['exo_signal'] >= exo_threshold) & (merged['endo_signal'] < endo_threshold),
+        (merged['exo_signal'] < exo_threshold) & (merged['endo_signal'] >= endo_threshold),
+    ]
+    choices = ['both', 'exo_only', 'endo_only']
+    
+    merged['binding_type'] = np.select(conditions, choices, default='none')
+    merged['mecp2_bound'] = merged['binding_type'] != 'none'
+    
+    # Log binding type distributions
+    binding_counts = merged['binding_type'].value_counts()
+    logger.info("\nBinding type counts:")
+    logger.info(binding_counts)
+    
+    # Calculate percentages
+    binding_pcts = (binding_counts / len(merged) * 100).round(2)
+    logger.info("\nBinding type percentages:")
+    logger.info(binding_pcts)
+    
+    return merged
+
+def analyze_cell_types(genes_df, expression_data, cpg_associations, args):
+    """Analyze methylation patterns for each cell type"""
+    results = {}
+    
+    if not expression_data:
+        logger.error("No expression data provided")
+        return results
+    
+    # Load MeCP2 binding data
+    binding_df = load_mecp2_binding_data(args.chromosome)
+    if binding_df is None:
+        logger.error("Failed to load MeCP2 binding data")
+        return results
+        
+    for cell_type, expr_df in expression_data.items():
+        logger.info(f"\nAnalyzing {cell_type}...")
+        
+        try:
+            # Merge data
+            merged_df = merge_analysis_data(genes_df, expr_df, cpg_associations)
+            
+            if merged_df is None or len(merged_df) == 0:
+                logger.warning(f"No valid data for {cell_type}")
+                continue
+            
+            # Assign binding types from MeCP2 data
+            merged_df = assign_binding_types(merged_df, binding_df, CONFIG['binding_thresholds'])
+            
+            # Calculate methylation levels
+            methylation_df = calculate_methylation_levels(merged_df, args)
+            
+            results[cell_type] = {
+                'methylation': methylation_df,
+                'binding': analyze_binding_enrichment_groups(methylation_df, PATHS['output_dir']),
+                'cpg': analyze_cpg_methylation_patterns(methylation_df, cpg_associations)
+            }
+            
+        except Exception as e:
+            logger.error(f"Error analyzing {cell_type}: {str(e)}")
+            continue
+    
+    return results
+
+def load_binding_data(binding_file: str) -> pd.DataFrame:
+    """
+    Load pre-calculated MeCP2 binding data
+    """
+    try:
+        if not os.path.exists(binding_file):
+            logger.error(f"Binding file not found: {binding_file}")
+            return None
+            
+        binding_df = pd.read_csv(binding_file)
+        
+        # Verify required columns exist
+        required_cols = ['chr', 'start', 'end', 'exo_signal', 'endo_signal', 'binding_type']
+        if not all(col in binding_df.columns for col in required_cols):
+            logger.error(f"Binding file missing required columns: {required_cols}")
+            return None
+            
+        logger.info(f"Loaded binding data with {len(binding_df)} regions")
+        logger.info("\nBinding type distribution:")
+        logger.info(binding_df['binding_type'].value_counts())
+        
+        return binding_df
+        
+    except Exception as e:
+        logger.error(f"Error loading binding data: {str(e)}")
+        return None
+
+def assign_binding_types(genes_df: pd.DataFrame, binding_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Assign binding types to genes based on overlapping binding regions
+    """
+    if binding_df is None:
+        logger.warning("No binding data provided - setting all binding types to 'none'")
+        genes_df['binding_type'] = 'none'
+        genes_df['exo_signal'] = None
+        genes_df['endo_signal'] = None
+        genes_df['mecp2_bound'] = False
+        return genes_df
+
+    # Convert to PyRanges for efficient overlap detection
+    genes_pr = pr.PyRanges(
+        chromosomes=genes_df['chromosome'],
+        starts=genes_df['start'],
+        ends=genes_df['end'],
+        strands=genes_df['strand']
+    )
+    
+    binding_pr = pr.PyRanges(
+        chromosomes=binding_df['chr'],
+        starts=binding_df['start'],
+        ends=binding_df['end'],
+        strands=None
+    )
+
+    # Find overlaps
+    overlaps = genes_pr.join(binding_pr).as_df()
+    
+    # Initialize columns
+    genes_df['binding_type'] = 'none'
+    genes_df['exo_signal'] = 0.0
+    genes_df['endo_signal'] = 0.0
+    genes_df['mecp2_bound'] = False
+
+    # Process overlaps
+    for _, overlap in overlaps.iterrows():
+        gene_idx = genes_df.index[
+            (genes_df['chromosome'] == overlap['Chromosome']) & 
+            (genes_df['start'] == overlap['Start']) & 
+            (genes_df['end'] == overlap['End'])
+        ].values[0]
+        
+        current_type = genes_df.at[gene_idx, 'binding_type']
+        new_type = overlap['binding_type']
+        
+        # Update binding type
+        if current_type == 'none':
+            genes_df.at[gene_idx, 'binding_type'] = new_type
+        elif current_type != new_type and new_type != 'none':
+            genes_df.at[gene_idx, 'binding_type'] = 'both'
+        
+        # Update signals (take maximum value)
+        genes_df.at[gene_idx, 'exo_signal'] = max(
+            genes_df.at[gene_idx, 'exo_signal'],
+            overlap['exo_signal']
+        )
+        genes_df.at[gene_idx, 'endo_signal'] = max(
+            genes_df.at[gene_idx, 'endo_signal'],
+            overlap['endo_signal']
+        )
+        
+        genes_df.at[gene_idx, 'mecp2_bound'] = True
+
+    # Log results
+    logger.info("\nBinding type distribution after assignment:")
+    logger.info(genes_df['binding_type'].value_counts())
+    
+    return genes_df
+
+def classify_expression_changes(expr_df: pd.DataFrame, 
+                             padj_threshold: float = 0.05,
+                             lfc_threshold: float = 1.0) -> pd.DataFrame:
+    """
+    Classify genes based on their expression changes
+    """
+    expr_df['expression_status'] = 'unchanged'
+    
+    # Significant changes
+    significant = expr_df['padj'] < padj_threshold
+    
+    # Upregulated: log2FC > 1 (2-fold increase)
+    expr_df.loc[significant & (expr_df['log2FoldChange'] >= lfc_threshold), 
+                'expression_status'] = 'upregulated'
+    
+    # Downregulated: log2FC < -1 (2-fold decrease)
+    expr_df.loc[significant & (expr_df['log2FoldChange'] <= -lfc_threshold), 
+                'expression_status'] = 'downregulated'
+    
+    return expr_df
+
+def identify_promoter_cpgs(genes_df: pd.DataFrame, 
+                         cpg_df: pd.DataFrame,
+                         upstream_distance: int = 2000,
+                         downstream_distance: int = 500) -> pd.DataFrame:
+    """
+    Identify CpG islands in promoter regions
+    """
+    # Convert to PyRanges for efficient overlap detection
+    genes_pr = pr.PyRanges(
+        chromosomes=genes_df['chromosome'],
+        starts=genes_df['start'] - upstream_distance,  # Include upstream region
+        ends=genes_df['start'] + downstream_distance,  # Include downstream
+        strands=genes_df['strand']
+    )
+    
+    cpg_pr = pr.PyRanges(
+        chromosomes=cpg_df['chr'],
+        starts=cpg_df['start'],
+        ends=cpg_df['end']
+    )
+    
+    # Find overlaps
+    overlaps = genes_pr.join(cpg_pr).as_df()
+    
+    return overlaps
+
+def analyze_binding_and_expression(genes_df: pd.DataFrame,
+                                 binding_df: pd.DataFrame,
+                                 expr_df: pd.DataFrame,
+                                 cpg_df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
+    """
+    Analyze relationships between MeCP2 binding, CpG islands, and expression
+    """
+    # 1. Identify promoter CpG islands
+    promoter_cpgs = identify_promoter_cpgs(genes_df, cpg_df)
+    
+    # 2. Assign binding types to genes
+    genes_with_binding = assign_binding_types(genes_df, binding_df)
+    
+    # 3. Classify expression changes
+    expr_with_status = classify_expression_changes(expr_df)
+    
+    # 4. Merge all data
+    merged_df = pd.merge(genes_with_binding, expr_with_status, 
+                        left_on='gene_id', right_on='gene')
+    
+    # 5. Analyze each binding category
+    results = {}
+    for binding_type in ['exo_only', 'endo_only', 'both', 'none']:
+        subset = merged_df[merged_df['binding_type'] == binding_type]
+        
+        # Get expression distribution
+        expr_counts = subset['expression_status'].value_counts()
+        
+        # Calculate methylation statistics
+        methylation_stats = {
+            'promoter_methylation': subset.groupby('expression_status')['promoter_methylation'].mean(),
+            'gene_body_methylation': subset.groupby('expression_status')['gene_body_methylation'].mean()
+        }
+        
+        results[binding_type] = {
+            'data': subset,
+            'expression_counts': expr_counts,
+            'methylation_stats': methylation_stats
+        }
+        
+        # Log results
+        logger.info(f"\nResults for {binding_type}:")
+        logger.info(f"Expression distribution:\n{expr_counts}")
+        logger.info("\nMethylation levels by expression status:")
+        logger.info(f"Promoter:\n{methylation_stats['promoter_methylation']}")
+        logger.info(f"Gene body:\n{methylation_stats['gene_body_methylation']}")
+    
+    return results
+
+def visualize_binding_analysis(results: Dict[str, Dict], output_dir: str):
+    """
+    Create visualizations for binding analysis results
+    """
+    # 1. Expression distribution by binding type
+    plt.figure(figsize=(12, 6))
+    expr_data = {bt: res['expression_counts'] for bt, res in results.items()}
+    df_expr = pd.DataFrame(expr_data)
+    
+    sns.barplot(data=df_expr)
+    plt.title('Expression Changes by Binding Type')
+    plt.ylabel('Number of Genes')
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig(f'{output_dir}/expression_by_binding.pdf')
+    plt.close()
+    
+    # 2. Methylation levels
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+    
+    # Promoter methylation
+    methylation_data = []
+    for bt, res in results.items():
+        for expr_status, meth_level in res['methylation_stats']['promoter_methylation'].items():
+            methylation_data.append({
+                'binding_type': bt,
+                'expression': expr_status,
+                'methylation': meth_level,
+                'region': 'promoter'
+            })
+    
+    meth_df = pd.DataFrame(methylation_data)
+    
+    sns.boxplot(data=meth_df, x='binding_type', y='methylation', 
+                hue='expression', ax=ax1)
+    ax1.set_title('Promoter Methylation')
+    ax1.set_xticklabels(ax1.get_xticklabels(), rotation=45)
+    
+    # Similar plot for gene body methylation...
+    
+    plt.tight_layout()
+    plt.savefig(f'{output_dir}/methylation_patterns.pdf')
+    plt.close()
+
+def load_gene_data(cell_type: str) -> pd.DataFrame:
+    """
+    Load gene data for a specific cell type
+    """
+    try:
+        file_path = os.path.join(PATHS['gene_data'], f"{cell_type}_genes.csv")
+        if not os.path.exists(file_path):
+            logger.error(f"Gene data file not found: {file_path}")
+            return None
+            
+        df = pd.read_csv(file_path)
+        logger.info(f"Loaded gene data for {cell_type}: {len(df)} genes")
+        return df
+        
+    except Exception as e:
+        logger.error(f"Error loading gene data for {cell_type}: {str(e)}")
+        return None
+
+def load_cpg_associations(cell_type: str) -> pd.DataFrame:
+    """
+    Load CpG associations for a specific cell type
+    """
+    try:
+        file_path = os.path.join(PATHS['cpg_data'], f"{cell_type}_cpg_associations.csv")
+        if not os.path.exists(file_path):
+            logger.error(f"CpG associations file not found: {file_path}")
+            return None
+            
+        df = pd.read_csv(file_path)
+        logger.info(f"Loaded CpG associations for {cell_type}: {len(df)} associations")
+        return df
+        
+    except Exception as e:
+        logger.error(f"Error loading CpG associations for {cell_type}: {str(e)}")
+        return None
+
+def merge_analysis_data(genes_df: pd.DataFrame, 
+                       expr_df: pd.DataFrame,
+                       cpg_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Merge gene data with expression and CpG information
+    """
+    try:
+        if genes_df is None or expr_df is None or cpg_df is None:
+            logger.error("One or more required dataframes is None")
+            return None
+            
+        # Merge gene data with expression data
+        merged = pd.merge(genes_df, expr_df, 
+                         left_on='gene_id', 
+                         right_on='gene',
+                         how='inner')
+        
+        # Merge with CpG associations
+        merged = pd.merge(merged, cpg_df,
+                         on='gene_id',
+                         how='left')
+        
+        # Fill NaN values for CpG-related columns
+        cpg_columns = ['promoter_cpg_count', 'gene_body_cpg_count']
+        merged[cpg_columns] = merged[cpg_columns].fillna(0)
+        
+        logger.info(f"Merged data shape: {merged.shape}")
+        return merged
+        
+    except Exception as e:
+        logger.error(f"Error merging analysis data: {str(e)}")
+        return None

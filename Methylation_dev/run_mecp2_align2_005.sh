@@ -80,7 +80,6 @@ while [[ $# -gt 0 ]]; do
     esac
     shift
 done
-
 # Define cell types based on filter
 if [ "$CELL_TYPE_FILTER" = "ALL" ]; then
     CELL_TYPES=("NEU" "NSC")

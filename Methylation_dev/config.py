@@ -9,11 +9,11 @@ import argparse
 def get_experiment_name():
     try:
         parser = argparse.ArgumentParser(add_help=False)
-        parser.add_argument('--experiment', type=str, default='align2_005_consistent_peaks')
+        parser.add_argument('--experiment', type=str, default='align2_005')
         args, _ = parser.parse_known_args()
         return args.experiment
     except:
-        return 'align2_005_consistent_peaks'
+        return 'align2_005'
 
 EXPERIMENT = get_experiment_name()
 
@@ -97,6 +97,10 @@ CONFIG = {
             'gene_bodies': 'intermediate',
             'intergenic': 'high'
         }
+    },
+    'binding_thresholds': {
+        'exo': 1.0,
+        'endo': 1.0
     }
 }
 
@@ -123,7 +127,13 @@ PATHS = {
         'cpg_islands': '../DATA/features/cpg_islands.bed',
         'regulatory_elements': '../DATA/features/regulatory_elements.bed',
         'chromatin_states': '../DATA/features/chromatin_states.bed'
-    }
+    },
+    'binding_data': 'path/to/mecp2_binding_data.csv',
+    'gene_data': '../DATA/gene_data',
+    'cpg_data': '../DATA/cpg_data',
+    'medip_dir': '../DATA/medip_data',
+    'output_dir': './output',
+    'binding_data': '../DATA/mecp2_binding/mecp2_cpg_enrichment_parallel.csv'
 }
 
 # Quality control parameters
