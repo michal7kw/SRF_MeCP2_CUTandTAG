@@ -1,3 +1,0 @@
-```{r fragment-sizes, echo=FALSE, fig.cap="Fragment size distribution"}
-knitr::include_graphics("results_1/qc/fragment_size_dist.pdf")
-``` 

@@ -160,4 +160,16 @@ BIO_VALIDATION = {
         'constitutive_methylated': ['intergenic_repeats'],
         'tissue_specific': ['neural_enhancers']
     }
-} 
+}
+
+# Add function to verify paths
+def verify_paths():
+    """Verify that all required paths exist"""
+    for key, path in PATHS.items():
+        if isinstance(path, dict):  # Skip nested dictionaries
+            continue
+        if not os.path.exists(path):
+            logger.error(f"Path not found: {path} ({key})")
+            if key == 'medip_dir':
+                logger.error("Please check the MeDIP bigwig file directory path")
+                raise FileNotFoundError(f"MeDIP directory not found: {path}") 

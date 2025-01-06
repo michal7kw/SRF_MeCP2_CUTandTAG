@@ -16,11 +16,15 @@ from tqdm import tqdm
 import time
 import argparse
 from functions import *
-from config import CONFIG, PATHS, logger
+from config import CONFIG, PATHS, logger, verify_paths
 from cache_utils import clear_cache
 
 def analyze_tss_binding_patterns(df: pd.DataFrame, cell_type: str, output_dir: str):
     """Analyze binding patterns specifically around TSS and their relationship with gene regulation"""
+    
+    # Check if we have methylation data
+    has_methylation = all(col in df.columns for col in ['cpg_island_count', 'cpg_island_mean_methylation'])
+    logger.info(f"Methylation data available: {has_methylation}")
     
     # Create output directories
     tss_dir = os.path.join(output_dir, 'tss_analysis', cell_type)
@@ -37,6 +41,11 @@ def analyze_tss_binding_patterns(df: pd.DataFrame, cell_type: str, output_dir: s
     # Analyze each category
     results = {}
     for category, category_df in binding_categories.items():
+        # Skip empty categories
+        if len(category_df) == 0:
+            logger.warning(f"No genes found in group: {category} for {cell_type}")
+            continue
+            
         # Split by regulation status
         regulation_groups = {
             'not_deregulated': category_df[category_df['expression_status'] == 'unchanged'],
@@ -48,31 +57,35 @@ def analyze_tss_binding_patterns(df: pd.DataFrame, cell_type: str, output_dir: s
         group_stats = {}
         for reg_status, group_df in regulation_groups.items():
             if len(group_df) > 0:
-                group_stats[reg_status] = {
-                    'count': len(group_df),
-                    'promoter_methylation': {
-                        'mean': group_df['promoter_methylation'].mean(),
-                        'std': group_df['promoter_methylation'].std(),
-                        'median': group_df['promoter_methylation'].median()
-                    },
-                    'gene_body_methylation': {
-                        'mean': group_df['gene_body_methylation'].mean(),
-                        'std': group_df['gene_body_methylation'].std(),
-                        'median': group_df['gene_body_methylation'].median()
-                    }
+                stats = {
+                    'count': len(group_df)
                 }
+                
+                # Add methylation stats only if available
+                if has_methylation:
+                    stats.update({
+                        'methylation': {
+                            'mean': group_df['cpg_island_mean_methylation'].mean(),
+                            'std': group_df['cpg_island_mean_methylation'].std(),
+                            'median': group_df['cpg_island_mean_methylation'].median()
+                        },
+                        'cpg_count': {
+                            'mean': group_df['cpg_island_count'].mean(),
+                            'std': group_df['cpg_island_count'].std(),
+                            'median': group_df['cpg_island_count'].median()
+                        }
+                    })
+                
+                group_stats[reg_status] = stats
                 
                 # Save gene lists
                 output_file = os.path.join(tss_dir, f'{category}_{reg_status}_genes.csv')
                 group_df.to_csv(output_file, index=False)
         
-        results[category] = group_stats
-    
-    # Create visualization
-    create_tss_analysis_plots(results, cell_type, tss_dir)
-    
-    # Save detailed statistics
-    save_tss_analysis_results(results, cell_type, tss_dir)
+        results[category] = {
+            'regulation_counts': pd.Series({k: len(v) for k, v in regulation_groups.items()}),
+            'group_stats': group_stats
+        }
     
     return results
 
@@ -141,18 +154,66 @@ def run_analysis_pipeline(force_recompute: bool = False, n_processes: int = None
     tss_results = {}
     
     for ct, expr_df in expression_data.items():
+        logger.info(f"\nProcessing {ct}...")
+        
+        # Merge data
         merged_df = validate_and_merge_data(genes_df, expr_df, mecp2_binding)
-        results[ct] = calculate_contextual_methylation(
+        
+        # Ensure column names match PyRanges requirements
+        if 'chr' in merged_df.columns:
+            merged_df = merged_df.rename(columns={
+                'chr': 'Chromosome',
+                'start': 'Start',
+                'end': 'End'
+            })
+        
+        logger.info(f"Merged data columns: {merged_df.columns.tolist()}")
+        
+        # Calculate methylation levels
+        methylation_data = calculate_methylation_levels(
             merged_df,
             PATHS['medip_dir'],
             ct,
-            PATHS['genome_fasta'],
-            n_processes=n_processes
+            PATHS['genome_fasta']
         )
+        
+        # Merge methylation data with other data if available
+        if not methylation_data.empty and len(methylation_data.columns) > 0:
+            results[ct] = pd.concat([merged_df, methylation_data], axis=1)
+            logger.info("Methylation data added successfully")
+        else:
+            logger.warning("No methylation data available - proceeding with basic analysis")
+            results[ct] = merged_df
+        
+        # Save intermediate results
+        output_dir = os.path.join(PATHS['output_dir'], 'cpg_analysis', ct)
+        os.makedirs(output_dir, exist_ok=True)
+        
+        logger.info(f"Saving results to {output_dir}")
+        results[ct].to_csv(os.path.join(output_dir, f'{ct}_full_results.csv'), index=False)
+        
+        # Log data shape and columns for debugging
+        logger.info(f"Results shape for {ct}: {results[ct].shape}")
+        logger.info(f"Available columns: {results[ct].columns.tolist()}")
         
         # Perform TSS binding analysis
         logger.info(f"Performing TSS binding analysis for {ct}...")
         tss_results[ct] = analyze_tss_binding_patterns(results[ct], ct, PATHS['output_dir'])
+        
+        # Add detailed methylation analysis
+        methylation_stats = analyze_methylation_patterns(results[ct], ct, output_dir)
+        
+        # Add new detailed binding-methylation analysis
+        binding_results = analyze_binding_methylation_expression(results[ct], ct, output_dir)
+        
+        # Add new detailed analyses
+        detailed_dir = os.path.join(output_dir, 'detailed_analysis')
+        os.makedirs(detailed_dir, exist_ok=True)
+        
+        # Run new analyses
+        binding_patterns = analyze_mecp2_detailed_binding(results[ct], ct, detailed_dir)
+        occupancy_patterns = analyze_cpg_occupancy(results[ct], ct, detailed_dir)
+        regulatory_features = analyze_regulatory_features(results[ct], ct, detailed_dir)
     
     return {
         'methylation_results': results,
@@ -162,258 +223,141 @@ def run_analysis_pipeline(force_recompute: bool = False, n_processes: int = None
         'mecp2_binding': mecp2_binding
     }
 
-#%% Configure debug mode
-# Set up command line arguments to enable debug mode and specify sample size
-parser = argparse.ArgumentParser(description='Analyze MeCP2 methylation patterns')
-parser.add_argument('--debug', action='store_true', help='Run in debug mode with minimal dataset')
-parser.add_argument('--sample-size', type=int, default=100, help='Number of genes to use in debug mode')
-parser.add_argument('--force-recompute', action='store_true', 
-                   help='Force recomputation of all analysis stages')
-parser.add_argument('--experiment', type=str, default='align2_005',
-                   help='Experiment name to analyze')
-parser.add_argument('--processes', type=int, default=None,
-                   help='Number of processes to use for parallel computation')
-parser.add_argument('--cell-type', type=str, choices=['NEU', 'NSC'], 
-                   help='Cell type to analyze')
-parser.add_argument('--chromosome', type=str, 
-                   help='Chromosome to analyze (e.g., chr1)')
-args = parser.parse_args()
-
-# Modify configuration based on debug mode
-if args.debug:
-    logger.info(f"Running in DEBUG mode with sample size: {args.sample_size}")
-    CONFIG['debug'] = {
-        'enabled': True,
-        'sample_size': args.sample_size
-    }
-
-#%% Initialize output directory
-# Create directory for storing analysis results
-os.makedirs(PATHS['output_dir'], exist_ok=True)
-
-#%% Load and process gene annotations and expression data
-# Load gene annotations and create gene name mapping
-genes_df, gene_name_to_id = load_gene_annotations(PATHS['gtf_file'])
-
-# Load RNA-seq expression data with gene ID mapping
-expression_data = load_expression_data(PATHS['rnaseq'], gene_name_to_id)
-
-# Print mapping statistics for debugging
-for cell_type, expr_df in expression_data.items():
-    print(f"\n{cell_type} statistics:")
-    print(f"Total genes: {len(expr_df)}")
-    print(f"Genes with valid mapping: {expr_df['gene_id'].notna().sum()}")
-    print("\nSample of mapped genes:")
-    sample_df = expr_df[expr_df['gene_id'].notna()].head()
-    print(pd.DataFrame({
-        'Gene Symbol': sample_df['gene'],
-        'Ensembl ID': sample_df['gene_id'],
-        'log2FC': sample_df['log2FoldChange'],
-        'padj': sample_df['padj']
-    }))
-
-#%% Load MeCP2 binding data
-# Read MeCP2 ChIP-seq binding data from CSV file
-mecp2_binding = pd.read_csv(os.path.join(PATHS['mecp2_dir'], PATHS['mecp2_file']))
-
-#%% Run pipeline with specified filters
-analysis_results = run_analysis_pipeline(
-    force_recompute=args.force_recompute,
-    n_processes=args.processes,
-    cell_type=args.cell_type,
-    chromosome=args.chromosome
-)
-results = analysis_results['methylation_results']
-
-#%% Save results to pickle file
-# Store full results dictionary for later analysis
-logger.info("Saving full results dictionary to pickle file...")
-import pickle
-with open(f"{PATHS['output_dir']}/full_results.pkl", 'wb') as f:
-    pickle.dump(results, f)
-logger.info("Results saved successfully")
-
-#%% Load results from pickle (commented out)
-# Code for loading previously saved results
-# logger.info("Loading full results dictionary from pickle file...")
-# with open(f"{PATHS['output_dir']}/full_results.pkl", 'rb') as f:
-#     results = pickle.load(f)
-# logger.info("Results loaded successfully")
-
-#%% Generate visualizations
-# Create plots showing methylation patterns
-create_methylation_plots(results, PATHS['output_dir'])
-
-#%% Perform statistical analysis
-# Run statistical tests on methylation data
-stats_results = perform_statistical_analysis(results)
-
-#%% Save detailed results
-# Export results to CSV files for each cell type
-for cell_type, df in results.items():
-    df.to_csv(f"{PATHS['output_dir']}/{cell_type}_methylation_analysis.csv", 
-                index=False)
-
-#%% Save statistical analysis
-# Write statistical test results to text file
-with open(f"{PATHS['output_dir']}/statistical_analysis.txt", 'w') as f:
-    for cell_type, stats in stats_results.items():
-        f.write(f"\n{cell_type} Analysis:\n")
-        f.write("="*20 + "\n")
-        for region, results in stats.items():
-            f.write(f"\n{region.upper()}:\n")
-            f.write("-"*20 + "\n")
-            
-            for test_name, values in results.items():
-                f.write(f"{test_name}:\n")
-                f.write(f"Statistic: {values['statistic']}\n")
-                f.write(f"P-value: {values['pvalue']}\n") 
-
-#%% Load results for additional analysis
-# Load previously saved results from pickle file
-import pickle
-logger.info("Loading full results dictionary from pickle file...")
-with open(f"{PATHS['output_dir']}/full_results.pkl", 'rb') as f:
-    results = pickle.load(f)
-logger.info("Results loaded successfully")
-
-#%% Analyze MeCP2-regulated genes
-# Perform analysis of genes regulated by MeCP2
-create_mecp2_regulated_analysis(results, PATHS['output_dir'])
-
-#%% Print regulation summary
-# Display summary of regulated genes
-print_regulated_summary(results)
-
-#%% Debug gene filtering
-# Run debugging for regulated genes filtering
-debug_regulated_genes_filtering(results)
-
-#%% Print modified summary
-# Display improved summary of regulated genes
-print_regulated_summary_v2(results)
-
-#%% Generate focused visualization
-# Create plots highlighting significant differences
-plot_significant_differences(results, PATHS['output_dir'])
-
-#%% Generate comprehensive visualization
-# Create detailed plots of MeCP2 regulatory patterns
-plot_mecp2_regulatory_patterns(results, PATHS['output_dir'])
-
-#%% Print final summary
-# Display final summary of regulated genes
-print_regulated_summary_v2(results)
-
-#%% Generate final visualization
-# Create final plots of significant differences
-plot_significant_differences(results, PATHS['output_dir'])
-
-
-#%% Debug merge issues (commented out)
-# Code for debugging data merging issues and gene ID formatting
-# genes_df, expression_data, mecp2_binding = debug_merge_issues()
-
-################ Print sample gene IDs from each dataset
-# print("\nSample gene IDs from each dataset:")
-# print("\nGene annotations:")
-# print(genes_df['gene_id'].head())
-# print("\nExpression data (NEU):")
-# print(expression_data['NEU']['gene_id'].head())
-# print("\nExpression data (NSC):")
-# print(expression_data['NSC']['gene_id'].head())
-
-################# Check for any string formatting issues
-# print("\nChecking for string formatting issues:")
-# print("\nGene annotations gene_id example:", genes_df['gene_id'].iloc[0])
-# print("Gene annotations gene_id type:", type(genes_df['gene_id'].iloc[0]))
-# print("\nExpression data gene_id example:", expression_data['NEU']['gene_id'].iloc[0])
-# print("Expression data gene_id type:", type(expression_data['NEU']['gene_id'].iloc[0]))
-
-################# Try to fix the merge issue
-# def fix_gene_ids(df, column='gene_id'):
-#     """Clean and standardize gene IDs"""
-#     if column in df.columns:
-#         # Remove version numbers if present
-#         df[column] = df[column].str.split('.').str[0]
-#         # Remove any whitespace
-#         df[column] = df[column].str.strip()
-#         # Ensure string type
-#         df[column] = df[column].astype(str)
-#     return df
-
-################# Fix gene IDs in all datasets
-# genes_df = fix_gene_ids(genes_df)
-# expression_data = {
-#     cell_type: fix_gene_ids(df)
-#     for cell_type, df in expression_data.items()
-# }
-
-################# Try merge again
-# for cell_type, expr_df in expression_data.items():
-#     merged_df = genes_df.merge(expr_df, on='gene_id', how='inner')
-#     print(f"\nMerged DataFrame for {cell_type} after fixing:")
-#     print("Shape:", merged_df.shape)
-#     if merged_df.shape[0] > 0:
-#         print("Sample rows:")
-#         print(merged_df[['gene_id', 'gene_name', 'log2FoldChange', 'padj']].head())
-
-# After loading results
-logger.info("Performing detailed methylation analysis...")
-try:
-    analyze_methylation_patterns_detailed(results, PATHS['output_dir'])
-    logger.info("Completed detailed methylation analysis")
-except Exception as e:
-    logger.error(f"Error in detailed methylation analysis: {str(e)}")
-
-#%% Analyze binding enrichment groups
-logger.info("Analyzing binding enrichment groups...")
-analyze_binding_enrichment_groups(results, PATHS['output_dir'])
-
-#%% Special analysis for exo-enriched upregulated genes
-def analyze_exo_upregulated(results: Dict[str, pd.DataFrame], output_dir: str):
-    """Detailed analysis of upregulated genes with exo MeCP2 binding"""
-    for cell_type, df in results.items():
-        # Filter for exo-bound and upregulated genes
-        exo_up_df = df[
-            (df['binding_type'].isin(['exo', 'both'])) & 
-            (df['expression_status'] == 'upregulated')
-        ]
-        
-        if len(exo_up_df) == 0:
-            logger.warning(f"No exo-bound upregulated genes found for {cell_type}")
-            continue
-        
-        # Save detailed results
-        output_file = os.path.join(output_dir, 'exo_upregulated', 
-                                 f'{cell_type}_exo_upregulated_analysis.csv')
-        os.makedirs(os.path.dirname(output_file), exist_ok=True)
-        exo_up_df.to_csv(output_file, index=False)
-        
-        # Create visualizations
-        create_exo_up_visualizations(exo_up_df, cell_type, output_dir)
-
-logger.info("Performing special analysis of exo-enriched upregulated genes...")
-analyze_exo_upregulated(results, PATHS['output_dir'])
-
-#%% Perform detailed binding enrichment analysis
-logger.info("Performing detailed binding enrichment analysis...")
-analyze_binding_enrichment_detailed(results, PATHS['output_dir'])
-
-#%% Create additional visualizations
-logger.info("Creating additional visualizations...")
-for cell_type, df in results.items():
-    create_additional_visualizations(df, cell_type, PATHS['output_dir'])
-    create_exo_enriched_comparisons(df, cell_type, PATHS['output_dir'])
-
-# After loading results
-for cell_type, cell_data in results.items():
-    binding_analysis = analyze_binding_enrichment_groups(cell_data, PATHS['output_dir'])
+def main():
+    # Parse arguments
+    parser = argparse.ArgumentParser(description='Analyze MeCP2 binding and methylation patterns')
+    parser.add_argument('--experiment', type=str, default='align1_005', help='Experiment name')
+    parser.add_argument('--processes', type=int, default=None, help='Number of processes to use')
+    parser.add_argument('--cell-type', type=str, choices=['NEU', 'NSC', None], default=None, 
+                       help='Cell type to analyze')
+    parser.add_argument('--chromosome', type=str, default=None, help='Chromosome to analyze')
+    parser.add_argument('--debug', action='store_true', help='Run in debug mode')
+    parser.add_argument('--sample-size', type=int, default=100, help='Sample size for debug mode')
+    parser.add_argument('--force-recompute', action='store_true', help='Force recomputation')
     
-    if binding_analysis:  # Check if we got results
-        # Print summary of key findings
-        for group_name, group_results in binding_analysis.items():
-            print(f"\n{cell_type} - {group_name}:")
-            print(f"Total genes: {group_results['regulation_counts'].sum()}")
-            print("Regulation distribution:")
-            print(group_results['regulation_counts'])
+    args = parser.parse_args()
+    
+    # Update CONFIG with command line arguments
+    CONFIG['experiment'] = args.experiment
+    CONFIG['debug']['enabled'] = args.debug
+    CONFIG['debug']['sample_size'] = args.sample_size
+    
+    # Run the analysis pipeline
+    try:
+        logger.info("Starting MeCP2 methylation analysis...")
+        
+        # Verify paths and input files
+        verify_paths()
+        verify_input_files()
+        
+        # Run the main analysis pipeline
+        results = run_analysis_pipeline(
+            force_recompute=args.force_recompute,
+            n_processes=args.processes,
+            cell_type=args.cell_type,
+            chromosome=args.chromosome
+        )
+        
+        if not results:
+            logger.error("Analysis pipeline returned no results")
+            return
+        
+        # Process CpG analysis results
+        for ct, df in results['methylation_results'].items():
+            if args.cell_type and ct != args.cell_type:
+                continue
+            
+            logger.info(f"\nProcessing CpG analysis for {ct}...")
+            
+            # Debug print of available columns
+            logger.info(f"Available columns for {ct}: {df.columns.tolist()}")
+            
+            # Verify required columns exist
+            required_columns = ['cpg_island_count', 'cpg_island_mean_methylation']
+            if not all(col in df.columns for col in required_columns):
+                missing = [col for col in required_columns if col not in df.columns]
+                logger.error(f"Missing required columns: {missing}")
+                continue
+            
+            # Create output directories
+            output_dir = os.path.join(PATHS['output_dir'], 'cpg_analysis', ct)
+            os.makedirs(output_dir, exist_ok=True)
+            
+            # Generate CpG analysis visualizations and reports
+            try:
+                create_cpg_methylation_plots(df, ct, output_dir)
+                generate_cpg_report(df, ct, output_dir)
+                
+                # Additional CpG-specific analyses
+                if 'binding_type' in df.columns:
+                    analyze_cpg_binding_correlation(df, ct, output_dir)
+                if 'expression_status' in df.columns:
+                    analyze_cpg_expression_correlation(df, ct, output_dir)
+                
+                logger.info(f"Completed CpG analysis for {ct}")
+                
+            except Exception as e:
+                logger.error(f"Error in CpG analysis for {ct}: {str(e)}")
+                logger.error(f"DataFrame info:\n{df.info()}")
+        
+        logger.info("\nAnalysis completed successfully")
+        
+    except Exception as e:
+        logger.error(f"Error in main analysis: {str(e)}")
+        raise
+
+def verify_input_files():
+    """Verify that all required input files exist"""
+    required_files = [
+        PATHS['cpg_islands_file'],
+        PATHS['gtf_file'],
+        PATHS['genome_fasta']
+    ]
+    
+    for file_path in required_files:
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Required file not found: {file_path}")
+        logger.info(f"Found required file: {file_path}")
+
+def analyze_cpg_binding_correlation(df: pd.DataFrame, cell_type: str, output_dir: str):
+    """Analyze correlation between CpG methylation and MeCP2 binding"""
+    
+    plt.figure(figsize=(10, 6))
+    sns.boxplot(data=df, x='binding_type', y='cpg_island_mean_methylation')
+    plt.title(f'{cell_type}: CpG Methylation by MeCP2 Binding Type')
+    plt.xlabel('Binding Type')
+    plt.ylabel('CpG Island Methylation (%)')
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, 'cpg_binding_correlation.pdf'))
+    plt.close()
+    
+    # Save statistics
+    stats_file = os.path.join(output_dir, 'cpg_binding_stats.txt')
+    with open(stats_file, 'w') as f:
+        f.write(f"CpG Methylation by Binding Type - {cell_type}\n")
+        f.write("="*50 + "\n\n")
+        
+        for binding_type in df['binding_type'].unique():
+            subset = df[df['binding_type'] == binding_type]
+            f.write(f"\n{binding_type}:\n")
+            f.write(f"Count: {len(subset)}\n")
+            f.write(f"Mean methylation: {subset['cpg_island_mean_methylation'].mean():.2f}%\n")
+            f.write(f"Median methylation: {subset['cpg_island_mean_methylation'].median():.2f}%\n")
+            f.write(f"Std Dev: {subset['cpg_island_mean_methylation'].std():.2f}%\n")
+
+def analyze_cpg_expression_correlation(df: pd.DataFrame, cell_type: str, output_dir: str):
+    """Analyze correlation between CpG methylation and gene expression"""
+    
+    plt.figure(figsize=(10, 6))
+    sns.scatterplot(data=df, x='cpg_island_mean_methylation', y='log2FoldChange', 
+                    hue='binding_type', alpha=0.6)
+    plt.title(f'{cell_type}: CpG Methylation vs Expression')
+    plt.xlabel('CpG Island Methylation (%)')
+    plt.ylabel('log2 Fold Change')
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, 'cpg_expression_correlation.pdf'))
+    plt.close()
+
+if __name__ == "__main__":
+    main()

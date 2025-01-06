@@ -139,8 +139,43 @@ echo "Processes per job: $SLURM_NTASKS"
 echo "Command: $CMD"
 echo "-----------------------------------"
 
+# Add environment variable for debugging
+export PYTHONPATH="${PYTHONPATH}:${WORKING_DIR}"
+export DEBUG_LEVEL="DEBUG"
+
+# Add this before running the analysis
+echo "Checking for CpG analysis directories..."
+ls -l "${WORKING_DIR}/analyze_mecp2_cpg_enrichment_${EXPERIMENT}/cpg_analysis" || echo "CpG analysis directory not found"
+
+# Add before executing the command
+echo "Creating required directories..."
+mkdir -p "${WORKING_DIR}/analyze_mecp2_cpg_enrichment_${EXPERIMENT}/cpg_analysis"
+mkdir -p "${WORKING_DIR}/analyze_mecp2_cpg_enrichment_${EXPERIMENT}/cpg_analysis/${CELL_TYPE}"
+
+# After creating directories
+echo "Directory structure before analysis:"
+tree "${WORKING_DIR}/analyze_mecp2_cpg_enrichment_${EXPERIMENT}"
+
 # Execute the command
 eval $CMD
+
+# After command execution
+echo "Directory structure after analysis:"
+tree "${WORKING_DIR}/analyze_mecp2_cpg_enrichment_${EXPERIMENT}/cpg_analysis"
+
+# Check for specific files
+echo "Checking for CpG analysis files..."
+find "${WORKING_DIR}/analyze_mecp2_cpg_enrichment_${EXPERIMENT}/cpg_analysis" -type f -name "*cpg*"
+
+# Add after executing the command
+echo "Checking CpG analysis results..."
+CPG_DIR="${WORKING_DIR}/analyze_mecp2_cpg_enrichment_${EXPERIMENT}/cpg_analysis/${CELL_TYPE}"
+if [ -d "$CPG_DIR" ]; then
+    echo "CpG analysis directory exists:"
+    ls -l "$CPG_DIR"
+else
+    echo "ERROR: CpG analysis directory not created: $CPG_DIR"
+fi
 
 # After completion, check if this is the last job in the array
 if [ $SLURM_ARRAY_TASK_ID -eq $((SLURM_ARRAY_TASK_COUNT - 1)) ]; then
