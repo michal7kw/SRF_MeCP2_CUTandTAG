@@ -417,7 +417,12 @@ def calculate_methylation_levels_with_replicates(region_df: pd.DataFrame,
     })
 
 def calculate_normalized_methylation(ip_values, input_values, sequence):
-    """Calculate biologically meaningful methylation levels"""
+    """Calculate biologically meaningful methylation levels
+    
+    In mammalian DNA, methylation occurs primarily at CpG sites and is binary 
+    at each site (either methylated or unmethylated). The overall methylation
+    level represents the proportion of methylated CpGs in the region.
+    """
     if not ip_values or not input_values:
         return 0
         
@@ -426,27 +431,35 @@ def calculate_normalized_methylation(ip_values, input_values, sequence):
     if cpg_count == 0:
         return 0
         
-    # Calculate average signals with proper normalization
+    # Calculate average signals
     ip_mean = np.mean([x for x in ip_values if x is not None])
     input_mean = np.mean([x for x in input_values if x is not None])
     
     if input_mean <= 0:
         return 0
     
-    # Improved biological normalization:
-    # 1. CpG density normalization
+    # 1. Calculate enrichment relative to input
+    # MeDIP specifically pulls down methylated DNA fragments
+    enrichment = ip_mean / input_mean
+    
+    # 2. Normalize by local CpG density
+    # Regions with more CpGs will naturally have more MeDIP signal
     region_length = len(sequence)
     cpg_density = cpg_count / region_length
+    normalized_enrichment = enrichment / cpg_density
     
-    # 2. Calculate enrichment with local background correction
-    local_background = np.percentile([x for x in input_values if x is not None], 25)
-    enrichment = (ip_mean - local_background) / (input_mean * cpg_density)
+    # 3. Convert to methylation percentage
+    # Based on typical MeDIP calibration curves, where:
+    # - Low enrichment (~0-1x) indicates mostly unmethylated CpGs
+    # - Medium enrichment (~2-3x) indicates partially methylated regions
+    # - High enrichment (>4x) indicates heavily methylated regions
+    if normalized_enrichment <= 1:
+        methylation = 25 * normalized_enrichment  # Linear scaling for low values
+    else:
+        # Asymptotic approach to 100% for higher enrichment
+        methylation = 100 * (1 - np.exp(-0.5 * (normalized_enrichment - 1)))
     
-    # 3. Convert to methylation percentage using sigmoid transformation
-    # This better reflects biological methylation levels
-    methylation = 100 / (1 + np.exp(-enrichment))
-    
-    return max(0, min(100, methylation))
+    return methylation
 
 #%% Visualization functions
 def create_methylation_plots(results: Dict[str, pd.DataFrame], output_dir: str):
