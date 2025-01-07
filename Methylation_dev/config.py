@@ -9,11 +9,11 @@ import argparse
 def get_experiment_name():
     try:
         parser = argparse.ArgumentParser(add_help=False)
-        parser.add_argument('--experiment', type=str, default='align2_005')
+        parser.add_argument('--experiment', type=str, default='align1_005')
         args, _ = parser.parse_known_args()
         return args.experiment
     except:
-        return 'align2_005'
+        return 'align1_005'
 
 EXPERIMENT = get_experiment_name()
 
@@ -102,12 +102,12 @@ CONFIG = {
 
 # File paths
 PATHS = {
+    'output_dir': '/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/Methylation_dev',
     'mecp2_dir': f"/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative/analyze_mecp2_cpg_enrichment_{EXPERIMENT}/NSC/mecp2_cpg_enrichment_parallel",
     'mecp2_file': "mecp2_cpg_enrichment_parallel.csv",
     'medip_dir': "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_medip/output_done/bigwig",
     'gtf_file': "../DATA/gencode.vM10.annotation.gtf",
     'genome_fasta': "../DATA/mm10.fa",
-    'output_dir': f"analyze_mecp2_cpg_enrichment_{EXPERIMENT}",
     'cpg_islands_file': "../DATA/cpg_islands.bed",
     'rnaseq': {
         'NEU': '../iterative_alternative/DATA/DEA_NEU.csv',
@@ -168,8 +168,64 @@ def verify_paths():
     for key, path in PATHS.items():
         if isinstance(path, dict):  # Skip nested dictionaries
             continue
+        if key == 'mecp2_file':  # Skip the file name, we'll check the full path
+            continue
         if not os.path.exists(path):
-            logger.error(f"Path not found: {path} ({key})")
-            if key == 'medip_dir':
-                logger.error("Please check the MeDIP bigwig file directory path")
-                raise FileNotFoundError(f"MeDIP directory not found: {path}") 
+            if key == 'mecp2_dir':
+                # For mecp2_dir, check the full path including the file
+                full_path = os.path.join(path, PATHS['mecp2_file'])
+                if os.path.exists(full_path):
+                    logger.info(f"Found MeCP2 file at: {full_path}")
+                    continue
+                else:
+                    logger.error(f"MeCP2 file not found at: {full_path}")
+            else:
+                logger.error(f"Path not found: {path} ({key})")
+                if key == 'medip_dir':
+                    logger.error("Please check the MeDIP bigwig file directory path")
+                    raise FileNotFoundError(f"MeDIP directory not found: {path}")
+
+# Add function to update paths based on experiment
+def update_paths_for_experiment(experiment: str):
+    """Update paths based on experiment name"""
+    global PATHS
+    
+    # Base directory structure for input data
+    base_dir = f"/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative/analyze_mecp2_cpg_enrichment_{experiment}/NSC"
+    parallel_dir = os.path.join(base_dir, "mecp2_cpg_enrichment_parallel")
+    
+    # Update paths
+    PATHS['mecp2_dir'] = parallel_dir
+    PATHS['mecp2_file'] = "mecp2_cpg_enrichment_parallel.csv"
+    
+    # Set output directory base (experiment name will be added in pipeline)
+    PATHS['output_dir'] = '/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/Methylation_dev'
+    
+    # Log paths
+    logger.info(f"Updated paths for experiment: {experiment}")
+    logger.info(f"Input directory: {PATHS['mecp2_dir']}")
+    logger.info(f"Output base directory: {PATHS['output_dir']}")
+    logger.info(f"Final output will be: {os.path.join(PATHS['output_dir'], f'analyze_mecp2_cpg_enrichment_{experiment}')}")
+    
+    # Verify directory and file exist
+    if not os.path.exists(parallel_dir):
+        logger.error(f"MeCP2 parallel directory not found at: {parallel_dir}")
+        if os.path.exists(base_dir):
+            logger.info(f"Contents of base directory {base_dir}:")
+            for item in os.listdir(base_dir):
+                logger.info(f"  - {item}")
+                if item == 'mecp2_cpg_enrichment_parallel':
+                    logger.info("Found parallel directory, checking contents:")
+                    for subitem in os.listdir(os.path.join(base_dir, item)):
+                        logger.info(f"    - {subitem}")
+    else:
+        logger.info(f"Found parallel directory at: {parallel_dir}")
+        if os.path.exists(os.path.join(parallel_dir, PATHS['mecp2_file'])):
+            logger.info(f"Found MeCP2 file at: {os.path.join(parallel_dir, PATHS['mecp2_file'])}")
+            file_size = os.path.getsize(os.path.join(parallel_dir, PATHS['mecp2_file']))
+            logger.info(f"File size: {file_size/1024:.2f} KB")
+        else:
+            logger.error(f"MeCP2 file not found at: {os.path.join(parallel_dir, PATHS['mecp2_file'])}")
+            logger.info("Contents of parallel directory:")
+            for item in os.listdir(parallel_dir):
+                logger.info(f"  - {item}") 

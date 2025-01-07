@@ -33,8 +33,8 @@ print_usage() {
 DEBUG_MODE=false
 FORCE_RECOMPUTE=false
 SAMPLE_SIZE=100
-EXPERIMENT="align1_005"  # Default value
-CELL_TYPE_FILTER="NSC"   # Default value
+EXPERIMENT="align1_005"
+CELL_TYPE_FILTER="NSC" 
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -110,7 +110,7 @@ CHROMOSOME=${CHROMOSOMES[$CHR_IDX]}
 
 echo "Processing $CELL_TYPE - $CHROMOSOME"
 
-# Build python command
+# Build python command with experiment name from arguments
 CMD="python analysis_mecp2_methylation.py \
      --experiment $EXPERIMENT \
      --processes $SLURM_NTASKS \
@@ -138,6 +138,7 @@ echo "Force recompute: $FORCE_RECOMPUTE"
 echo "Processes per job: $SLURM_NTASKS"
 echo "Command: $CMD"
 echo "-----------------------------------"
+echo "MeCP2 directory will be: /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative/analyze_mecp2_cpg_enrichment_${EXPERIMENT}/NSC/mecp2_cpg_enrichment_parallel"
 
 # Add environment variable for debugging
 export PYTHONPATH="${PYTHONPATH}:${WORKING_DIR}"
