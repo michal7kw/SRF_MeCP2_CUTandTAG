@@ -1,0 +1,5 @@
+gene_id,gene_name,expression_status,log2FoldChange,padj,promoter_methylation,promoter_cpg_count,gene_body_methylation,gene_body_cpg_count,mecp2_bound,binding_type,exo_signal,endo_signal
+ENSMUSG00000056673,Kdm5d,unchanged,-0.028186468,0.933745293,0.0,44.0,99.99964856589071,396.0,False,,,
+ENSMUSG00000069049,Eif2s3y,unchanged,0.215792321,0.161137033,99.8398419847645,65.0,66.66666666666508,79.0,False,,,
+ENSMUSG00000068457,Uty,unchanged,-0.034577972,0.929404149,0.0,40.0,100.0,700.0,False,,,
+ENSMUSG00000069045,Ddx3y,unchanged,-0.053061609,0.851315728,0.0,40.0,99.99999999647378,206.0,False,,,

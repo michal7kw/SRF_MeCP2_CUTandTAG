@@ -1,0 +1,5 @@
+gene_id,gene_name,expression_status,log2FoldChange,padj,promoter_methylation,promoter_cpg_count,gene_body_methylation,gene_body_cpg_count,mecp2_bound,binding_type,exo_signal,endo_signal
+ENSMUSG00000073062,Zxdb,downregulated,-0.635684453,0.016329866,94.04424202902715,102,99.92546613690452,212,False,,,
+ENSMUSG00000033777,Tlr13,downregulated,-1.410151275,0.033630707,66.61837441185376,15,99.9999999990846,132,False,,,
+ENSMUSG00000049536,Tceal1,downregulated,-0.534455365,0.024613558,99.99999542199198,33,99.97026951514867,39,False,,,
+ENSMUSG00000047485,Klhl34,downregulated,-0.52807799,0.000811611,99.9158504563501,68,99.94034301766112,46,False,,,

@@ -1,0 +1,5 @@
+gene_id,gene_name,expression_status,log2FoldChange,padj,promoter_methylation,promoter_cpg_count,gene_body_methylation,gene_body_cpg_count,mecp2_bound,binding_type,exo_signal,endo_signal
+ENSMUSG00000075296,Aldh3b2,upregulated,1.002416809,2.19542e-06,99.45839465311288,22,99.9991290438232,88,False,,,
+ENSMUSG00000058470,Gm8369,upregulated,1.540479337,7.09457e-05,66.66333667813352,13,99.99999999998211,116,False,,,
+ENSMUSG00000024677,Ms4a6b,upregulated,0.889581161,0.034245209,99.85541393362818,15,99.99999816724956,71,False,,,
+ENSMUSG00000055523,Gucy2g,upregulated,0.606473828,0.043936961,66.46401697680791,28,99.9999999987795,593,False,,,

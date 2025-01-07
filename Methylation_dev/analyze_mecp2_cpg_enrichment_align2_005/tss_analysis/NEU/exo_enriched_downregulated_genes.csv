@@ -1,0 +1,2 @@
+gene_id,gene_name,expression_status,log2FoldChange,padj,promoter_methylation,promoter_cpg_count,gene_body_methylation,gene_body_cpg_count,mecp2_bound,binding_type,exo_signal,endo_signal
+ENSMUSG00000031216,Stard8,downregulated,-0.913727432,0.006345812,99.99992233849424,29,99.99996994681048,769,True,both,247.65881236617005,35.461600432540614
