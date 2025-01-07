@@ -1,4 +1,0 @@
-gene_id,gene_name,expression_status,log2FoldChange,padj,promoter_methylation,promoter_cpg_count,gene_body_methylation,gene_body_cpg_count,mecp2_bound,binding_type,exo_signal,endo_signal
-ENSMUSG00000063434,Sorcs3,downregulated,-0.64546091,1.78584e-08,35.88738179217362,143,99.99999998628783,4836,False,,,
-ENSMUSG00000048612,Myof,downregulated,-0.787660164,0.032150693,65.1303840610986,48,99.99999999999046,1548,False,,,
-ENSMUSG00000037071,Scd1,downregulated,-0.541470276,4.31782e-05,87.70734470034972,66,99.9999827888551,197,False,,,

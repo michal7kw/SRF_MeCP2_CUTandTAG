@@ -31,6 +31,48 @@ os.chdir("/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/Methyl
 
 from typing import Tuple
 
+def analyze_methylation_patterns_parallel(results: Dict[str, pd.DataFrame], 
+                                        output_dir: str,
+                                        n_processes: int = None):
+    """Parallel version of methylation pattern analysis"""
+    if n_processes is None:
+        n_processes = max(1, multiprocessing.cpu_count() - 1)
+
+    # Create tasks for parallel processing
+    tasks = []
+    for cell_type, df in results.items():
+        tasks.extend([
+            (df, cell_type, output_dir, 'distribution'),
+            (df, cell_type, output_dir, 'expression'),
+            (df, cell_type, output_dir, 'binding')
+        ])
+
+    # Process tasks in parallel
+    with ProcessPoolExecutor(max_workers=n_processes) as executor:
+        futures = []
+        for task in tasks:
+            if task[3] == 'distribution':
+                futures.append(executor.submit(analyze_methylation_distribution, *task[:-1]))
+            elif task[3] == 'expression':
+                futures.append(executor.submit(analyze_methylation_expression_relationship, *task[:-1]))
+            else:
+                futures.append(executor.submit(analyze_binding_patterns, *task[:-1]))
+
+        # Wait for all tasks to complete
+        for future in tqdm(futures, desc="Analyzing methylation patterns"):
+            try:
+                future.result()
+            except Exception as e:
+                logger.error(f"Error in parallel analysis: {str(e)}")
+
+
+
+
+
+
+
+
+
 def calculate_coverage_uniformity(df: pd.DataFrame) -> pd.Series:
     """Calculate coverage uniformity score"""
     try:
@@ -51,7 +93,7 @@ def calculate_signal_to_noise(df: pd.DataFrame) -> pd.Series:
         logger.warning(f"Error calculating signal-to-noise ratio: {str(e)}")
         return pd.Series(2.0, index=df.index)
     
-#%% Debug data merging
+#Debug data merging
 def debug_merge_issues():
     """Debug the data merging issues"""
     # Load data

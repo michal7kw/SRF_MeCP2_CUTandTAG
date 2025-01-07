@@ -1,4 +1,4 @@
-#%% Import required libraries
+#Import required libraries
 import pandas as pd
 import numpy as np
 import seaborn as sns
@@ -31,24 +31,154 @@ os.chdir("/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/Methyl
 
 from typing import Tuple
 
-#%% Helper functions for genomic regions
+def analyze_tss_binding_patterns(df: pd.DataFrame, cell_type: str, output_dir: str):
+    """Analyze binding patterns specifically around TSS and their relationship with gene regulation"""
+    
+    # Create output directories
+    tss_dir = os.path.join(output_dir, 'tss_analysis', cell_type)
+    os.makedirs(tss_dir, exist_ok=True)
+    
+    # Define binding categories
+    binding_categories = {
+        'exo_enriched': df[df['binding_type'].isin(['exo', 'both'])],
+        'exo_only': df[df['binding_type'] == 'exo'],
+        'endo_only': df[df['binding_type'] == 'endo'],
+        'non_enriched': df[~df['mecp2_bound']]
+    }
+    
+    # Analyze each category
+    results = {}
+    for category, category_df in binding_categories.items():
+        # Split by regulation status
+        regulation_groups = {
+            'not_deregulated': category_df[category_df['expression_status'] == 'unchanged'],
+            'upregulated': category_df[category_df['expression_status'] == 'upregulated'],
+            'downregulated': category_df[category_df['expression_status'] == 'downregulated']
+        }
+        
+        # Calculate statistics for each group
+        group_stats = {}
+        for reg_status, group_df in regulation_groups.items():
+            if len(group_df) > 0:
+                group_stats[reg_status] = {
+                    'count': len(group_df),
+                    'promoter_methylation': {
+                        'mean': group_df['promoter_methylation'].mean(),
+                        'std': group_df['promoter_methylation'].std(),
+                        'median': group_df['promoter_methylation'].median()
+                    },
+                    'gene_body_methylation': {
+                        'mean': group_df['gene_body_methylation'].mean(),
+                        'std': group_df['gene_body_methylation'].std(),
+                        'median': group_df['gene_body_methylation'].median()
+                    }
+                }
+                
+                # Save gene lists
+                output_file = os.path.join(tss_dir, f'{category}_{reg_status}_genes.csv')
+                group_df.to_csv(output_file, index=False)
+        
+        results[category] = group_stats
+    
+    # Create visualization
+    create_tss_analysis_plots(results, cell_type, tss_dir)
+    
+    # Save detailed statistics
+    save_tss_analysis_results(results, cell_type, tss_dir)
+    
+    return results
+
+def save_tss_analysis_results(results: dict, cell_type: str, output_dir: str):
+    """Save detailed statistics from TSS binding analysis"""
+    
+    # Create output file
+    stats_file = os.path.join(output_dir, f'{cell_type}_tss_analysis_stats.txt')
+    
+    with open(stats_file, 'w') as f:
+        f.write(f"TSS Binding Analysis Results - {cell_type}\n")
+        f.write("="*50 + "\n\n")
+        
+        for category, stats in results.items():
+            f.write(f"\n{category.upper()}\n")
+            f.write("-"*30 + "\n")
+            
+            total_genes = sum(stats.get(status, {}).get('count', 0) 
+                            for status in ['not_deregulated', 'upregulated', 'downregulated'])
+            
+            f.write(f"Total genes: {total_genes}\n\n")
+            
+            for status, measurements in stats.items():
+                f.write(f"{status}:\n")
+                f.write(f"  Count: {measurements['count']}\n")
+                f.write(f"  Percentage: {(measurements['count']/total_genes)*100:.2f}%\n")
+                
+                f.write("\n  Promoter Methylation:\n")
+                f.write(f"    Mean ± SD: {measurements['promoter_methylation']['mean']:.2f} ± "
+                       f"{measurements['promoter_methylation']['std']:.2f}\n")
+                f.write(f"    Median: {measurements['promoter_methylation']['median']:.2f}\n")
+                
+                f.write("\n  Gene Body Methylation:\n")
+                f.write(f"    Mean ± SD: {measurements['gene_body_methylation']['mean']:.2f} ± "
+                       f"{measurements['gene_body_methylation']['std']:.2f}\n")
+                f.write(f"    Median: {measurements['gene_body_methylation']['median']:.2f}\n\n")
+
+
+#Helper functions for genomic regions
 def get_promoter_region(gene_start: int, gene_end: int, strand: str) -> Tuple[int, int]:
-    """Get promoter coordinates based on gene location and strand"""
+    """Get promoter coordinates based on gene location and strand
+    
+    For genes on the + strand:
+    - Takes CONFIG['genomic_regions']['promoter'][0] bases upstream of TSS as start
+    - Takes CONFIG['genomic_regions']['promoter'][1] bases upstream of TSS as end
+    
+    For genes on the - strand:
+    - Takes CONFIG['genomic_regions']['promoter'][1] bases downstream of TTS as start 
+    - Takes CONFIG['genomic_regions']['promoter'][0] bases downstream of TTS as end
+    
+    Args:
+        gene_start: Start coordinate of the gene
+        gene_end: End coordinate of the gene  
+        strand: DNA strand ('+' or '-')
+        
+    Returns:
+        Tuple of (promoter_start, promoter_end) coordinates
+    """
     if strand == '+':
+        # For + strand, promoter is upstream of gene start (TSS)
         return (gene_start + CONFIG['genomic_regions']['promoter'][0], 
                 gene_start + CONFIG['genomic_regions']['promoter'][1])
     else:
+        # For - strand, promoter is downstream of gene end (TSS) 
         return (gene_end - CONFIG['genomic_regions']['promoter'][1], 
                 gene_end - CONFIG['genomic_regions']['promoter'][0])
 
 def get_gene_body_region(gene_start: int, gene_end: int, strand: str) -> Tuple[int, int]:
-    """Get gene body coordinates based on gene location and strand"""
+    """Get gene body coordinates based on gene location and strand
+    
+    For genes on the + strand:
+    - Starts CONFIG['genomic_regions']['gene_body_start'] bases downstream of TSS
+    - Ends at gene end coordinate
+    
+    For genes on the - strand:  
+    - Starts at gene start coordinate
+    - Ends CONFIG['genomic_regions']['gene_body_start'] bases upstream of TTS
+    
+    Args:
+        gene_start: Start coordinate of the gene
+        gene_end: End coordinate of the gene
+        strand: DNA strand ('+' or '-')
+        
+    Returns:
+        Tuple of (gene_body_start, gene_body_end) coordinates
+    """
     if strand == '+':
+        # For + strand, gene body starts downstream of TSS
         return (gene_start + CONFIG['genomic_regions']['gene_body_start'], gene_end)
     else:
-        return (gene_start, gene_end - CONFIG['genomic_regions']['gene_body_start']) 
+        # For - strand, gene body ends upstream of TTS
+        return (gene_start, gene_end - CONFIG['genomic_regions']['gene_body_start'])
 
-#%% Analyze methylation patterns
+#Analyze methylation patterns
 def analyze_methylation_patterns(genes_df: pd.DataFrame, 
                                expression_data: Dict[str, pd.DataFrame],
                                mecp2_binding: pd.DataFrame,
@@ -207,102 +337,142 @@ def run_analysis_pipeline(force_recompute: bool = False) -> Dict[str, Any]:
         'mecp2_binding': mecp2_binding
     }
 
-#%% Modified print_regulated_summary function
+#Modified print_regulated_summary function
 def print_regulated_summary_v2(results: Dict[str, pd.DataFrame]):
     """Print summary statistics for regulated MeCP2-bound genes with improved analysis"""
-    for cell_type, df in results.items():
-        print(f"\nSummary for {cell_type}:")
-        print("="*50)
-        
-        # First, check regulated genes
-        regulated_df = df[df['expression_status'].isin(['upregulated', 'downregulated'])]
-        print(f"\nTotal regulated genes: {len(regulated_df)}")
-        
-        if len(regulated_df) == 0:
-            print("No regulated genes found.")
-            continue
-        
-        # Check MeCP2 binding
-        mecp2_bound_df = regulated_df[regulated_df['mecp2_bound']]
-        print(f"MeCP2-bound regulated genes: {len(mecp2_bound_df)}")
-        
-        if len(mecp2_bound_df) == 0:
-            print("No MeCP2-bound regulated genes found.")
-            continue
-        
-        # Check binding types present
-        binding_types = mecp2_bound_df['binding_type'].value_counts()
-        print("\nBinding types present:")
-        print(binding_types)
-        
-        # Analyze each binding type
-        for binding_type in binding_types.index:
-            if pd.isna(binding_type):
+    
+    # Create output directory if it doesn't exist
+    output_dir = "analysis_output"
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Open file for writing
+    with open(os.path.join(output_dir, "regulated_genes_summary.txt"), "w") as f:
+        for cell_type, df in results.items():
+            summary = f"\nSummary for {cell_type}:\n"
+            summary += "="*50 + "\n"
+            
+            f.write(summary)
+            print(summary, end="")
+            
+            # First, check regulated genes
+            regulated_df = df[df['expression_status'].isin(['upregulated', 'downregulated'])]
+            regulated_summary = f"\nTotal regulated genes: {len(regulated_df)}\n"
+            
+            f.write(regulated_summary)
+            print(regulated_summary, end="")
+            
+            if len(regulated_df) == 0:
+                msg = "No regulated genes found.\n"
+                f.write(msg)
+                print(msg, end="")
                 continue
-                
-            subset_df = mecp2_bound_df[mecp2_bound_df['binding_type'] == binding_type]
             
-            print(f"\n{binding_type.upper()} BINDING:")
-            print("-"*20)
+            # Check MeCP2 binding
+            mecp2_bound_df = regulated_df[regulated_df['mecp2_bound']]
+            binding_summary = f"MeCP2-bound regulated genes: {len(mecp2_bound_df)}\n"
             
-            # Gene counts and basic statistics
-            expr_counts = subset_df['expression_status'].value_counts()
-            print("\nGene counts by expression status:")
-            print(expr_counts)
+            f.write(binding_summary)
+            print(binding_summary, end="")
             
-            # Calculate and display statistics
-            metrics = {
-                'promoter_methylation': 'Promoter Methylation',
-                'gene_body_methylation': 'Gene Body Methylation',
-                'promoter_cpg_count': 'Promoter CpG Count'
-            }
+            if len(mecp2_bound_df) == 0:
+                msg = "No MeCP2-bound regulated genes found.\n"
+                f.write(msg)
+                print(msg, end="")
+                continue
             
-            for metric, metric_name in metrics.items():
-                print(f"\n{metric_name}:")
-                
-                # Calculate statistics by expression status
-                stats_df = subset_df.groupby('expression_status')[metric].agg([
-                    'count', 'mean', 'std', 'min', 'max'
-                ]).round(3)
-                print(stats_df)
-                
-                # Perform statistical tests
-                up_genes = subset_df[subset_df['expression_status'] == 'upregulated']
-                down_genes = subset_df[subset_df['expression_status'] == 'downregulated']
-                
-                if len(up_genes) > 0 and len(down_genes) > 0:
-                    stats_results = perform_statistical_tests(
-                        up_genes[metric],
-                        down_genes[metric],
-                        metric_name
-                    )
+            # Check binding types present
+            binding_types = mecp2_bound_df['binding_type'].value_counts()
+            binding_type_summary = "\nBinding types present:\n" + binding_types.to_string() + "\n"
+            
+            f.write(binding_type_summary)
+            print(binding_type_summary, end="")
+            
+            # Analyze each binding type
+            for binding_type in binding_types.index:
+                if pd.isna(binding_type):
+                    continue
                     
-                    if stats_results.get('mannwhitney'):
-                        print(f"\nMann-Whitney U test for {metric_name}:")
-                        print(f"Statistic: {stats_results['mannwhitney']['statistic']:.2f}")
-                        print(f"P-value: {stats_results['mannwhitney']['pvalue']:.4f}")
+                subset_df = mecp2_bound_df[mecp2_bound_df['binding_type'] == binding_type]
+                
+                binding_header = f"\n{binding_type.upper()} BINDING:\n" + "-"*20 + "\n"
+                f.write(binding_header)
+                print(binding_header, end="")
+                
+                # Gene counts and basic statistics
+                expr_counts = subset_df['expression_status'].value_counts()
+                counts_summary = "\nGene counts by expression status:\n" + expr_counts.to_string() + "\n"
+                
+                f.write(counts_summary)
+                print(counts_summary, end="")
+                
+                # Calculate and display statistics
+                metrics = {
+                    'promoter_methylation': 'Promoter Methylation',
+                    'gene_body_methylation': 'Gene Body Methylation',
+                    'promoter_cpg_count': 'Promoter CpG Count'
+                }
+                
+                for metric, metric_name in metrics.items():
+                    metric_header = f"\n{metric_name}:\n"
+                    f.write(metric_header)
+                    print(metric_header, end="")
+                    
+                    # Calculate statistics by expression status
+                    stats_df = subset_df.groupby('expression_status')[metric].agg([
+                        'count', 'mean', 'std', 'min', 'max'
+                    ]).round(3)
+                    stats_summary = stats_df.to_string() + "\n"
+                    
+                    f.write(stats_summary)
+                    print(stats_summary, end="")
+                    
+                    # Perform statistical tests
+                    up_genes = subset_df[subset_df['expression_status'] == 'upregulated']
+                    down_genes = subset_df[subset_df['expression_status'] == 'downregulated']
+                    
+                    if len(up_genes) > 0 and len(down_genes) > 0:
+                        stats_results = perform_statistical_tests(
+                            up_genes[metric],
+                            down_genes[metric],
+                            metric_name
+                        )
                         
-                        if stats_results.get('cohens_d') is not None:
-                            print(f"Cohen's d: {stats_results['cohens_d']:.4f}")
-                        else:
-                            print("Cohen's d: Not available")
-                    
-                    if stats_results.get('error'):
-                        print(f"Error in statistical tests: {stats_results['error']}")
-            
-            # Calculate correlation
-            if len(subset_df) > 0:
-                corr_result = calculate_correlation(
-                    subset_df['promoter_methylation'],
-                    subset_df['gene_body_methylation']
-                )
-                if corr_result:
-                    print("\nCorrelation between promoter and gene body methylation:")
-                    print(f"Spearman correlation: rho={corr_result['statistic']:.4f}, p={corr_result['pvalue']:.4f}")
-                else:
-                    print("\nCorrelation analysis: Not available (insufficient data or no variation)")
+                        if stats_results.get('mannwhitney'):
+                            stats_summary = (f"\nMann-Whitney U test for {metric_name}:\n"
+                                          f"Statistic: {stats_results['mannwhitney']['statistic']:.2f}\n"
+                                          f"P-value: {stats_results['mannwhitney']['pvalue']:.4f}\n")
+                            
+                            if stats_results.get('cohens_d') is not None:
+                                stats_summary += f"Cohen's d: {stats_results['cohens_d']:.4f}\n"
+                            else:
+                                stats_summary += "Cohen's d: Not available\n"
+                                
+                            f.write(stats_summary)
+                            print(stats_summary, end="")
+                        
+                        if stats_results.get('error'):
+                            error_msg = f"Error in statistical tests: {stats_results['error']}\n"
+                            f.write(error_msg)
+                            print(error_msg, end="")
+                
+                # Calculate correlation
+                if len(subset_df) > 0:
+                    corr_result = calculate_correlation(
+                        subset_df['promoter_methylation'],
+                        subset_df['gene_body_methylation']
+                    )
+                    if corr_result:
+                        corr_summary = ("\nCorrelation between promoter and gene body methylation:\n"
+                                      f"Spearman correlation: rho={corr_result['statistic']:.4f}, "
+                                      f"p={corr_result['pvalue']:.4f}\n")
+                        f.write(corr_summary)
+                        print(corr_summary, end="")
+                    else:
+                        no_corr_msg = "\nCorrelation analysis: Not available (insufficient data or no variation)\n"
+                        f.write(no_corr_msg)
+                        print(no_corr_msg, end="")
 
-#%% Calculate methylation levels for multiple replicates
+#Calculate methylation levels for multiple replicates
 def calculate_methylation_levels_with_replicates(region_df: pd.DataFrame,
                                                medip_dir: str,
                                                cell_type_prefix: str,
@@ -461,7 +631,7 @@ def calculate_normalized_methylation(ip_values, input_values, sequence):
     
     return methylation
 
-#%% Visualization functions
+#Visualization functions
 def create_methylation_plots(results: Dict[str, pd.DataFrame], output_dir: str):
     """Create comprehensive visualization of methylation patterns"""
     if CONFIG['debug']['enabled']:
@@ -508,8 +678,7 @@ def create_methylation_plots(results: Dict[str, pd.DataFrame], output_dir: str):
         plt.savefig(f'{output_dir}/{cell_type}_cpg_density.pdf')
         plt.close()
 
-
-#%% Statistical analysis
+#Statistical analysis
 def perform_statistical_analysis(results: Dict[str, pd.DataFrame]) -> Dict[str, Dict]:
     """Perform statistical tests on methylation patterns"""
     stats_results = {}
@@ -546,8 +715,7 @@ def perform_statistical_analysis(results: Dict[str, pd.DataFrame]) -> Dict[str, 
     
     return stats_results
 
-
-#%% Create visualization functions
+#Create visualization functions
 def create_methylation_patterns_plot(df: pd.DataFrame, cell_type: str, output_dir: str):
     """Create detailed methylation pattern plots"""
     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 15))
@@ -652,7 +820,7 @@ def create_methylation_distribution_plot(df: pd.DataFrame, cell_type: str, outpu
     plt.close()
 
 
-#%% Debug the filtering steps
+#Debug the filtering steps
 def debug_regulated_genes_filtering(results: Dict[str, pd.DataFrame]):
     """Debug the filtering of regulated genes with MeCP2 binding"""
     for cell_type, df in results.items():
@@ -695,7 +863,7 @@ def debug_regulated_genes_filtering(results: Dict[str, pd.DataFrame]):
             print(bound_regulated[sample_cols].head())
 
 
-#%% Modified statistical test functions
+#Modified statistical test functions
 def perform_statistical_tests(up_data: pd.Series, down_data: pd.Series, metric_name: str) -> Dict:
     """Perform statistical tests with proper error handling"""
     results = {}
@@ -855,7 +1023,7 @@ def calculate_effect_size(group1: pd.Series, group2: pd.Series) -> float:
         logger.warning(f"Could not calculate effect size: {str(e)}")
         return None
 
-#%% Create focused visualization of significant findings
+#Create focused visualization of significant findings
 def plot_significant_differences(results: Dict[str, pd.DataFrame], output_dir: str):
     """Create plots focusing on the significant differences found in the analysis"""
     os.makedirs(os.path.join(output_dir, 'significant_findings'), exist_ok=True)
@@ -944,7 +1112,7 @@ def plot_significant_differences(results: Dict[str, pd.DataFrame], output_dir: s
             plt.close()
 
 
-#%% Modified plot_mecp2_regulatory_patterns function
+#Modified plot_mecp2_regulatory_patterns function
 def plot_mecp2_regulatory_patterns(results: Dict[str, pd.DataFrame], output_dir: str):
     """Create comprehensive visualization of MeCP2's regulatory patterns"""
     os.makedirs(os.path.join(output_dir, 'regulatory_patterns'), exist_ok=True)
@@ -967,7 +1135,7 @@ def plot_mecp2_regulatory_patterns(results: Dict[str, pd.DataFrame], output_dir:
         create_methylation_distribution_plot(mecp2_bound_df, cell_type, output_dir)
 
 
-#%% Create focused visualization of significant findings
+#Create focused visualization of significant findings
 def plot_significant_differences(results: Dict[str, pd.DataFrame], output_dir: str):
     """Create plots focusing on the significant differences found in the analysis"""
     os.makedirs(os.path.join(output_dir, 'significant_findings'), exist_ok=True)
@@ -1055,7 +1223,7 @@ def plot_significant_differences(results: Dict[str, pd.DataFrame], output_dir: s
                                     'NSC_gene_body_methylation.pdf'))
             plt.close()
 
-#%% Modified print_regulated_summary function
+#Modified print_regulated_summary function
 def print_regulated_summary_v2(results: Dict[str, pd.DataFrame]):
     """Print summary statistics for regulated MeCP2-bound genes with improved analysis"""
     for cell_type, df in results.items():
@@ -1150,7 +1318,7 @@ def print_regulated_summary_v2(results: Dict[str, pd.DataFrame]):
                 else:
                     print("\nCorrelation analysis: Not available (insufficient data or no variation)")
 
-#%% Print summary for regulated genes
+#Print summary for regulated genes
 def print_regulated_summary(results: Dict[str, pd.DataFrame]):
     """Print summary statistics for regulated MeCP2-bound genes"""
     for cell_type, df in results.items():
@@ -1185,7 +1353,7 @@ def print_regulated_summary(results: Dict[str, pd.DataFrame]):
             print("\nMean promoter CpG count:")
             print(subset_df.groupby('expression_status')['promoter_cpg_count'].mean())
 
-#%% Create detailed visualizations for MeCP2-bound regulated genes
+#Create detailed visualizations for MeCP2-bound regulated genes
 def create_mecp2_regulated_analysis(results: Dict[str, pd.DataFrame], output_dir: str):
     """Create detailed analysis of methylation patterns for MeCP2-bound regulated genes"""
     os.makedirs(os.path.join(output_dir, 'mecp2_regulated_analysis'), exist_ok=True)
@@ -1333,7 +1501,7 @@ def create_mecp2_regulated_analysis(results: Dict[str, pd.DataFrame], output_dir
                         for key, value in values.items():
                             f.write(f"{key}: {value}\n")
 
-#%% Load and process gene annotations with gene name mapping
+#Load and process gene annotations with gene name mapping
 def load_gene_annotations(gtf_file: str) -> pd.DataFrame:
     """Load gene annotations with debug mode support"""
     logger.info("Loading gene annotations...")
@@ -1372,7 +1540,7 @@ def load_gene_annotations(gtf_file: str) -> pd.DataFrame:
     
     return genes_df, gene_name_to_id
 
-#%% Load and process differential expression data with gene ID mapping
+#Load and process differential expression data with gene ID mapping
 def load_expression_data(rnaseq_files: Union[Dict[str, str], str], 
                         gene_name_to_id: dict,
                         single_file: bool = False) -> Union[Dict[str, pd.DataFrame], pd.DataFrame]:
@@ -2179,40 +2347,6 @@ def calculate_methylation_levels_parallel(region_df: pd.DataFrame,
         raise RuntimeError("No valid results obtained from parallel processing")
     
     return pd.concat(results, ignore_index=True)
-
-def analyze_methylation_patterns_parallel(results: Dict[str, pd.DataFrame], 
-                                        output_dir: str,
-                                        n_processes: int = None):
-    """Parallel version of methylation pattern analysis"""
-    if n_processes is None:
-        n_processes = max(1, multiprocessing.cpu_count() - 1)
-
-    # Create tasks for parallel processing
-    tasks = []
-    for cell_type, df in results.items():
-        tasks.extend([
-            (df, cell_type, output_dir, 'distribution'),
-            (df, cell_type, output_dir, 'expression'),
-            (df, cell_type, output_dir, 'binding')
-        ])
-
-    # Process tasks in parallel
-    with ProcessPoolExecutor(max_workers=n_processes) as executor:
-        futures = []
-        for task in tasks:
-            if task[3] == 'distribution':
-                futures.append(executor.submit(analyze_methylation_distribution, *task[:-1]))
-            elif task[3] == 'expression':
-                futures.append(executor.submit(analyze_methylation_expression_relationship, *task[:-1]))
-            else:
-                futures.append(executor.submit(analyze_binding_patterns, *task[:-1]))
-
-        # Wait for all tasks to complete
-        for future in tqdm(futures, desc="Analyzing methylation patterns"):
-            try:
-                future.result()
-            except Exception as e:
-                logger.error(f"Error in parallel analysis: {str(e)}")
 
 def analyze_binding_enrichment_groups(results, output_dir):
     """Analyze binding enrichment patterns across different groups"""
@@ -3112,3 +3246,67 @@ def summarize_binding_analysis(results: Dict[str, pd.DataFrame], output_dir: str
                 f.write(f"Std: {df[f'{region}_methylation'].std():.2f}\n")
             
             f.write("\n" + "="*50 + "\n")
+
+def analyze_binding_enrichment_groups(df: pd.DataFrame, output_dir: str):
+    """Analyze gene groups based on binding enrichment and regulation status"""
+    
+    # Create exo-enriched group (both exo-only and exo-enriched)
+    exo_enriched = df[df['binding_type'].isin(['exo', 'both'])]
+    endo_only = df[df['binding_type'] == 'endo']
+    non_enriched = df[~df['mecp2_bound']]
+    
+    # Analyze each group
+    groups = {
+        'exo_enriched': exo_enriched,
+        'endo_only': endo_only,
+        'non_enriched': non_enriched
+    }
+    
+    for group_name, group_df in groups.items():
+        # Get regulation counts
+        regulation_counts = group_df['expression_status'].value_counts()
+        
+        # Calculate methylation statistics for each regulation status
+        stats = {}
+        for status in ['not_deregulated', 'upregulated', 'downregulated']:
+            subset = group_df[group_df['expression_status'] == status]
+            if len(subset) > 0:
+                stats[status] = {
+                    'count': len(subset),
+                    'promoter_methylation': {
+                        'mean': subset['promoter_methylation'].mean(),
+                        'std': subset['promoter_methylation'].std(),
+                        'median': subset['promoter_methylation'].median()
+                    },
+                    'gene_body_methylation': {
+                        'mean': subset['gene_body_methylation'].mean(),
+                        'std': subset['gene_body_methylation'].std(),
+                        'median': subset['gene_body_methylation'].median()
+                    }
+                }
+        
+        # Save results
+        output_file = os.path.join(output_dir, f'{group_name}_analysis.txt')
+        with open(output_file, 'w') as f:
+            f.write(f"Analysis for {group_name}\n")
+            f.write("="*50 + "\n\n")
+            
+            f.write("Regulation counts:\n")
+            f.write(str(regulation_counts) + "\n\n")
+            
+            for status, stat in stats.items():
+                f.write(f"\n{status.upper()}:\n")
+                f.write(f"Count: {stat['count']}\n")
+                f.write("\nPromoter methylation:\n")
+                f.write(f"Mean ± SD: {stat['promoter_methylation']['mean']:.2f} ± {stat['promoter_methylation']['std']:.2f}\n")
+                f.write(f"Median: {stat['promoter_methylation']['median']:.2f}\n")
+                f.write("\nGene body methylation:\n")
+                f.write(f"Mean ± SD: {stat['gene_body_methylation']['mean']:.2f} ± {stat['gene_body_methylation']['std']:.2f}\n")
+                f.write(f"Median: {stat['gene_body_methylation']['median']:.2f}\n")
+        
+        # Save gene lists
+        for status in ['not_deregulated', 'upregulated', 'downregulated']:
+            subset = group_df[group_df['expression_status'] == status]
+            if len(subset) > 0:
+                output_file = os.path.join(output_dir, f'{group_name}_{status}_genes.csv')
+                subset.to_csv(output_file, index=False)
