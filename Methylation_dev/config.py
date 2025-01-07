@@ -7,13 +7,7 @@ import argparse
 
 # Get experiment name from command line arguments if running as main script
 def get_experiment_name():
-    try:
-        parser = argparse.ArgumentParser(add_help=False)
-        parser.add_argument('--experiment', type=str, default='align2_005')
-        args, _ = parser.parse_known_args()
-        return args.experiment
-    except:
-        return 'align2_005'
+    return os.environ.get('EXPERIMENT_NAME', 'align2_005')
 
 EXPERIMENT = get_experiment_name()
 
