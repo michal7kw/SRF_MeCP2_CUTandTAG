@@ -11,7 +11,7 @@
 #SBATCH --output="logs/nsc_cpg_enrichment_align2_005_consistent_peaks.out"
 #SBATCH --array=0-9  # Process in 10 chunks
 
-cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative
+cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative
 
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate
 conda activate snakemake
@@ -19,15 +19,13 @@ conda activate snakemake
 EXPERIMENT_IN="align2_005"
 EXPERIMENT_OUT="align2_005_consistent_peaks"
 
-INPUT_EXPERIMENT="results_2_${EXPERIMENT_IN}"
-OUTPUT_EXPERIMENT="results_2_${EXPERIMENT_OUT}"
-
+PEAKS_EXPERIMENT="results_2_${EXPERIMENT_IN}"
 ALIGNMENT_EXPERIMENT="results_1b"
 CELL_LINE="NSC"
 
-WORKING_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative"
-DATA_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/DATA"
-RESULTS_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/analyze_mecp2_cpg_enrichment_${EXPERIMENT_OUT}/${CELL_LINE}"
+WORKING_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative"
+DATA_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/DATA"
+RESULTS_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative/analyze_mecp2_cpg_enrichment_${EXPERIMENT_OUT}/${CELL_LINE}"
 
 # Create directories
 mkdir -p "${RESULTS_DIR}/exo"
@@ -41,18 +39,14 @@ rm -f "${RESULTS_DIR}/endo"/*.narrowPeak
 
 echo "Copying and organizing peaks from ${PEAKS_EXPERIMENT}..."
 
-# Copy exogenous peaks (virus samples)
+# Copy exogenous peaks (virus samples) - removed symlinks
 for sample in NSCv1 NSCv2 NSCv3; do
-    cp "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/${INPUT_EXPERIMENT}/peaks/narrow/${sample}_narrow_peaks.narrowPeak" "${RESULTS_DIR}/exo/"
-    # Also create a symlink with the alternative naming
-    ln -sf "${RESULTS_DIR}/exo/${sample}_narrow_peaks.narrowPeak" "${RESULTS_DIR}/exo/${sample}_peaks.narrowPeak"
+    cp "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative/${PEAKS_EXPERIMENT}/peaks/narrow/${sample}_narrow_peaks.narrowPeak" "${RESULTS_DIR}/exo/${sample}_peaks.narrowPeak"
 done
 
-# Copy endogenous peaks (M samples) 
+# Copy endogenous peaks (M samples) - removed symlinks
 for sample in NSCM1 NSCM2 NSCM3; do
-    cp "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/${INPUT_EXPERIMENT}/peaks/narrow/${sample}_narrow_peaks.narrowPeak" "${RESULTS_DIR}/endo/"
-    # Also create a symlink with the alternative naming
-    ln -sf "${RESULTS_DIR}/endo/${sample}_narrow_peaks.narrowPeak" "${RESULTS_DIR}/endo/${sample}_peaks.narrowPeak"
+    cp "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative/${PEAKS_EXPERIMENT}/peaks/narrow/${sample}_narrow_peaks.narrowPeak" "${RESULTS_DIR}/endo/${sample}_peaks.narrowPeak"
 done
 
 # Process chunk

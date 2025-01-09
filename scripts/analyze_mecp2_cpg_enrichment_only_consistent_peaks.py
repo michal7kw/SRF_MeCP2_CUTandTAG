@@ -100,16 +100,7 @@ class MeCP2CpGAnalyzer:
         return np.mean(signals) if signals else 0
 
     def check_peak_consistency(self, overlaps_dict: Dict[str, pd.DataFrame]) -> bool:
-        """
-        Check if a region has consistent peaks across replicates
-        
-        Args:
-            overlaps_dict: Dictionary mapping sample names to their overlapping peaks DataFrames
-        
-        Returns:
-            bool: True if peaks are present in at least 2 replicates, False otherwise
-        """
-        # Count how many replicates have peaks
+        """Check if a region has consistent peaks across replicates"""
         replicates_with_peaks = sum(1 for df in overlaps_dict.values() if not df.empty)
         
         # For M2 endo group (2 replicates), require both to have peaks
@@ -220,13 +211,26 @@ class MeCP2CpGAnalyzer:
             else:
                 pvalue = 1.0
             
+            # Calculate enrichment with safety check
+            if endo_signal > 0:
+                enrichment = exo_signal / endo_signal
+            else:
+                enrichment = float('inf') if exo_signal > 0 else 0.0
+            
+            # Update significance check to avoid division by zero
+            is_significant = (
+                (enrichment >= self.config.min_fold_change if endo_signal > 0 else exo_signal > 0) and
+                exo_signal > self.config.min_signal_threshold and
+                pvalue < 0.05
+            )
+            
             enrichment_data.append({
                 'chr': cpg['chr'],
                 'start': cpg['start'],
                 'end': cpg['end'],
                 'exo_signal': exo_signal,
                 'endo_signal': endo_signal,
-                'enrichment': exo_signal / endo_signal if endo_signal > 0 else float('inf'),
+                'enrichment': enrichment,
                 'pvalue': pvalue,
                 'binding_type': binding_type,
                 'peak_width_exo': np.mean([
@@ -237,11 +241,7 @@ class MeCP2CpGAnalyzer:
                     df['end'].mean() - df['start'].mean() 
                     for df in endo_overlaps.values() if not df.empty
                 ]) if has_consistent_endo else 0,
-                'significant': (
-                    exo_signal / endo_signal >= self.config.min_fold_change and 
-                    exo_signal > self.config.min_signal_threshold and
-                    pvalue < 0.05
-                )
+                'significant': is_significant
             })
         
         return pd.DataFrame(enrichment_data)

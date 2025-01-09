@@ -11,7 +11,7 @@
 #SBATCH --output="logs/neu_cpg_enrichment_align1_005.out"
 #SBATCH --array=0-9  # Process in 10 chunks
 
-cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative
+cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative
 
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate
 conda activate snakemake
@@ -21,9 +21,9 @@ PEAKS_EXPERIMENT="results_2_${EXPERIMENT}"
 ALIGNMENT_EXPERIMENT="results_1"
 CELL_LINE="NEU"
 
-WORKING_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative"
-DATA_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/DATA"
-RESULTS_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/analyze_mecp2_cpg_enrichment_${EXPERIMENT}/${CELL_LINE}"
+WORKING_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative"
+DATA_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/DATA"
+RESULTS_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative/analyze_mecp2_cpg_enrichment_${EXPERIMENT}/${CELL_LINE}"
 
 # Create directories
 mkdir -p "${RESULTS_DIR}/exo"
@@ -39,14 +39,14 @@ echo "Copying and organizing peaks from ${PEAKS_EXPERIMENT}..."
 
 # Copy exogenous peaks (virus samples)
 for sample in NeuV1 NeuV2 NeuV3; do
-    cp "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/${PEAKS_EXPERIMENT}/peaks/narrow/${sample}_narrow_peaks.narrowPeak" "${RESULTS_DIR}/exo/"
+    cp "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative/${PEAKS_EXPERIMENT}/peaks/narrow/${sample}_narrow_peaks.narrowPeak" "${RESULTS_DIR}/exo/"
     # Also create a symlink with the alternative naming
     ln -sf "${RESULTS_DIR}/exo/${sample}_narrow_peaks.narrowPeak" "${RESULTS_DIR}/exo/${sample}_peaks.narrowPeak"
 done
 
 # Copy endogenous peaks (M samples) 
 for sample in NeuM2 NeuM3; do
-    cp "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/${PEAKS_EXPERIMENT}/peaks/narrow/${sample}_narrow_peaks.narrowPeak" "${RESULTS_DIR}/endo/"
+    cp "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative/${PEAKS_EXPERIMENT}/peaks/narrow/${sample}_narrow_peaks.narrowPeak" "${RESULTS_DIR}/endo/"
     # Also create a symlink with the alternative naming
     ln -sf "${RESULTS_DIR}/endo/${sample}_narrow_peaks.narrowPeak" "${RESULTS_DIR}/endo/${sample}_peaks.narrowPeak"
 done

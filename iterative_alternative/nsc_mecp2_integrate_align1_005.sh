@@ -12,7 +12,7 @@
 #SBATCH --output="logs/nsc_integrate_align1_005.out"
 
 # Set base directories
-BASE_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG"
+BASE_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG"
 WORKING_DIR="${BASE_DIR}/iterative_alternative"
 DATA_DIR="${BASE_DIR}/DATA"
 EXPERIMENT="align1_005"

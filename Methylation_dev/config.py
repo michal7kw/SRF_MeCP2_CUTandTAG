@@ -104,8 +104,8 @@ PATHS = {
     'output_dir': f"analyze_mecp2_cpg_enrichment_{EXPERIMENT}",
     'cpg_islands_file': "../DATA/cpg_islands.bed",
     'rnaseq': {
-        'NEU': '../iterative_alternative/DATA/DEA_NEU.csv',
-        'NSC': '../iterative_alternative/DATA/DEA_NSC.csv'
+        'NEU': '../iterative_alternative/DATA/DEA_NEU_filtered.csv',
+        'NSC': '../iterative_alternative/DATA/DEA_NSC_filtered.csv'
     },
     'cache_dir': os.path.join(WORKING_DIR, "analysis_cache"),
     'validation_data': {
