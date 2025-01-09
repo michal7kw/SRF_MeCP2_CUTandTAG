@@ -28,10 +28,11 @@ import cache_utils
 importlib.reload(functions)
 importlib.reload(config) 
 importlib.reload(cache_utils)
-
+importlib.reload(func_cpg_islands_methylation)
 from functions import *
 from config import *
 from cache_utils import *
+from func_cpg_islands_methylation import *
 
 #%% Define the analysis pipeline function
 def run_analysis_pipeline(force_recompute: bool = False, n_processes: int = None,
