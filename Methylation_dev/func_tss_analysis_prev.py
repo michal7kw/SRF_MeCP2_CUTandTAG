@@ -195,83 +195,62 @@ def save_tss_analysis_results(results: Dict[str, Dict], cell_type: str, output_d
                 f.write(f"      Total CpGs: {measurements['gene_body_metrics']['cpg_count']['total']}\n")
                 f.write("\n")
 
+
 def analyze_tss_binding_patterns(df: pd.DataFrame, cell_type: str, output_dir: str):
-    """Analyze MeCP2 binding patterns around TSS with CpG density considerations
+    """Analyze MeCP2 binding patterns around transcription start sites (TSS) and their relationship with gene regulation.
     
+    This function performs a comprehensive analysis of how MeCP2 binds around gene transcription start sites
+    and how this binding correlates with gene regulation. It:
+
+    1. Categorizes genes into binding groups based on MeCP2 ChIP-seq data:
+       - exo_enriched: Genes bound by MeCP2 in both exogenous and endogenous conditions
+       - exo_only: Genes bound only in exogenous MeCP2 conditions
+       - endo_only: Genes bound only in endogenous MeCP2 conditions  
+       - non_enriched: Genes not bound by MeCP2
+
+    2. For each binding category, further subdivides genes by expression status:
+       - upregulated: Genes with increased expression
+       - downregulated: Genes with decreased expression
+       - not_deregulated: Genes with unchanged expression
+
+    3. Calculates detailed statistics for each subgroup including:
+       - Gene counts and percentages
+       - Promoter methylation levels (mean, median, std)
+       - Gene body methylation levels (mean, median, std)
+
+    4. Creates visualization plots showing:
+       - Distribution of binding patterns
+       - Correlation between binding and regulation
+       - Methylation patterns in different groups
+
+    5. Saves results to disk:
+       - Gene lists as CSV files
+       - Statistical metrics in text files
+       - Visualization plots as PDFs
+
+    The results provide insights into how MeCP2 binding patterns around TSS may influence
+    gene regulation and how this relates to DNA methylation levels.
+
     Args:
-        df: DataFrame containing:
-            - gene info and binding data
-            - methylation levels weighted by CpG density
-            - CpG density metrics
-            - quality control flags
+        df: DataFrame containing gene info, binding data and expression status
         cell_type: Cell type being analyzed (e.g. 'NSC', 'NEU') 
         output_dir: Base output directory for saving results
+        
+    Returns:
+        Dictionary containing statistical results for each binding category and regulation status
     """
     
     # Create output directories
     tss_dir = os.path.join(output_dir, 'tss_analysis', cell_type)
     os.makedirs(tss_dir, exist_ok=True)
     
-    # Ensure required columns exist
-    required_columns = ['log2FoldChange', 'padj', 'mecp2_bound']
-    missing_columns = [col for col in required_columns if col not in df.columns]
-    if missing_columns:
-        logger.error(f"Missing required columns: {missing_columns}")
-        return None
-    
-    # Create a copy to avoid modifying original
-    df = df.copy()
-    
-    # Add expression_status column
-    df['expression_status'] = 'unchanged'
-    df.loc[(df['log2FoldChange'] > 1) & (df['padj'] < 0.05), 'expression_status'] = 'upregulated'
-    df.loc[(df['log2FoldChange'] < -1) & (df['padj'] < 0.05), 'expression_status'] = 'downregulated'
-    
-    # Log expression status distribution
-    logger.info("\nExpression status distribution:")
-    logger.info(df['expression_status'].value_counts().to_string())
-    
-    # Handle mecp2_bound column more robustly
-    if 'mecp2_bound' in df.columns:
-        # First, check the current values
-        logger.debug(f"mecp2_bound unique values before conversion: {df['mecp2_bound'].unique()}")
-        logger.debug(f"mecp2_bound dtype before conversion: {df['mecp2_bound'].dtype}")
-        
-        # Convert to boolean more carefully
-        try:
-            # Handle NaN values first
-            df['mecp2_bound'] = df['mecp2_bound'].fillna(False)
-            
-            # Convert numeric values to boolean
-            if df['mecp2_bound'].dtype in ['float64', 'float32', 'int64', 'int32']:
-                df['mecp2_bound'] = df['mecp2_bound'] > 0
-            else:
-                # Try string conversion for any other type
-                df['mecp2_bound'] = df['mecp2_bound'].map({'True': True, 'False': False, '1': True, '0': False})
-                df['mecp2_bound'] = df['mecp2_bound'].fillna(False)
-        
-        except Exception as e:
-            logger.error(f"Error converting mecp2_bound to boolean: {str(e)}")
-            logger.error("Setting all values to False")
-            df['mecp2_bound'] = False
-        
-        logger.debug(f"mecp2_bound unique values after conversion: {df['mecp2_bound'].unique()}")
-        logger.debug(f"mecp2_bound dtype after conversion: {df['mecp2_bound'].dtype}")
-    else:
-        logger.error("mecp2_bound column not found in DataFrame")
-        return None
-    
     # Define binding categories
     binding_categories = {
         'exo_enriched': df[df['binding_type'].isin(['exo', 'both'])],
         'exo_only': df[df['binding_type'] == 'exo'],
         'endo_only': df[df['binding_type'] == 'endo'],
-        'non_enriched': df[df['mecp2_bound'] == False]  # Changed from ~ operator to == False
+        'non_enriched': df[~df['mecp2_bound']]
     }
-    
-    # Log category sizes
-    for category, subset in binding_categories.items():
-        logger.info(f"{category}: {len(subset)} genes")
     
     # Analyze each category
     results = {}
@@ -287,72 +266,30 @@ def analyze_tss_binding_patterns(df: pd.DataFrame, cell_type: str, output_dir: s
         group_stats = {}
         for reg_status, group_df in regulation_groups.items():
             if len(group_df) > 0:
-                # Filter out low quality data
-                high_quality_df = group_df[
-                    ~group_df['low_cpg_promoter'] & 
-                    ~group_df['high_meth_promoter']
-                ]
-                
                 group_stats[reg_status] = {
                     'count': len(group_df),
-                    'high_quality_count': len(high_quality_df),
-                    'promoter_metrics': {
-                        'methylation': {
-                            'mean': high_quality_df['promoter_methylation'].mean(),
-                            'std': high_quality_df['promoter_methylation'].std(),
-                            'median': high_quality_df['promoter_methylation'].median()
-                        },
-                        'cpg_density': {
-                            'mean': high_quality_df['promoter_cpg_density'].mean(),
-                            'std': high_quality_df['promoter_cpg_density'].std(),
-                            'median': high_quality_df['promoter_cpg_density'].median()
-                        },
-                        'cpg_count': {
-                            'total': high_quality_df['promoter_cpg_count'].sum(),
-                            'mean': high_quality_df['promoter_cpg_count'].mean()
-                        }
+                    'promoter_methylation': {
+                        'mean': group_df['promoter_methylation'].mean(),
+                        'std': group_df['promoter_methylation'].std(),
+                        'median': group_df['promoter_methylation'].median()
                     },
-                    'gene_body_metrics': {
-                        'methylation': {
-                            'mean': high_quality_df['gene_body_methylation'].mean(),
-                            'std': high_quality_df['gene_body_methylation'].std(),
-                            'median': high_quality_df['gene_body_methylation'].median()
-                        },
-                        'cpg_density': {
-                            'mean': high_quality_df['gene_body_cpg_density'].mean(),
-                            'std': high_quality_df['gene_body_cpg_density'].std(),
-                            'median': high_quality_df['gene_body_cpg_density'].median()
-                        },
-                        'cpg_count': {
-                            'total': high_quality_df['gene_body_cpg_count'].sum(),
-                            'mean': high_quality_df['gene_body_cpg_count'].mean()
-                        }
+                    'gene_body_methylation': {
+                        'mean': group_df['gene_body_methylation'].mean(),
+                        'std': group_df['gene_body_methylation'].std(),
+                        'median': group_df['gene_body_methylation'].median()
                     }
                 }
                 
-                # Save gene lists with quality metrics
+                # Save gene lists
                 output_file = os.path.join(tss_dir, f'{category}_{reg_status}_genes.csv')
                 group_df.to_csv(output_file, index=False)
-                
-                # Save high-quality subset
-                hq_output_file = os.path.join(tss_dir, f'{category}_{reg_status}_genes_high_quality.csv')
-                high_quality_df.to_csv(hq_output_file, index=False)
         
         results[category] = group_stats
     
-    # Create visualization with CpG density consideration
+    # Create visualization
     create_tss_analysis_plots(results, cell_type, tss_dir)
     
     # Save detailed statistics
     save_tss_analysis_results(results, cell_type, tss_dir)
-    
-    # Log quality metrics
-    logger.info(f"\nQuality metrics for {cell_type}:")
-    total_genes = len(df)
-    low_cpg_genes = df['low_cpg_promoter'].sum()
-    high_meth_genes = df['high_meth_promoter'].sum()
-    logger.info(f"Total genes analyzed: {total_genes}")
-    logger.info(f"Genes with low CpG density: {low_cpg_genes} ({low_cpg_genes/total_genes*100:.1f}%)")
-    logger.info(f"Genes with suspiciously high methylation: {high_meth_genes} ({high_meth_genes/total_genes*100:.1f}%)")
     
     return results

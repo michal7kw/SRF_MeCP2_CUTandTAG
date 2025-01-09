@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=nsc_integrate_align2_005_consistent_peaks
+#SBATCH --job-name=nsc_integrate_align1_005_consistent_peaks
 #SBATCH --account=kubacki.michal
 #SBATCH --mem=32GB
 #SBATCH --time=24:00:00
@@ -8,14 +8,14 @@
 #SBATCH --mail-type=ALL
 #SBATCH --exclusive
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/nsc_integrate_align2_005_consistent_peaks.err"
-#SBATCH --output="logs/nsc_integrate_align2_005_consistent_peaks.out"
+#SBATCH --error="logs/nsc_integrate_align1_005_consistent_peaks.err"
+#SBATCH --output="logs/nsc_integrate_align1_005_consistent_peaks.out"
 
 # Set base directories
 BASE_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG"
 WORKING_DIR="${BASE_DIR}/iterative_alternative"
 DATA_DIR="${BASE_DIR}/DATA"
-EXPERIMENT="align2_005_consistent_peaks"
+EXPERIMENT="align1_005_consistent_peaks"
 CELL_LINE="NSC"
 RESULTS_DIR="${WORKING_DIR}/analyze_mecp2_cpg_enrichment_${EXPERIMENT}/${CELL_LINE}"
 
