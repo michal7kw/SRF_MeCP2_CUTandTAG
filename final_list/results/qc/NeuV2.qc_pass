@@ -1,8 +1,0 @@
-Sample QC Report
-================
-Mapping rate: 100.00% (threshold: 70%)
-Library complexity: 0.326 (threshold: 0.7)
-QC Status: FAIL
-
-Failed checks:
-- Library complexity too low: 0.326 < 0.7

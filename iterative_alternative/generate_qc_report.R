@@ -7,17 +7,17 @@ library(knitr)
 library(rmarkdown)
 
 # Set working directory
-setwd("/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative")
+setwd("/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative")
 
 # Function to read fragment sizes
 read_fragment_sizes <- function(sample) {
-    read.table(paste0("results_1/qc/fragment_sizes/", sample, "_sizes.txt")) %>%
+    read.table(paste0("results_1b/qc/fragment_sizes/", sample, "_sizes.txt")) %>%
         mutate(sample = sample)
 }
 
 # Function to read FRiP scores
 read_frip <- function(sample) {
-    read.table(paste0("results_1/qc/frip/", sample, "_frip.txt")) %>%
+    read.table(paste0("results_1b/qc/frip/", sample, "_frip.txt")) %>%
         mutate(frip = V2/V3 * 100,
                sample = sample) # Add sample column to FRiP data
 }
@@ -53,7 +53,7 @@ p2 <- ggplot(frip_scores, aes(x=sample, y=frip)) +
     labs(x="Sample", y="FRiP %", title="Fraction of Reads in Peaks")
 
 # Save plots
-pdf_dir <- "results_1/qc"
+pdf_dir <- "results_1b/qc"
 dir.create(pdf_dir, recursive = TRUE, showWarnings = FALSE)  # Ensure directory exists
 
 ggsave(file.path(pdf_dir, "fragment_size_dist.pdf"), p1, width=10, height=6)
@@ -61,5 +61,5 @@ ggsave(file.path(pdf_dir, "frip_scores.pdf"), p2, width=10, height=6)
 
 # Generate HTML report
 rmarkdown::render("qc_report.Rmd",
-                 output_file = "results_1/qc/qc_report.html",
+                 output_file = "results_1b/qc/qc_report.html",
                  knit_root_dir = getwd())  # Explicitly set working directory for knitting

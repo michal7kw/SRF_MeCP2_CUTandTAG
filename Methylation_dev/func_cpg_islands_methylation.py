@@ -1,38 +1,50 @@
+# Standard library imports
+import os
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from typing import Dict, List, Tuple, Any, Union
+
+# Third-party imports
 import pandas as pd
 import pyranges as pr # type: ignore
-from config import CONFIG, PATHS, logger
 import numpy as np
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
-import os
 from tqdm import tqdm
 import pysam
-from typing import Dict, List, Tuple, Any, Union
 import pyBigWig
 import matplotlib.pyplot as plt
 import seaborn as sns
-import multiprocessing
 
+# Local imports
+from config import CONFIG, PATHS, logger
+
+# Set working directory for file operations
 os.chdir("/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/Methylation_dev")
 
 def load_cpg_islands(cpg_file: str) -> pr.PyRanges:
     """Load CpG islands from BED file into PyRanges object
     
-    Format:
+    Args:
+        cpg_file: Path to BED file containing CpG island coordinates
+        
+    Returns:
+        PyRanges object containing CpG island data
+        
+    Format of input BED file:
     chr1    3531624    3531843    611    CpG:    27
     """
-    # Read the BED file
+    # Read the BED file into pandas DataFrame
     cpg_df = pd.read_csv(cpg_file, sep='\t', header=None,
                         names=['Chromosome', 'Start', 'End', 'ID', 'Type', 'cpg_count'])
     
-    # Convert CpG count to numeric (it's the last column)
+    # Convert CpG count column to numeric type
     cpg_df['cpg_count'] = pd.to_numeric(cpg_df['cpg_count'])
     
-    # Debug info
+    # Log debug information about loaded data
     logger.debug(f"Loaded CpG islands data shape: {cpg_df.shape}")
     logger.debug(f"Columns: {cpg_df.columns.tolist()}")
     logger.debug(f"First few rows:\n{cpg_df.head()}")
     
-    # Convert to PyRanges
+    # Convert DataFrame to PyRanges format for genomic interval operations
     cpg_islands = pr.PyRanges(cpg_df)
     logger.info(f"Loaded {len(cpg_islands)} CpG islands")
     return cpg_islands
@@ -42,16 +54,27 @@ def calculate_methylation_levels_parallel(region_df: pd.DataFrame,
                                         cell_type: str,
                                         genome_fasta: str,
                                         n_processes: int = None) -> pd.DataFrame:
-    """Calculate methylation levels for genomic regions in parallel."""
+    """Calculate methylation levels for genomic regions using parallel processing.
     
+    Args:
+        region_df: DataFrame containing genomic regions to analyze
+        medip_dir: Directory containing MeDIP-seq data files
+        cell_type: Cell type identifier (e.g. 'NEU', 'NSC')
+        genome_fasta: Path to genome FASTA file
+        n_processes: Number of parallel processes to use (defaults to CPU count - 1)
+        
+    Returns:
+        DataFrame with methylation levels for each region
+    """
+    # Set number of processes based on CPU count if not specified
     if n_processes is None:
         n_processes = max(1, multiprocessing.cpu_count() - 1)
 
-    # Split data into chunks
+    # Split data into chunks for parallel processing
     chunk_size = max(1, len(region_df) // (n_processes * 4))
     chunks = np.array_split(region_df, len(region_df) // chunk_size + 1)
 
-    # Process chunks in parallel
+    # Process chunks in parallel using ProcessPoolExecutor
     with ProcessPoolExecutor(max_workers=n_processes) as executor:
         futures = [
             executor.submit(calculate_methylation_for_regions,
@@ -59,6 +82,7 @@ def calculate_methylation_levels_parallel(region_df: pd.DataFrame,
             for chunk in chunks
         ]
         
+        # Collect results with progress bar
         results = []
         for future in tqdm(futures, desc="Calculating methylation levels"):
             try:
@@ -68,34 +92,46 @@ def calculate_methylation_levels_parallel(region_df: pd.DataFrame,
                 logger.error(f"Error processing chunk: {str(e)}")
                 continue
 
+    # Verify we got valid results
     if not results:
         raise RuntimeError("No valid results obtained from parallel processing")
     
+    # Combine results from all chunks
     return pd.concat(results, ignore_index=True)
 
 def calculate_methylation_for_regions(region_df: pd.DataFrame,
                                     medip_dir: str,
                                     cell_type: str,
                                     genome_fasta: str) -> pd.DataFrame:
-    """Calculate methylation for a set of genomic regions."""
+    """Calculate methylation levels for a set of genomic regions.
     
-    # Map cell types to file prefixes
+    Args:
+        region_df: DataFrame containing regions to analyze
+        medip_dir: Directory containing MeDIP-seq data
+        cell_type: Cell type identifier
+        genome_fasta: Path to genome FASTA file
+        
+    Returns:
+        DataFrame with methylation levels and CpG counts
+    """
+    # Map cell types to file prefixes used in filenames
     prefix_map = {'NEU': 'N', 'NSC': 'PP'}
     prefix = prefix_map.get(cell_type)
     if not prefix:
         raise ValueError(f"Unknown cell type: {cell_type}")
 
-    # Get replicate file paths
+    # Get paths for IP and input replicate files
     ip_files = [os.path.join(medip_dir, f"Medip_{prefix}_output_r{i}.bw") 
                 for i in range(1, 4)]
     input_files = [os.path.join(medip_dir, f"Medip_{prefix}_input_r{i}.bw") 
                   for i in range(1, 4)]
 
-    # Check files exist
+    # Verify all required files exist
     for f in ip_files + input_files:
         if not os.path.exists(f):
             raise FileNotFoundError(f"Missing required file: {f}")
 
+    # Process each region and collect results
     results = []
     with pysam.FastaFile(genome_fasta) as fasta:
         for _, region in region_df.iterrows():
@@ -120,26 +156,39 @@ def calculate_region_methylation(region: pd.Series,
                                ip_files: List[str],
                                input_files: List[str],
                                fasta: pysam.FastaFile) -> Tuple[float, int]:
-    """Calculate methylation with better handling of missing data"""
+    """Calculate methylation level for a single genomic region.
     
+    Args:
+        region: Series containing region coordinates
+        ip_files: List of IP replicate bigWig files
+        input_files: List of input replicate bigWig files
+        fasta: Open FASTA file handle for sequence access
+        
+    Returns:
+        Tuple of (methylation_level, cpg_count)
+    """
     replicate_values = []
     
-    # Get sequence and validate CpG content
+    # Get sequence and count CpGs
     sequence = fasta.fetch(region['chr'], int(region['start']), int(region['end']))
     cpg_count = sequence.upper().count('CG')
     
+    # Skip regions with no CpGs
     if cpg_count == 0:
         logger.warning(f"No CpGs in region {region['chr']}:{region['start']}-{region['end']}")
-        return None, cpg_count  # Mark as missing rather than zero
+        return None, cpg_count
 
+    # Process each replicate pair
     valid_replicates = 0
     for ip_file, input_file in zip(ip_files, input_files):
         with pyBigWig.open(ip_file) as bw_ip, pyBigWig.open(input_file) as bw_input:
             try:
+                # Get signal values for the region
                 ip_values = bw_ip.values(region['chr'], int(region['start']), int(region['end']))
                 input_values = bw_input.values(region['chr'], int(region['start']), int(region['end']))
                 
                 if ip_values and input_values:
+                    # Filter out missing values
                     valid_pairs = [(ip, inp) for ip, inp in zip(ip_values, input_values)
                                  if ip is not None and inp is not None]
                     
@@ -154,7 +203,7 @@ def calculate_region_methylation(region: pd.Series,
                 logger.debug(f"Error processing replicate: {str(e)}")
                 continue
 
-    # Require minimum number of valid replicates
+    # Require minimum number of valid replicates for reliable measurement
     MIN_REPLICATES = 2
     if valid_replicates >= MIN_REPLICATES:
         return np.mean(replicate_values), cpg_count
@@ -165,32 +214,39 @@ def calculate_region_methylation(region: pd.Series,
 def calculate_normalized_methylation(ip_values: List[float],
                                   input_values: List[float],
                                   sequence: str) -> float:
-    """Calculate methylation with better handling of edge cases"""
+    """Calculate normalized methylation level from IP and input signals.
     
-    # 1. Signal validation
+    Args:
+        ip_values: List of IP signal values
+        input_values: List of input signal values
+        sequence: DNA sequence of the region
+        
+    Returns:
+        Normalized methylation percentage
+    """
+    # Validate input signals
     if not ip_values or not input_values:
         logger.warning("Missing IP or input values")
-        return None  # Better to mark as missing than assume zero
+        return None
         
-    # 2. Calculate mean signals with minimum threshold
-    MIN_SIGNAL = 0.001  # Prevent division by very small numbers
+    # Calculate mean signals with minimum threshold to avoid division by zero
+    MIN_SIGNAL = 0.001
     ip_mean = max(MIN_SIGNAL, np.mean(ip_values))
     input_mean = max(MIN_SIGNAL, np.mean(input_values))
     
-    # 3. Calculate enrichment
+    # Calculate IP/input enrichment ratio
     enrichment = ip_mean / input_mean
     
-    # 4. Normalize by CpG density with minimum threshold
+    # Normalize by CpG density
     cpg_count = sequence.upper().count('CG')
     region_length = len(sequence)
-    MIN_DENSITY = 0.001  # Minimum density threshold
+    MIN_DENSITY = 0.001
     cpg_density = max(MIN_DENSITY, cpg_count / region_length)
     
     normalized_enrichment = enrichment / cpg_density
     
-    # 5. Convert to methylation percentage with baseline
-    # Assuming minimum ~20% methylation in mammalian cells
-    BASE_METHYLATION = 20
+    # Convert to methylation percentage (20-100% range)
+    BASE_METHYLATION = 20  # Minimum methylation level in mammalian cells
     methylation = BASE_METHYLATION + min(80, normalized_enrichment * 15)
     
     return methylation
@@ -243,7 +299,7 @@ def analyze_cpg_methylation(merged_df: pd.DataFrame,
     promoter_cpgs = promoters.join(cpg_islands)
     gene_body_cpgs = gene_bodies.join(cpg_islands)
     
-    # Combine overlaps
+    # Combine overlaps into single DataFrame
     all_cpgs = pd.concat([
         promoter_cpgs.as_df(),
         gene_body_cpgs.as_df()
@@ -253,7 +309,7 @@ def analyze_cpg_methylation(merged_df: pd.DataFrame,
         logger.warning("No CpG islands found overlapping with genes")
         return pd.DataFrame()
     
-    # Calculate methylation levels
+    # Prepare regions for methylation calculation
     cpg_regions = pd.DataFrame({
         'chr': all_cpgs['Chromosome'],
         'start': all_cpgs['Start'],
@@ -274,7 +330,7 @@ def analyze_cpg_methylation(merged_df: pd.DataFrame,
         n_processes
     )
     
-    # Merge results
+    # Merge methylation results with region information
     result_df = cpg_regions.merge(methylation_results,
                                 left_index=True,
                                 right_index=True)
@@ -292,11 +348,11 @@ def plot_cpg_methylation_by_category(data: pd.DataFrame, cell_type: str):
             - methylation: methylation percentage
         cell_type: Cell type code ('NSC' or 'NEU')
     """
-    # Create output directory
+    # Create output directory for plots
     output_dir = os.path.join('plots', 'cpg_methylation', cell_type)
     os.makedirs(output_dir, exist_ok=True)
     
-    # Set plot style
+    # Set plot style parameters
     plt.rcParams.update({
         'figure.figsize': (15, 6),
         'axes.grid': True,
@@ -305,16 +361,16 @@ def plot_cpg_methylation_by_category(data: pd.DataFrame, cell_type: str):
         'axes.spines.right': False
     })
     
-    # Create figure with two subplots
+    # Create figure with two subplots (promoter and gene body)
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
     
-    # Define binding categories
+    # Define binding categories for analysis
     binding_categories = {
         'exo_enriched': data[data['binding_type'].isin(['exo_only', 'both'])],
         'no_exo_enriched': data[~data['binding_type'].isin(['exo_only', 'both'])]
     }
     
-    # Plot for promoter CpG islands
+    # Plot methylation data for promoter CpG islands
     plot_data = []
     for cat_name, cat_data in binding_categories.items():
         promoter_data = cat_data[cat_data['region_type'] == 'promoter']
@@ -342,13 +398,13 @@ def plot_cpg_methylation_by_category(data: pd.DataFrame, cell_type: str):
     ax1.set_xlabel('Binding Category')
     ax1.set_ylabel('Methylation Level (%)')
     
-    # Add sample sizes
+    # Add sample size annotations
     for i, cat in enumerate(plot_df['Category'].unique()):
         cat_data = plot_df[plot_df['Category'] == cat]
         ax1.text(i, ax1.get_ylim()[1], f'n={cat_data["Count"].sum()}',
                 horizontalalignment='center', verticalalignment='bottom')
     
-    # Plot for gene body CpG islands
+    # Plot methylation data for gene body CpG islands
     plot_data = []
     for cat_name, cat_data in binding_categories.items():
         body_data = cat_data[cat_data['region_type'] == 'gene_body']
@@ -376,13 +432,13 @@ def plot_cpg_methylation_by_category(data: pd.DataFrame, cell_type: str):
     ax2.set_xlabel('Binding Category')
     ax2.set_ylabel('Methylation Level (%)')
     
-    # Add sample sizes
+    # Add sample size annotations
     for i, cat in enumerate(plot_df['Category'].unique()):
         cat_data = plot_df[plot_df['Category'] == cat]
         ax2.text(i, ax2.get_ylim()[1], f'n={cat_data["Count"].sum()}',
                 horizontalalignment='center', verticalalignment='bottom')
     
-    # Adjust layout and save
+    # Finalize and save plot
     plt.suptitle(f'{cell_type} - CpG Island Methylation Analysis by Binding Category', y=1.05)
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, f'{cell_type}_cpg_methylation_by_category.pdf'),
@@ -390,4 +446,3 @@ def plot_cpg_methylation_by_category(data: pd.DataFrame, cell_type: str):
     plt.close()
     
     return plot_df
-

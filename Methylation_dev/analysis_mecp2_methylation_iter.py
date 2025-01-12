@@ -243,4 +243,39 @@ cpg_methylation_results = analyze_cpg_methylation(
 cpg_methylation_results.head()
 #%% ########################## plot_cpg_methylation_by_category ############################################################
 cpg_stats = plot_cpg_methylation_by_category(cpg_methylation_results, cell_type)
-# %%
+
+
+#%% ########################## Documentation ############################################################
+
+"""
+This script analyzes methylation patterns in MeCP2 binding regions and CpG islands, comparing between different cell types (NSC vs NEU).
+
+Input files:
+- MeDIP-seq bigWig files for IP and input samples (specified in medip_dir)
+- CpG islands BED file (specified in PATHS['cpg_islands_file']) 
+- Genome FASTA file (specified in PATHS['genome_fasta'])
+- Gene expression and MeCP2 binding data (in merged_df DataFrame)
+
+The script performs two main analyses:
+
+1. Peak-level methylation analysis:
+- Calculates methylation levels in MeCP2 binding peaks using MeDIP-seq data
+- Compares methylation between different binding categories (exo_only, both, etc.)
+- Analyzes relationship between peak methylation and gene expression changes
+- Generates plots showing methylation levels in promoters vs gene bodies
+
+2. CpG island methylation analysis:  
+- Identifies CpG islands overlapping with gene promoters and bodies
+- Calculates methylation levels in these CpG islands
+- Compares methylation patterns between binding categories
+- Analyzes how CpG island methylation relates to gene expression
+- Creates visualization plots
+
+Output files:
+- PDF plots in plots/peak_methylation/<cell_type>/ showing peak methylation analysis
+- PDF plots in plots/cpg_methylation/<cell_type>/ showing CpG island methylation analysis
+- DataFrames with detailed methylation results for peaks and CpG islands
+
+The analysis helps understand how MeCP2 binding and DNA methylation patterns
+are related to gene regulation in different cellular contexts.
+"""
