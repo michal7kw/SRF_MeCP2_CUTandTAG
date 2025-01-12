@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=enrichment_NSC_5_align2_new_005
+#SBATCH --job-name=peaks_enrichment_and_genes_regulation_NSC_5.
 #SBATCH --account=kubacki.michal
 #SBATCH --mem=32GB
 #SBATCH --time=24:00:00
@@ -8,8 +8,8 @@
 #SBATCH --mail-type=ALL
 #SBATCH --exclusive
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/enrichment_NSC_5_align2_new_005.err"
-#SBATCH --output="logs/enrichment_NSC_5_align2_new_005.out"
+#SBATCH --error="logs/peaks_enrichment_and_genes_regulation_NSC_5.err"
+#SBATCH --output="logs/peaks_enrichment_and_genes_regulation_NSC_5.out"
 
 cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative
 
@@ -18,30 +18,39 @@ conda activate snakemake
 
 mkdir -p logs
 
-WORKING_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative"
-DATA_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative/results_1"
-INPUT_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative/results_2_align2_005"
-RESULTS_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative/results_5_align2_005"
+# Define base directory
+BASE_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG"
 
-echo "Copying and renaming peaks from results_2_align2_005 to ${RESULTS_DIR}..."
-rm -rf "${RESULTS_DIR}/peaks"
+# Define directory structure
+WORKING_DIR="${BASE_DIR}/iterative_alternative"
+DATA_DIR="${BASE_DIR}/DATA"
+
+# Define experiment-specific directories
+ALIGN_DIR="${WORKING_DIR}/results_1b"
+PEAKS_DIR="${WORKING_DIR}/results_2_align2_005"
+RESULTS_DIR="${WORKING_DIR}/results_5_align2_005/peaks_enrichment_and_genes_regulation_NSC_5"
+
+# Create results directory
 mkdir -p "${RESULTS_DIR}/peaks"
 
-# Copy and rename files
+echo "Copying and renaming peaks from ${PEAKS_DIR} to ${RESULTS_DIR}..."
+
+# Copy and rename peak files
 for sample in NSCv1 NSCv2 NSCv3 NSCM1 NSCM2 NSCM3; do
-    if [ -f "${INPUT_DIR}/peaks/narrow/${sample}_narrow_peaks.narrowPeak" ]; then
-        cp "${INPUT_DIR}/peaks/narrow/${sample}_narrow_peaks.narrowPeak" \
-           "${RESULTS_DIR}/peaks/${sample}_peaks.narrowPeak"
+    peak_file="${PEAKS_DIR}/peaks/narrow/${sample}_narrow_peaks.narrowPeak"
+    if [ -f "${peak_file}" ]; then
+        cp "${peak_file}" "${RESULTS_DIR}/peaks/${sample}_peaks.narrowPeak"
     else
-        echo "Warning: Source file not found for sample ${sample}"
+        echo "Warning: Source file not found for sample ${sample}: ${peak_file}"
     fi
 done
 
-python -u ../scripts/analyze_enrichment_NSC_5.py \
-    --working-dir $WORKING_DIR \
-    --data-dir $DATA_DIR \
-    --results-dir $RESULTS_DIR \
-    2>&1 | tee "logs/enrichment_NSC_5_align2_005.out"
+# Run analysis script
+python -u ../scripts/peaks_enrichment_and_genes_regulation/peaks_enrichment_and_genes_regulation_NSC_5.py \
+    --working-dir "${WORKING_DIR}" \
+    --data-dir "${DATA_DIR}" \
+    --results-dir "${RESULTS_DIR}" \
+    2>&1 | tee "logs/peaks_enrichment_and_genes_regulation_NSC_5.out"
 
 
 #####################################################################

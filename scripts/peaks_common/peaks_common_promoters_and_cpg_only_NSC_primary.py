@@ -394,20 +394,20 @@ def categorize_peaks(df):
     
     return df
 
-def save_categorized_results(results_df, output_dir):
+def save_categorized_results(results_df, output_dir, peak_type):
     """Save categorized results to separate files"""
     # Create category-specific dataframes
     exo_only_df = results_df[results_df['category'] == 'exo_only']
     endo_only_df = results_df[results_df['category'] == 'endo_only']
     common_df = results_df[results_df['category'] == 'common']
     
-    # Save to separate files
-    exo_only_df.to_csv(f'{output_dir}/exo_only.csv', index=False)
-    endo_only_df.to_csv(f'{output_dir}/endo_only.csv', index=False)
-    common_df.to_csv(f'{output_dir}/common.csv', index=False)
+    # Save to separate files with peak type in filename
+    exo_only_df.to_csv(f'{output_dir}/exo_only_{peak_type}.csv', index=False)
+    endo_only_df.to_csv(f'{output_dir}/endo_only_{peak_type}.csv', index=False)
+    common_df.to_csv(f'{output_dir}/common_{peak_type}.csv', index=False)
     
     # Print statistics
-    print("\nDetailed Peak Statistics:")
+    print(f"\nDetailed {peak_type.capitalize()} Peak Statistics:")
     print(f"Exo-only peaks: {len(exo_only_df)} regions")
     print(f"Endo-only peaks: {len(endo_only_df)} regions")
     print(f"Common peaks: {len(common_df)} regions")
@@ -418,6 +418,8 @@ def main():
     parser.add_argument('--working-dir', type=str, required=True)
     parser.add_argument('--results-dir', type=str, required=True)
     parser.add_argument('--peaks-dir', type=str, required=True)
+    parser.add_argument('--peak-type', type=str, required=True, choices=['narrow', 'broad'],
+                       help='Type of peak files to analyze (narrow or broad)')
     parser.add_argument('--processes', type=int, default=None,
                        help='Number of processes to use (default: CPU count - 1)')
     args = parser.parse_args()
@@ -430,17 +432,18 @@ def main():
     gene_annotations, _ = load_gene_annotations()
     cpg_trees = load_cpg_islands(args.working_dir + "/DATA/cpg_islands.bed")
     
-    # Load combined peak files
-    print("\nLoading peak files...")
+    # Load combined peak files with appropriate extension
+    peak_suffix = 'broadPeak' if args.peak_type == 'broad' else 'narrowPeak'
+    print(f"\nLoading {args.peak_type} peak files...")
     peaks_exo = {
         'exo': load_peak_file(
-            args.peaks_dir + "/NPCs_exo_combined.narrowPeak",
+            f"{args.peaks_dir}/NPCs_exo_combined.{peak_suffix}",
             "exo"
         )
     }
     peaks_endo = {
         'endo': load_peak_file(
-            args.peaks_dir + "/NPCs_endo_combined.narrowPeak",
+            f"{args.peaks_dir}/NPCs_endo_combined.{peak_suffix}",
             "endo"
         )
     }
@@ -481,9 +484,9 @@ def main():
     # Categorize and save results
     results = categorize_peaks(results)
     
-    # Save all results and category-specific files
-    results.to_csv(f'{args.results_dir}/promoter_cpg_peak_analysis.csv', index=False)
-    save_categorized_results(results, args.results_dir)
+    # Save all results and category-specific files with peak type in filename
+    results.to_csv(f'{args.results_dir}/promoter_cpg_peak_analysis_{args.peak_type}.csv', index=False)
+    save_categorized_results(results, args.results_dir, args.peak_type)
     
     # Print summary
     print("\nAnalysis Summary:")
@@ -499,7 +502,7 @@ def main():
         'no_peaks': len(results[results['category'] == 'none'])
     }
     
-    with open(f'{args.results_dir}/analysis_statistics.txt', 'w') as f:
+    with open(f'{args.results_dir}/analysis_statistics_{args.peak_type}.txt', 'w') as f:
         for key, value in stats.items():
             f.write(f'{key}: {value}\n')
 
