@@ -176,19 +176,27 @@ def analyze_promoter_binding(args):
                 'endo_peaks': endo_data.iloc[0]['peak_count'],
                 'exo_peaks': exo_data.iloc[0]['peak_count'],
                 'endo_signal': endo_data.iloc[0]['max_signal'],
-                'exo_signal': exo_data.iloc[0]['max_signal']
+                'exo_signal': exo_data.iloc[0]['max_signal'],
+                'endo_peak_starts': endo_data.iloc[0]['peak_starts'],
+                'endo_peak_ends': endo_data.iloc[0]['peak_ends'],
+                'exo_peak_starts': exo_data.iloc[0]['peak_starts'],
+                'exo_peak_ends': exo_data.iloc[0]['peak_ends']
             })
         elif not endo_data.empty:
             results['endo_only'].append({
                 'gene_name': gene,
                 'peak_count': endo_data.iloc[0]['peak_count'],
-                'signal': endo_data.iloc[0]['max_signal']
+                'signal': endo_data.iloc[0]['max_signal'],
+                'peak_starts': endo_data.iloc[0]['peak_starts'],
+                'peak_ends': endo_data.iloc[0]['peak_ends']
             })
         else:
             results['exo_only'].append({
                 'gene_name': gene,
                 'peak_count': exo_data.iloc[0]['peak_count'],
-                'signal': exo_data.iloc[0]['max_signal']
+                'signal': exo_data.iloc[0]['max_signal'],
+                'peak_starts': exo_data.iloc[0]['peak_starts'],
+                'peak_ends': exo_data.iloc[0]['peak_ends']
             })
     
     # Convert results to DataFrames and save
@@ -202,6 +210,7 @@ def analyze_promoter_binding(args):
     print(f"Common promoter peaks: {len(results['common'])}")
     print(f"Endo-only promoter peaks: {len(results['endo_only'])}")
     print(f"Exo-only promoter peaks: {len(results['exo_only'])}")
+
 def main():
     parser = argparse.ArgumentParser(description='Analyze promoter peak binding')
     parser.add_argument('--peaks-dir', required=True, help='Directory containing peak files')

@@ -1,6 +1,7 @@
 import csv
 from operator import itemgetter
 from typing import List, Dict, Tuple
+import argparse
 
 def load_and_filter_cpg(csv_path: str, signal_threshold: float = 0.1) -> List[Dict]:
     """Load and filter CPG enrichment data"""
@@ -104,9 +105,20 @@ def write_results(data: List[Dict], output_file: str):
         writer.writerows(data)
 
 def main():
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Process CpG enrichment data')
+    parser.add_argument('--working-dir', type=str, required=True,
+                       help='Path to working directory')
+    parser.add_argument('--data-dir', type=str, required=True,
+                       help='Path to data directory')
+    parser.add_argument('--results-dir', type=str, required=True,
+                       help='Path to results directory')
+    args = parser.parse_args()
+
     # File paths
-    cpg_file = "./cpg_enrichment_NSC.csv"
-    gtf_file = "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/DATA/gencode.vM10.annotation.gtf"
+    cpg_file = f"{args.results_dir}/cpg_enrichment_NSC.csv"
+    gtf_file = f"{args.data_dir}/gencode.vM10.annotation.gtf"
+    output_file = f"{args.results_dir}/cpg_enrichment_annotated.csv"
     
     # Load and filter CPG data
     print("Loading and filtering CPG data...")
@@ -122,7 +134,6 @@ def main():
         peak['genomic_region'] = determine_genomic_region(peak, genes)
     
     # Save results
-    output_file = "cpg_enrichment_annotated.csv"
     write_results(cpg_data, output_file)
     print(f"Results saved to {output_file}")
 

@@ -32,16 +32,14 @@ RESULTS_DIR="${WORKING_DIR}/results_5_align2_005/peaks_enrichment_and_genes_regu
 # Create results directory
 mkdir -p "${RESULTS_DIR}"
 
-# Define input files
-INPUT_FILES=(
-    EXO_PEAKS="${PEAKS_DIR}/peaks/narrow/NPCs_exo_combined.narrowPeak"
-    ENDO_PEAKS="${PEAKS_DIR}/peaks/narrow/NPCs_endo_combined.narrowPeak"
-    DEA_FILE="${DATA_DIR}/DEA_NSC.csv"
-    GTF_FILE="${DATA_DIR}/gencode.vM10.annotation.gtf"
-)
+# Define input files (fix the array declaration)
+EXO_PEAKS="${PEAKS_DIR}/peaks/narrow/NPCs_exo_combined.narrowPeak"
+ENDO_PEAKS="${PEAKS_DIR}/peaks/narrow/NPCs_endo_combined.narrowPeak"
+DEA_FILE="${DATA_DIR}/DEA_NSC.csv"
+GTF_FILE="${DATA_DIR}/gencode.vM10.annotation.gtf"
 
-# Run enrichment analysis
-python -u ../scripts/peaks_enrichment_and_genes_regulation/peaks_enrichment_and_genes_regulation/peaks_enrichment_and_genes_regulation_NSC_5_combined.py \
+# Run enrichment analysis (use the variables directly)
+python -u ../scripts/peaks_enrichment_and_genes_regulation/peaks_enrichment_and_genes_regulation_NSC_5_combined.py \
     --exo-peaks "${EXO_PEAKS}" \
     --endo-peaks "${ENDO_PEAKS}" \
     --dea "${DEA_FILE}" \
