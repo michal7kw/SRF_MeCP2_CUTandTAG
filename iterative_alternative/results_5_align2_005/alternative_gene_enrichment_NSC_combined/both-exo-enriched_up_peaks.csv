@@ -1,0 +1,2 @@
+chr,peak_start,peak_end,gene_name,signalValue,source,regulation,log2FoldChange,padj,binding_category
+chr7,126884462,126885047,Taok2,"{34371: 11.6964, 44730: 19.9895}","['exo', 'endo']",up,1.008982011,5.31011e-32,both-exo-enriched

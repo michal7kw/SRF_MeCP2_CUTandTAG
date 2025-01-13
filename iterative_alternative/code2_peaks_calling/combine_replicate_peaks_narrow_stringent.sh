@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=combine_replicate_peaks_narrow
+#SBATCH --job-name=combine_replicate_peaks
 #SBATCH --account=kubacki.michal
 #SBATCH --mem=64GB
 #SBATCH --time=12:00:00
@@ -7,8 +7,8 @@
 #SBATCH --ntasks=8
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/combine_replicate_peaks_narrow.err"
-#SBATCH --output="logs/combine_replicate_peaks_narrow.out"
+#SBATCH --error="logs/combine_replicate_peaks.err"
+#SBATCH --output="logs/combine_replicate_peaks.out"
 
 cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative
 
@@ -19,14 +19,16 @@ mkdir -p logs
 
 PEAKS_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative/results_2_align2_005/peaks/narrow"
 
-# Process exogenous peaks
-python -u ../scripts/combine_peaks/combine_replicate_peaks_narrow.py \
-    --peaks-dir "$PEAKS_DIR" \
-    --condition exo \
-    2>&1 | tee "logs/combine_replicate_peaks_narrow_exo.out" 
-
-# Process exogenous peaks
-python -u ../scripts/combine_peaks/combine_replicate_peaks_narrow.py \
+# Process endogenous peaks
+python -u ../scripts/combine_replicate_peaks.py \
     --peaks-dir "$PEAKS_DIR" \
     --condition endo \
-    2>&1 | tee "logs/combine_replicate_peaks_narrow_endo.out" 
+    --peak-type narrow \
+    2>&1 | tee "logs/combine_replicate_peaks_endo.out"
+
+# Process exogenous peaks
+python -u ../scripts/combine_replicate_peaks.py \
+    --peaks-dir "$PEAKS_DIR" \
+    --condition exo \
+    --peak-type narrow \
+    2>&1 | tee "logs/combine_replicate_peaks_exo.out" 

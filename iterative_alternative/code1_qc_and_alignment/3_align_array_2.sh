@@ -12,24 +12,25 @@
 #SBATCH --output="logs/align_2.out"
 #SBATCH --array=0-11
 
+# Set parameters
+GENOME_INDEX="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/mm10_bowtie2_index/mm10"
+MIN_FRAGMENT=100
+MAX_FRAGMENT=700
+SORT_MEMORY="2G"
+THREADS=32
+TMP_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative/tmpb"
+TOTAL_MEMORY="30G"
+
+INPUT_DIR="results_1"
+RESULTS_DIR="results_1b"
+
 # Function for logging with timestamps
 log_progress() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
 }
 
-INPUT_DIR="results_1"
-RESULTS_DIR="results_1b"
-
-# Function to validate input files
-validate_inputs() {
-    local sample=$1
-    local r1="${INPUT_DIR}/trimmed/${sample}_R1_001_val_1.fq.gz"
-    local r2="${INPUT_DIR}/trimmed/${sample}_R2_001_val_2.fq.gz"
-    [[ -f "$r1" && -f "$r2" ]] || return 1
-}
-
 # Set working directory
-cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative || {
+cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative || {
     log_progress "Error: Failed to change to working directory"
     exit 1
 }
@@ -40,11 +41,25 @@ if ! source /opt/common/tools/ric.cosr/miniconda3/bin/activate /beegfs/scratch/r
     exit 1
 fi
 
-# Create required directories
-mkdir -p ${RESULTS_DIR}/aligned logs
+# Create required directories - make this more comprehensive
+mkdir -p ${RESULTS_DIR}/aligned \
+         ${RESULTS_DIR}/logs \
+         logs \
+         "$TMP_DIR"
+
+# Function to validate input files
+validate_inputs() {
+    local sample=$1
+    local r1="${INPUT_DIR}/trimmed/${sample}_R1_001_val_1.fq.gz"
+    local r2="${INPUT_DIR}/trimmed/${sample}_R2_001_val_2.fq.gz"
+    [[ -f "$r1" && -f "$r2" ]] || return 1
+}
 
 # Get sample names from trimmed files (more reliable than fastqc results)
-ALL_SAMPLES=($(find ${INPUT_DIR}/trimmed -name "*_R1_001_val_1.fq.gz" -type f | sed 's|${INPUT_DIR}/trimmed/||;s|_R1_001_val_1.fq.gz||' | sort))
+ALL_SAMPLES=($(find ${INPUT_DIR}/trimmed -name "*_R1_001_val_1.fq.gz" -type f | sed "s|${INPUT_DIR}/trimmed/||;s|_R1_001_val_1.fq.gz||" | sort))
+
+# Add debug logging to help troubleshoot
+log_progress "Found ${#ALL_SAMPLES[@]} samples: ${ALL_SAMPLES[*]}"
 
 # Verify we have samples before continuing
 if [ ${#ALL_SAMPLES[@]} -eq 0 ]; then
@@ -60,15 +75,6 @@ fi
 
 # Get current sample
 SAMPLE=${ALL_SAMPLES[$SLURM_ARRAY_TASK_ID]}
-
-# Set parameters
-GENOME_INDEX="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/mm10_bowtie2_index/mm10"
-MAX_FRAGMENT=2000
-MIN_FRAGMENT=150
-SORT_MEMORY="2G"
-THREADS=32
-TMP_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/tmpb"
-TOTAL_MEMORY="30G"
 
 # Create temporary directory if it doesn't exist
 if [ ! -d "$TMP_DIR" ]; then
@@ -119,9 +125,9 @@ else
         --dovetail \
         --mm \
         -S "$TEMP_DIR/${SAMPLE}.sam" \
-        2> ${RESULTS_DIR}/logs/align_${SAMPLE}.log; then
-        echo "Error: Bowtie2 alignment failed for ${SAMPLE}"
-        echo "Check ${RESULTS_DIR}/logs/align_${SAMPLE}.log for details"
+        2> "${RESULTS_DIR}/logs/align_${SAMPLE}.log"; then
+        log_progress "Error: Bowtie2 alignment failed for ${SAMPLE}"
+        log_progress "Check ${RESULTS_DIR}/logs/align_${SAMPLE}.log for details"
         exit 1
     fi
 fi

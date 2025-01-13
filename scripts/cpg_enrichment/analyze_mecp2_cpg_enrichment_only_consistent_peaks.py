@@ -354,7 +354,7 @@ def main():
     endo_peaks = {}
     
     # Load exogenous peaks
-    exo_files = list(Path(args.exo_peaks_dir).glob('*.narrowPeak'))
+    exo_files = list(Path(args.exo_peaks_dir).glob('*.filtered.narrowPeak'))
     logger.info(f"Found {len(exo_files)} exo peak files: {[f.name for f in exo_files]}")
     
     for peak_file in exo_files:
@@ -367,7 +367,7 @@ def main():
             logger.error(f"Failed to load {peak_file}: {str(e)}")
     
     # Load endogenous peaks
-    endo_files = list(Path(args.endo_peaks_dir).glob('*.narrowPeak'))
+    endo_files = list(Path(args.endo_peaks_dir).glob('*.filtered.narrowPeak'))
     logger.info(f"Found {len(endo_files)} endo peak files: {[f.name for f in endo_files]}")
     
     for peak_file in endo_files:
