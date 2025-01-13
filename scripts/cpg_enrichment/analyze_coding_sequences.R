@@ -1,3 +1,17 @@
+# Check and install required packages if missing
+required_packages <- c("TxDb.Mmusculus.UCSC.mm10.knownGene", "org.Mm.eg.db")
+
+for (pkg in required_packages) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+        message(sprintf("Package %s not found. Installing...", pkg))
+        if (!requireNamespace("BiocManager", quietly = TRUE)) {
+            install.packages("BiocManager")
+        }
+        BiocManager::install(pkg)
+    }
+}
+
+# Load required packages
 library(tidyverse)
 library(optparse)
 library(GenomicFeatures)
@@ -35,28 +49,90 @@ setwd(opts$work_dir)
 # Create output directory
 dir.create("coding_sequence_analysis", showWarnings = FALSE)
 
-# Function to get coding sequence lengths using biomaRt
+# Read TSS peaks file first
+tss_peaks <- read.csv("./peaks_annotation/exo_only_tss_peaks.csv")
+
+# Function to get coding sequence lengths using local databases as fallback
 get_coding_lengths <- function() {
-    message("Connecting to Ensembl...")
+    message("Attempting to get coding lengths...")
     
-    # Connect to Ensembl
-    mart <- useMart("ensembl", dataset="mmusculus_gene_ensembl")
-    
-    # Get coding sequence information
-    message("Retrieving coding sequence information...")
-    coding_seq_info <- getBM(
-        attributes = c(
-            "external_gene_name",
-            "ensembl_gene_id",
-            "cds_length",
-            "gene_biotype"
-        ),
-        filters = "biotype",
-        values = "protein_coding",
-        mart = mart
-    )
-    
-    return(coding_seq_info)
+    # First try biomaRt
+    tryCatch({
+        message("Trying Ensembl biomaRt...")
+        
+        # Try different Ensembl mirrors with HTTPS
+        mirrors <- c(
+            "https://useast.ensembl.org",
+            "https://uswest.ensembl.org",
+            "https://asia.ensembl.org",
+            "https://www.ensembl.org"
+        )
+        
+        for (mirror in mirrors) {
+            tryCatch({
+                message(sprintf("Trying mirror: %s", mirror))
+                mouse <- useMart("ensembl", dataset = "mmusculus_gene_ensembl", host = mirror)
+                
+                coding_lengths <- getBM(
+                    attributes = c("external_gene_name", "cds_length"),
+                    filters = "external_gene_name",
+                    values = tss_peaks$SYMBOL,
+                    mart = mouse
+                )
+                
+                if (nrow(coding_lengths) > 0) {
+                    message(sprintf("Successfully connected to %s", mirror))
+                    return(coding_lengths)
+                }
+            }, error = function(e) {
+                message(sprintf("Failed to connect to %s: %s", mirror, e$message))
+            })
+        }
+        
+        # If we get here, try local database
+        stop("All Ensembl mirrors failed, trying local database...")
+        
+    }, error = function(e) {
+        message("Falling back to local UCSC database...")
+        
+        # Get transcript lengths from local UCSC database
+        txdb <- TxDb.Mmusculus.UCSC.mm10.knownGene
+        
+        # Get gene symbols - handle many:1 mappings
+        gene_symbols <- suppressWarnings(
+            select(org.Mm.eg.db, 
+                   keys = tss_peaks$SYMBOL,
+                   columns = c("ENTREZID", "SYMBOL"),
+                   keytype = "SYMBOL") %>%
+            # Remove duplicates by keeping the first mapping for each symbol
+            distinct(SYMBOL, .keep_all = TRUE)
+        )
+        
+        # Get CDS by transcript
+        cds_by_tx <- cdsBy(txdb, by="tx", use.names=TRUE)
+        
+        # Calculate CDS lengths
+        cds_lengths <- lapply(cds_by_tx, function(x) sum(width(x)))
+        
+        # Convert to data frame
+        coding_lengths <- data.frame(
+            entrez_id = names(cds_lengths),
+            cds_length = unlist(cds_lengths)
+        )
+        
+        # Join with gene symbols and handle multiple mappings
+        coding_lengths <- coding_lengths %>%
+            left_join(gene_symbols, by = c("entrez_id" = "ENTREZID")) %>%
+            filter(!is.na(SYMBOL)) %>%
+            group_by(SYMBOL) %>%
+            # For each gene symbol, keep the longest CDS
+            slice_max(cds_length, n = 1) %>%
+            ungroup() %>%
+            select(external_gene_name = SYMBOL, cds_length)
+        
+        message(sprintf("Found CDS lengths for %d genes", nrow(coding_lengths)))
+        return(coding_lengths)
+    })
 }
 
 # Get coding sequence lengths
@@ -65,7 +141,7 @@ coding_lengths <- get_coding_lengths()
 # Clean and process the data
 coding_analysis <- coding_lengths %>%
     filter(!is.na(cds_length)) %>%
-    group_by(ensembl_gene_id) %>%
+    group_by(external_gene_name) %>%
     # Take the longest CDS for each gene
     slice_max(cds_length, n = 1) %>%
     ungroup()

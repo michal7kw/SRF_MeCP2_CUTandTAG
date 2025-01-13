@@ -28,7 +28,7 @@ validate_inputs() {
 }
 
 # Set working directory
-cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative || {
+cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative || {
     log_progress "Error: Failed to change to working directory"
     exit 1
 }
@@ -43,7 +43,7 @@ fi
 mkdir -p ${RESULTS_DIR}/aligned ${RESULTS_DIR}/logs
 
 # Get sample names from trimmed files (more reliable than fastqc results)
-ALL_SAMPLES=($(find ${RESULTS_DIR}/trimmed -name "*_R1_001_val_1.fq.gz" -type f | sed 's|${RESULTS_DIR}/trimmed/||;s|_R1_001_val_1.fq.gz||' | sort))
+ALL_SAMPLES=($(find ${RESULTS_DIR}/trimmed -name "*_R1_001_val_1.fq.gz" -type f | sed "s|${RESULTS_DIR}/trimmed/||;s|_R1_001_val_1.fq.gz||" | sort))
 
 # Verify we have samples before continuing
 if [ ${#ALL_SAMPLES[@]} -eq 0 ]; then
@@ -61,11 +61,11 @@ fi
 SAMPLE=${ALL_SAMPLES[$SLURM_ARRAY_TASK_ID]}
 
 # Set parameters
-GENOME_INDEX="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/mm10_bowtie2_index/mm10"
+GENOME_INDEX="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/mm10_bowtie2_index/mm10"
 MAX_FRAGMENT=1000
 SORT_MEMORY="32G"
 THREADS=32
-TMP_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/iterative_alternative/tmp"
+TMP_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative/tmp"
 
 # Create temporary directory if it doesn't exist
 if [ ! -d "$TMP_DIR" ]; then
