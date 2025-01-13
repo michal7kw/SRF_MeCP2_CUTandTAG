@@ -286,6 +286,8 @@ def main():
     parser.add_argument('--results-dir', type=str, required=True)
     parser.add_argument('--peaks-dir', type=str, required=True)
     parser.add_argument('--processes', type=int, default=None)
+    parser.add_argument('--peak-type', type=str, required=True, choices=['narrow', 'broad'],
+                      help='Type of peaks to process: narrow or broad')
     args = parser.parse_args()
 
     os.chdir(args.working_dir)
@@ -294,9 +296,11 @@ def main():
     gene_annotations = load_gene_annotations()
     cpg_trees = load_cpg_islands(args.working_dir + "/DATA/cpg_islands.bed")
     
-    # Load peak files
-    peaks_exo = {'exo': load_peak_file(f"{args.peaks_dir}/NPCs_exo_combined.narrowPeak", "exo")}
-    peaks_endo = {'endo': load_peak_file(f"{args.peaks_dir}/NPCs_endo_combined.narrowPeak", "endo")}
+    # Load peak files with peak type
+    peaks_exo = {'exo': load_peak_file(
+        f"{args.peaks_dir}/NPCs_exo_combined.{args.peak_type}Peak", "exo")}
+    peaks_endo = {'endo': load_peak_file(
+        f"{args.peaks_dir}/NPCs_endo_combined.{args.peak_type}Peak", "endo")}
     
     # Create interval trees
     print("\nCreating interval trees...")

@@ -28,17 +28,23 @@ DATA_DIR="${BASE_DIR}/DATA"
 GTF_PATH="${DATA_DIR}/gencode.vM10.annotation.gtf"
 CPG_PATH="${DATA_DIR}/cpgIslandExt.txt"
 
-# Analysis directories
-PEAKS_DIR="${PROJ_DIR}/results_2_align2_005/peaks/narrow"
-OUTPUT_DIR="${PROJ_DIR}/results_5_align2_005/peaks_annotation_NSC_combined_cpg_specific"
+# Process both narrow and broad peaks
+for PEAK_TYPE in narrow broad; do
+    echo "Processing ${PEAK_TYPE} peaks..."
+    
+    # Analysis directories
+    PEAKS_DIR="${PROJ_DIR}/results_2_align2_005/peaks/${PEAK_TYPE}"
+    OUTPUT_DIR="${PROJ_DIR}/results_5_align2_005/peaks_annotation_NSC_combined_cpg_specific_${PEAK_TYPE}"
 
-# Remove OUTPUT_DIR if it exists and recreate it
-rm -rf "${OUTPUT_DIR}"
-mkdir -p "${OUTPUT_DIR}"
+    # Remove OUTPUT_DIR if it exists and recreate it
+    rm -rf "${OUTPUT_DIR}"
+    mkdir -p "${OUTPUT_DIR}"
 
-python -u ../scripts/peaks_annotation/peaks_annotation_NSC_combined_cpg_specific.py \
-    --gtf-path "$GTF_PATH" \
-    --peaks-dir "$PEAKS_DIR" \
-    --output-dir "$OUTPUT_DIR" \
-    --cpg-path "$CPG_PATH" \
-    2>&1 | tee "logs/peaks_annotation_NSC_combined_cpg_specific.out"
+    python -u ../scripts/peaks_annotation/peaks_annotation_NSC_combined_cpg_specific.py \
+        --gtf-path "$GTF_PATH" \
+        --peaks-dir "$PEAKS_DIR" \
+        --output-dir "$OUTPUT_DIR" \
+        --cpg-path "$CPG_PATH" \
+        --peak-type "$PEAK_TYPE" \
+        2>&1 | tee "logs/peaks_annotation_NSC_combined_cpg_specific_${PEAK_TYPE}.out"
+done

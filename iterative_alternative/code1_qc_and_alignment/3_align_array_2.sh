@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=align_2
 #SBATCH --account=kubacki.michal
-#SBATCH --mem=32GB
+#SBATCH --mem=64GB
 #SBATCH --time=12:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=32
@@ -16,10 +16,10 @@
 GENOME_INDEX="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/mm10_bowtie2_index/mm10"
 MIN_FRAGMENT=100
 MAX_FRAGMENT=700
-SORT_MEMORY="2G"
+SORT_MEMORY="16G"
 THREADS=32
 TMP_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative/tmpb"
-TOTAL_MEMORY="30G"
+TOTAL_MEMORY="64G"
 
 INPUT_DIR="results_1"
 RESULTS_DIR="results_1b"
@@ -227,17 +227,66 @@ log_progress "Indexing BAM file..."
 samtools index -@ $THREADS ${RESULTS_DIR}/aligned/${SAMPLE}.bam
 
 log_progress "Removing PCR duplicates..."
-# Remove duplicates and save metrics
-if ! samtools markdup -@ $THREADS -r \
+# Create temporary directory for this operation
+TEMP_DEDUP_DIR="$TMP_DIR/${SAMPLE}_dedup"
+mkdir -p "$TEMP_DEDUP_DIR"
+
+# First, ensure proper coordinate sorting for fixmate
+log_progress "Sorting BAM file by name for fixmate..."
+if ! samtools sort -n \
+    -@ $THREADS \
+    -m $SORT_MEMORY \
+    -T "$TEMP_DEDUP_DIR/namesort" \
     ${RESULTS_DIR}/aligned/${SAMPLE}.bam \
-    ${RESULTS_DIR}/aligned/${SAMPLE}.dedup.bam \
-    2> ${RESULTS_DIR}/aligned/${SAMPLE}.markdup_metrics; then
+    -o "$TEMP_DEDUP_DIR/${SAMPLE}.namesorted.bam"; then
+    log_progress "Error: BAM name sorting failed for ${SAMPLE}"
+    exit 1
+fi
+
+# Run fixmate to add mate information
+log_progress "Running fixmate..."
+if ! samtools fixmate -m \
+    -@ $THREADS \
+    "$TEMP_DEDUP_DIR/${SAMPLE}.namesorted.bam" \
+    "$TEMP_DEDUP_DIR/${SAMPLE}.fixmate.bam"; then
+    log_progress "Error: Fixmate failed for ${SAMPLE}"
+    exit 1
+fi
+
+# Sort by coordinate for markdup
+log_progress "Sorting by coordinate for markdup..."
+if ! samtools sort \
+    -@ $THREADS \
+    -m $SORT_MEMORY \
+    -T "$TEMP_DEDUP_DIR/coordsort" \
+    "$TEMP_DEDUP_DIR/${SAMPLE}.fixmate.bam" \
+    -o "$TEMP_DEDUP_DIR/${SAMPLE}.coordsorted.bam"; then
+    log_progress "Error: BAM coordinate sorting failed for ${SAMPLE}"
+    exit 1
+fi
+
+# Now mark and remove duplicates
+log_progress "Marking and removing duplicates..."
+if ! samtools markdup \
+    -@ $THREADS \
+    -r \
+    -s \
+    -f ${RESULTS_DIR}/aligned/${SAMPLE}.markdup_metrics \
+    "$TEMP_DEDUP_DIR/${SAMPLE}.coordsorted.bam" \
+    ${RESULTS_DIR}/aligned/${SAMPLE}.dedup.bam; then
     log_progress "Error: Duplicate marking failed for ${SAMPLE}"
     exit 1
 fi
 
 # Index the deduplicated BAM
-samtools index -@ $THREADS ${RESULTS_DIR}/aligned/${SAMPLE}.dedup.bam
+log_progress "Indexing deduplicated BAM..."
+if ! samtools index -@ $THREADS ${RESULTS_DIR}/aligned/${SAMPLE}.dedup.bam; then
+    log_progress "Error: BAM indexing failed for ${SAMPLE}"
+    exit 1
+fi
+
+# Clean up temporary files
+rm -rf "$TEMP_DEDUP_DIR"
 
 log_progress "Generating QC metrics..."
 # Generate comprehensive QC metrics

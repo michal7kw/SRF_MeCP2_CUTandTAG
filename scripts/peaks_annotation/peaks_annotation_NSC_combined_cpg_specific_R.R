@@ -59,13 +59,17 @@ suppressPackageStartupMessages({
     library(dplyr)
 })
 
-# Parse command line arguments (simplified)
+# Parse command line arguments
 option_list <- list(
     make_option("--peaks-dir", type="character", default=NULL, dest="peaks_dir",
-                help="Directory containing narrowPeak files"),
+                help="Directory containing peak files"),
     make_option("--output-dir", type="character", default=NULL, dest="output_dir",
-                help="Output directory for plots")
+                help="Output directory for plots"),
+    make_option("--peak-type", type="character", default="narrow", dest="peak_type",
+                help="Type of peaks to process: narrow or broad")
 )
+
+# Parse command line arguments
 opts <- parse_args(OptionParser(option_list=option_list))
 
 # Add diagnostic prints
@@ -73,6 +77,13 @@ print("Command line arguments received:")
 print(opts)
 print("Output directory path:")
 print(opts$output_dir)
+print("Peak type:")
+print(opts$peak_type)
+
+# Ensure the peak type is valid
+if (!opts$peak_type %in% c("narrow", "broad")) {
+    stop("Invalid peak type. Must be 'narrow' or 'broad'.")
+}
 
 # Ensure the output directory path is not NULL and is a character string
 if (is.null(opts$output_dir) || !is.character(opts$output_dir)) {
@@ -257,10 +268,10 @@ main <- function() {
     cpg_islands <- get_cpg_islands()
     
     message("Processing peak files...")
-    # Process peak files
+    # Process peak files based on the peak type
     peak_files <- list(
-        endo = file.path(opts$peaks_dir, "NPCs_endo_combined.narrowPeak"),
-        exo = file.path(opts$peaks_dir, "NPCs_exo_combined.narrowPeak")
+        endo = file.path(opts$peaks_dir, paste0("NPCs_endo_combined.", opts$peak_type, "Peak")),
+        exo = file.path(opts$peaks_dir, paste0("NPCs_exo_combined.", opts$peak_type, "Peak"))
     )
     
     results <- list()

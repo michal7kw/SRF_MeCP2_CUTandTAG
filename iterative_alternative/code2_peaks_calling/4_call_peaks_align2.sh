@@ -13,16 +13,8 @@
 #SBATCH --array=0-10  # Excluding IgM controls
 
 ALIGNMENT="align2"
-
-# Set results directory
-if [ "$ALIGNMENT" == "align1" ]; then
-    INPUT_DIR="results_1"
-    RESULTS_DIR="results_2_align1_005"
-else
-    INPUT_DIR="results_1b"
-    RESULTS_DIR="results_2_align2_005"
-fi
-
+INPUT_DIR="results_1b"
+RESULTS_DIR="results_2_align2_005"
 # Set working directory
 BASE_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative"
 cd $BASE_DIR || exit 1
@@ -103,8 +95,26 @@ check_bam_integrity() {
 generate_fragment_dist() {
     local bam=$1
     local output="${QC_DIR}/fragment_dist.txt"
-    samtools view "$bam" | awk '{print sqrt($9^2)}' > "$output"
-    Rscript -e "png('${QC_DIR}/fragment_dist.png'); hist(read.table('$output')\$V1, breaks=100, main='Fragment Size Distribution'); dev.off()"
+    
+    # Use proper fragment length calculation for paired-end reads
+    samtools view "$bam" | \
+        awk '$9 > 0 {print $9}' > "$output"  # Only take positive TLEN values
+    
+    # Check if the output file has data
+    if [ -s "$output" ]; then
+        Rscript -e "
+            data <- read.table('$output')\$V1
+            png('${QC_DIR}/fragment_dist.png')
+            hist(data, 
+                breaks=100, 
+                main='Fragment Size Distribution',
+                xlab='Fragment Length (bp)',
+                ylab='Frequency')
+            dev.off()
+        "
+    else
+        echo "Warning: No fragment length information found in BAM file"
+    fi
 }
 
 calculate_frip() {

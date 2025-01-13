@@ -1,0 +1,121 @@
+# Directories to ignore
+Archive/
+chipseq-smk-pipeline/
+mm10_bowtie2_index/
+temp*/
+.snakemake/
+DATA/
+data/
+logs/
+
+# Compressed files
+*.7z
+*.bz2
+*.gz
+*.iso
+*.lz4
+*.lzma
+*.lzo
+*.rar
+*.tar
+*.tar.gz
+*.xz
+*.zip
+*.zipx
+*.auc
+
+# Data files
+*.bai
+*.bam
+*.bed
+*.bt2
+*.counts
+*.fa
+*.fai
+*.fasta
+*.fastq
+*.fastq.gz
+*.gtf
+*.narrowPeak
+*.size
+
+# Analysis outputs
+*.eps
+*.html
+*.json
+*.log
+*.npz
+*.out
+*.pkl
+*.tsv
+*.txt
+*.xls
+*.xml
+*.err
+*.tsv
+*.bdg
+*.*Peak
+*.auc
+*.bedgraph
+
+# Hidden files
+.*
+
+# Custom pipeline specific
+*.bw
+gencode.vM10.annotation.gtf
+
+__pycache__/
+iterative_alternative/SEACR-master/
+
+tutorial*
+tmp/
+tmpb/
+references/
+**/auc
+
+iterative_alternative/results/peaks/seacr/auc
+iterative_alternative/results copy/peaks/seacr/auc
+
+# Large result files
+iterative_alternative/results_5/mecp2_enrichment_independent.csv
+iterative_alternative/results_5/intermediate/
+iterative_alternative/results_5/intermediate/
+iterative_alternative/results_5/intermediate/
+
+Visualization/results/old/
+
+# General large file patterns
+intermediate/
+
+# Files larger than 100MB
+*.[!g][!i][!t]*  # Matches any file with an extension that doesn't start with 'g', 'i', or 't'
+[!.]*            # Matches any file/directory that doesn't start with a dot
+*                # Matches everything
+!.gitignore      # But don't ignore .gitignore
+!.gitattributes  # But don't ignore .gitattributes  
+!.github         # But don't ignore .github directory
+
+*.csi
+*.markdup_metrics
+Methylation_dev/RESULTS
+
+
+old/
+peaks_backup/
+iterative_alternative/analyze_mecp2_cpg_enrichment_align2_005_consistent_peaks/NSC_backup
+iterative_alternative/analyze_mecp2_cpg_enrichment_align1_005/
+iterative_alternative/analyze_mecp2_cpg_enrichment_align1_005_consistent_peaks/
+iterative_alternative/analyze_mecp2_cpg_enrichment_align2_005/
+iterative_alternative/results_1/
+iterative_alternative/results_2_align1_005/
+iterative_alternative/results_5_align1_005/
+
+# Files larger than 100MB (GitHub's file size limit)
+*.[!g][!i][!t]* filter=lfs diff=lfs merge=lfs -text size>=100M
+[!.]* filter=lfs diff=lfs merge=lfs -text size>=100M
+* filter=lfs diff=lfs merge=lfs -text size>=100M
+!.gitignore
+!.gitattributes
+!.github/
+

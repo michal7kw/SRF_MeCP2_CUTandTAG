@@ -136,12 +136,12 @@ def find_peaks_in_promoters(peaks_df: pd.DataFrame,
 def analyze_promoter_binding(args):
     """Main analysis function."""
     # Load gene annotations
-    gene_annotations = load_gene_annotations("../DATA/gencode.vM10.annotation.gtf")
+    gene_annotations = load_gene_annotations(args.gtf_path)
     
-    # Define peak files
+    # Define peak files based on peak type
     peak_files = {
-        'endo': os.path.join(args.peaks_dir, "NPCs_endo_combined.narrowPeak"),
-        'exo': os.path.join(args.peaks_dir, "NPCs_exo_combined.narrowPeak")
+        'endo': os.path.join(args.peaks_dir, f"NPCs_endo_combined.{args.peak_type}Peak"),
+        'exo': os.path.join(args.peaks_dir, f"NPCs_exo_combined.{args.peak_type}Peak")
     }
     
     # Load peaks
@@ -216,6 +216,8 @@ def main():
     parser.add_argument('--peaks-dir', required=True, help='Directory containing peak files')
     parser.add_argument('--output-dir', required=True, help='Directory for output files')
     parser.add_argument('--gtf-path', required=True, help='Path to GTF annotation file')
+    parser.add_argument('--peak-type', required=True, choices=['narrow', 'broad'],
+                      help='Type of peaks to process: narrow or broad')
     args = parser.parse_args()
     
     os.makedirs(args.output_dir, exist_ok=True)

@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=peak_compare
+#SBATCH --job-name=compare_peaks
 #SBATCH --account=kubacki.michal
 #SBATCH --mem=32GB
 #SBATCH --time=4:00:00
@@ -7,8 +7,8 @@
 #SBATCH --ntasks=8
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/peak_compare.err"
-#SBATCH --output="logs/peak_compare.out"
+#SBATCH --error="logs/compare_peaks.err"
+#SBATCH --output="logs/compare_peaks.out"
 
 # Set working directory
 BASE_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative"
@@ -17,9 +17,10 @@ cd $BASE_DIR || exit 1
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate /beegfs/scratch/ric.broccoli/kubacki.michal/conda_envs/snakemake
 
 RESULTS_DIR="results_2_align2_005"
+OUTPUT_DIR="additional_scripts"
 
 # Create analysis directories
-mkdir -p ${RESULTS_DIR}/peak_analysis/{differential,overlaps,cpg_analysis,plots}
+mkdir -p ${OUTPUT_DIR}/compare_peaks/{differential,overlaps,cpg_analysis,plots}
 
 # Define sample groups
 WILD_TYPE_NEU=("NeuV2" "NeuV3")
@@ -35,7 +36,7 @@ merge_peaks() {
     local group_name=$1
     shift
     local samples=("$@")
-    local output="${RESULTS_DIR}/peak_analysis/${group_name}_merged.bed"
+    local output="${OUTPUT_DIR}/compare_peaks/${group_name}_merged.bed"
     
     # Concatenate peaks from all replicates
     for sample in "${samples[@]}"; do
@@ -61,7 +62,7 @@ filter_cpg_peaks() {
 calculate_peak_stats() {
     local group_name=$1
     local peaks=$2
-    local output_prefix="${RESULTS_DIR}/peak_analysis/stats/${group_name}"
+    local output_prefix="${OUTPUT_DIR}/compare_peaks/stats/${group_name}"
     
     # Calculate peak widths
     awk '{print $3-$2}' "$peaks" > "${output_prefix}_widths.txt"
@@ -117,10 +118,10 @@ analyze_differential_peaks() {
     
     # Analyze peak differences
     Rscript ../scripts/analyze_differential_peaks.R \
-        --common "${RESULTS_DIR}/peak_analysis/${output_prefix}_common.bed" \
-        --wt-specific "${RESULTS_DIR}/peak_analysis/${output_prefix}_wt_specific.bed" \
-        --mut-specific "${RESULTS_DIR}/peak_analysis/${output_prefix}_mut_specific.bed" \
-        --output "${RESULTS_DIR}/peak_analysis/${output_prefix}_analysis.pdf" \
+        --common "${OUTPUT_DIR}/compare_peaks/${output_prefix}_common.bed" \
+        --wt-specific "${OUTPUT_DIR}/compare_peaks/${output_prefix}_wt_specific.bed" \
+        --mut-specific "${OUTPUT_DIR}/compare_peaks/${output_prefix}_mut_specific.bed" \
+        --output "${OUTPUT_DIR}/compare_peaks/${output_prefix}_analysis.pdf" \
         --cpg-only "$cpg_only"
 }
 
@@ -128,7 +129,7 @@ analyze_differential_peaks() {
 analyze_cpg_overlaps() {
     local peaks=$1
     local group_name=$2
-    local output_prefix="${RESULTS_DIR}/peak_analysis/cpg_analysis/${group_name}"
+    local output_prefix="${OUTPUT_DIR}/compare_peaks/cpg_analysis/${group_name}"
     
     # Find peaks overlapping CpG islands
     bedtools intersect -a "$peaks" -b "$CpG_ISLANDS" -wo > "${output_prefix}_cpg_overlaps.bed"
@@ -150,34 +151,34 @@ main() {
     
     # Calculate statistics for each group
     for group in wt_neu mut_neu wt_nsc mut_nsc; do
-        calculate_peak_stats "$group" "${RESULTS_DIR}/peak_analysis/${group}_merged.bed"
+        calculate_peak_stats "$group" "${OUTPUT_DIR}/compare_peaks/${group}_merged.bed"
     done
     
     # Perform differential analysis on all peaks
     analyze_differential_peaks \
-        "${RESULTS_DIR}/peak_analysis/wt_neu_merged.bed" \
-        "${RESULTS_DIR}/peak_analysis/mut_neu_merged.bed" \
-        "${RESULTS_DIR}/peak_analysis/differential/neu" \
+        "${OUTPUT_DIR}/compare_peaks/wt_neu_merged.bed" \
+        "${OUTPUT_DIR}/compare_peaks/mut_neu_merged.bed" \
+        "${OUTPUT_DIR}/compare_peaks/differential/neu" \
         false
 
     # Perform differential analysis on CpG-only peaks
     analyze_differential_peaks \
-        "${RESULTS_DIR}/peak_analysis/wt_neu_merged.bed" \
-        "${RESULTS_DIR}/peak_analysis/mut_neu_merged.bed" \
-        "${RESULTS_DIR}/peak_analysis/differential/neu_cpg" \
+        "${OUTPUT_DIR}/compare_peaks/wt_neu_merged.bed" \
+        "${OUTPUT_DIR}/compare_peaks/mut_neu_merged.bed" \
+        "${OUTPUT_DIR}/compare_peaks/differential/neu_cpg" \
         true
     
     # Perform differential analysis on NSC comparisons
     analyze_differential_peaks \
-        "${RESULTS_DIR}/peak_analysis/wt_nsc_merged.bed" \
-        "${RESULTS_DIR}/peak_analysis/mut_nsc_merged.bed" \
-        "${RESULTS_DIR}/peak_analysis/differential/nsc" \
+        "${OUTPUT_DIR}/compare_peaks/wt_nsc_merged.bed" \
+        "${OUTPUT_DIR}/compare_peaks/mut_nsc_merged.bed" \
+        "${OUTPUT_DIR}/compare_peaks/differential/nsc" \
         false
     
     # Analyze CpG island overlaps
     for group in wt_neu mut_neu wt_nsc mut_nsc; do
         analyze_cpg_overlaps \
-            "${RESULTS_DIR}/peak_analysis/${group}_merged.bed" \
+            "${OUTPUT_DIR}/compare_peaks/${group}_merged.bed" \
             "$group"
     done
 }
@@ -185,4 +186,4 @@ main() {
 # Execute main function with error handling
 {
     main
-} 2>&1 | tee "${RESULTS_DIR}/logs/peak_analysis.log" 
+} 2>&1 | tee "${OUTPUT_DIR}/logs/compare_peaks.log" 

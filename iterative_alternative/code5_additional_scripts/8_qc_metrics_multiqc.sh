@@ -16,18 +16,20 @@ cd /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alt
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate /beegfs/scratch/ric.broccoli/kubacki.michal/conda_envs/snakemake
 
 RESULTS_DIR="results_1b"
+OUTPUT_DIR="additional_scripts"
+PEAKS_DIR="results_2_align2_005/peaks"
+
 ALIGNED_DIR="${RESULTS_DIR}/aligned"
-PEAKS_DIR="${RESULTS_DIR}/peaks"
-QC_DIR="${RESULTS_DIR}/qc_7"
-LOGS_DIR="${RESULTS_DIR}/logs"
+QC_DIR="${OUTPUT_DIR}/qc"
+LOGS_DIR="${OUTPUT_DIR}/logs"
 
 # Create output directory for MultiQC
-mkdir -p ${RESULTS_DIR}/multiqc
+mkdir -p ${OUTPUT_DIR}/multiqc
 
 # Run MultiQC
 multiqc \
     --force \
-    --outdir ${RESULTS_DIR}/multiqc \
+    --outdir ${OUTPUT_DIR}/multiqc \
     --filename multiqc_report \
     --title "CUT&Tag QC Report" \
     --comment "Quality control metrics for CUT&Tag data" \

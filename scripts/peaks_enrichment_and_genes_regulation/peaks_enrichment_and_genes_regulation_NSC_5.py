@@ -93,17 +93,6 @@ def load_data():
         # Load DEA results
         dea_nsc = pd.read_csv("../DATA/DEA_NSC.csv")
         print("\nDEA file columns:", dea_nsc.columns.tolist())
-        
-        # Add timeout for file operations
-        def load_with_timeout(filepath, timeout=30):
-            """Load file with timeout"""
-            start_time = time.time()
-            while not os.path.exists(filepath):
-                if time.time() - start_time > timeout:
-                    print(f"Timeout waiting for file: {filepath}")
-                    return None
-                time.sleep(1)
-            return filepath
 
         def validate_peak_file(df, sample_name):
             """Validate peak file contents"""
@@ -169,11 +158,16 @@ def load_data():
         depths_exo = {}
         depths_endo = {}
         
+        # Update BAM file path to use ALIGN_DIR
+        ALIGN_DIR = f"{args.working_dir}/results_1b/aligned"
+        
         # Load exogenous samples
         for sample in exo_samples:
             peak_file = f"{RESULTS_DIR}/peaks/{sample}_peaks.narrowPeak"
             peaks_exo[sample] = load_peak_file(peak_file, sample)
-            depths_exo[sample] = calculate_sequencing_depth_safe(f"{DATA_DIR}/aligned/{sample}.bam")
+            # Update BAM file path
+            bam_file = f"{ALIGN_DIR}/{sample}.bam"
+            depths_exo[sample] = calculate_sequencing_depth_safe(bam_file)
             
             if not peaks_exo[sample].empty:
                 peaks_exo[sample] = normalize_signals(peaks_exo[sample], depths_exo[sample])
@@ -182,7 +176,9 @@ def load_data():
         for sample in endo_samples:
             peak_file = f"{RESULTS_DIR}/peaks/{sample}_peaks.narrowPeak"
             peaks_endo[sample] = load_peak_file(peak_file, sample)
-            depths_endo[sample] = calculate_sequencing_depth_safe(f"{DATA_DIR}/aligned/{sample}.bam")
+            # Update BAM file path
+            bam_file = f"{ALIGN_DIR}/{sample}.bam"
+            depths_endo[sample] = calculate_sequencing_depth_safe(bam_file)
             
             if not peaks_endo[sample].empty:
                 peaks_endo[sample] = normalize_signals(peaks_endo[sample], depths_endo[sample])

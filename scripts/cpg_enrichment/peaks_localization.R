@@ -60,6 +60,9 @@ both_peaks <- read_peak_file("mecp2_cpg_enrichment_parallel_both.csv")
 # Get TSS annotations
 txdb <- TxDb.Mmusculus.UCSC.mm10.knownGene
 
+# Create peaks_annotation directory if it doesn't exist
+dir.create("peaks_annotation", showWarnings = FALSE)
+
 # Analyze peak distribution relative to TSS
 analyze_peaks <- function(peaks, name) {
   # Annotate peaks
@@ -69,7 +72,7 @@ analyze_peaks <- function(peaks, name) {
                           annoDb = "org.Mm.eg.db")
   
   # Plot peak distribution
-  pdf(paste0(name, "_distribution.pdf"))
+  pdf(paste0("peaks_annotation/", name, "_distribution.pdf"))
   plotAnnoPie(peakAnno)
   plotDistToTSS(peakAnno)
   dev.off()
@@ -98,9 +101,9 @@ exo_tss <- get_tss_peaks(exo_only_peaks, exo_anno)
 both_tss <- get_tss_peaks(both_peaks, both_anno)
 
 # Save TSS-proximal peaks
-write_csv(endo_tss, "endo_only_tss_peaks.csv")
-write_csv(exo_tss, "exo_only_tss_peaks.csv")
-write_csv(both_tss, "both_tss_peaks.csv")
+write_csv(endo_tss, "peaks_annotation/endo_only_tss_peaks.csv")
+write_csv(exo_tss, "peaks_annotation/exo_only_tss_peaks.csv")
+write_csv(both_tss, "peaks_annotation/both_tss_peaks.csv")
 
 # Generate summary statistics
 summary_stats <- data.frame(
@@ -112,7 +115,7 @@ summary_stats <- data.frame(
 summary_stats <- summary_stats %>%
   mutate(Percent_TSS = (TSS_Proximal / Total_Peaks) * 100)
 
-write_csv(summary_stats, "peak_location_summary.csv")
+write_csv(summary_stats, "peaks_annotation/peak_location_summary.csv")
 
 # Plot distribution of distances to TSS
 plot_tss_dist <- function(anno_list, names) {
@@ -130,7 +133,7 @@ plot_tss_dist <- function(anno_list, names) {
          y = "Density",
          title = "Distribution of Peak Distances to TSS")
   
-  ggsave("tss_distance_distribution.pdf", width = 10, height = 6)
+  ggsave("peaks_annotation/tss_distance_distribution.pdf", width = 10, height = 6)
 }
 
 plot_tss_dist(
@@ -138,10 +141,12 @@ plot_tss_dist(
   c("Endo Only", "Exo Only", "Both")
 )
 
+#####################################################################################################################################
+
 # Enhanced genomic annotation analysis
 analyze_genomic_regions <- function(peaks, name) {
     # Create output directory for plots
-    dir.create("genomic_annotation_plots", showWarnings = FALSE)
+    dir.create("peaks_annotation_adv", showWarnings = FALSE)
     
     # 1. Detailed genomic annotation
     detailed_anno <- annotatePeak(peaks,
@@ -154,7 +159,7 @@ analyze_genomic_regions <- function(peaks, name) {
     # 2. Generate comprehensive plots
     
     # Pie chart of genomic annotations
-    pdf(paste0("genomic_annotation_plots/", name, "_pie_chart.pdf"))
+    pdf(paste0("peaks_annotation_adv/", name, "_pie_chart.pdf"))
     plotAnnoPie(detailed_anno)
     dev.off()
     
@@ -203,7 +208,7 @@ create_comparative <- function(endo_analysis, exo_analysis, both_analysis) {
         spread(category, percentage) %>%
         arrange(desc(`Both`))
     
-    write_csv(summary_table, "genomic_annotation_plots/region_distribution_summary.csv")
+    write_csv(summary_table, "peaks_annotation_adv/region_distribution_summary.csv")
 }
 
 create_comparative(endo_analysis, exo_analysis, both_analysis)
@@ -233,13 +238,13 @@ calculate_feature_enrichment <- function(peaks, name) {
     
     # Plot results
     if (!is.null(ego) && nrow(ego) > 0) {
-        pdf(paste0("genomic_annotation_plots/", name, "_GO_enrichment.pdf"))
+        pdf(paste0("peaks_annotation_adv/", name, "_GO_enrichment.pdf"))
         print(dotplot(ego, showCategory = 15, title = paste(name, "GO Enrichment")))
         dev.off()
         
         # Save results to CSV
         write.csv(as.data.frame(ego), 
-                 file = paste0("genomic_annotation_plots/", name, "_GO_enrichment.csv"))
+                 file = paste0("peaks_annotation_adv/", name, "_GO_enrichment.csv"))
     }
     
     return(ego)
@@ -251,6 +256,6 @@ exo_enrichment <- calculate_feature_enrichment(exo_only_peaks, "exo_only")
 both_enrichment <- calculate_feature_enrichment(both_peaks, "both")
 
 # Save all statistics
-write_csv(endo_analysis$detailed_stats, "genomic_annotation_plots/endo_only_detailed_stats.csv")
-write_csv(exo_analysis$detailed_stats, "genomic_annotation_plots/exo_only_detailed_stats.csv")
-write_csv(both_analysis$detailed_stats, "genomic_annotation_plots/both_detailed_stats.csv")
+write_csv(endo_analysis$detailed_stats, "peaks_annotation_adv/endo_only_detailed_stats.csv")
+write_csv(exo_analysis$detailed_stats, "peaks_annotation_adv/exo_only_detailed_stats.csv")
+write_csv(both_analysis$detailed_stats, "peaks_annotation_adv/both_detailed_stats.csv")

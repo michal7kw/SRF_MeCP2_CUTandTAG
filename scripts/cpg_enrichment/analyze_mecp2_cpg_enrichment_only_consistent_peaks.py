@@ -315,6 +315,32 @@ def get_sequencing_depths(bam_dir: str) -> Dict[str, int]:
             
     return depths
 
+def load_peak_files(peak_dir: Path, pattern: str = "*_peaks.narrowPeak") -> Dict[str, BedTool]:
+    """Load peak files from directory"""
+    logger.info(f"Checking peaks directory: {peak_dir}")
+    logger.info(f"Directory exists: {peak_dir.exists()}")
+    
+    if not peak_dir.exists():
+        raise ValueError(f"Peak directory does not exist: {peak_dir}")
+        
+    # Use glob to find peak files
+    peak_files = list(peak_dir.glob(pattern))
+    logger.info(f"Directory contents: {peak_files}")
+    
+    # Create dictionary of BedTool objects
+    peaks = {}
+    for peak_file in peak_files:
+        try:
+            # Extract sample name from filename
+            sample_name = peak_file.stem  # Remove .narrowPeak extension
+            peaks[sample_name] = BedTool(str(peak_file))
+            logger.info(f"Loaded peak file: {peak_file}")
+        except Exception as e:
+            logger.error(f"Error loading {peak_file}: {e}")
+            
+    logger.info(f"Found {len(peaks)} peak files: {list(peaks.keys())}")
+    return peaks
+
 def main():
     # Parse arguments
     import argparse
@@ -348,37 +374,14 @@ def main():
     logger.info(f"Directory exists: {os.path.exists(args.endo_peaks_dir)}")
     logger.info(f"Directory contents: {list(Path(args.endo_peaks_dir).glob('*'))}")
 
-    # Load data
+    # Load peak files with more detailed logging
     logger.info("Loading peak files...")
-    exo_peaks = {}
-    endo_peaks = {}
+    exo_peaks = load_peak_files(Path(args.exo_peaks_dir))
+    endo_peaks = load_peak_files(Path(args.endo_peaks_dir))
     
-    # Load exogenous peaks
-    exo_files = list(Path(args.exo_peaks_dir).glob('*.filtered.narrowPeak'))
-    logger.info(f"Found {len(exo_files)} exo peak files: {[f.name for f in exo_files]}")
-    
-    for peak_file in exo_files:
-        sample_name = peak_file.stem  # e.g., 'NeuV1_peaks'
-        try:
-            peaks_df = analyzer.load_peak_data(str(peak_file))
-            logger.info(f"Successfully loaded {len(peaks_df)} peaks from {peak_file.name}")
-            exo_peaks[sample_name] = peaks_df
-        except Exception as e:
-            logger.error(f"Failed to load {peak_file}: {str(e)}")
-    
-    # Load endogenous peaks
-    endo_files = list(Path(args.endo_peaks_dir).glob('*.filtered.narrowPeak'))
-    logger.info(f"Found {len(endo_files)} endo peak files: {[f.name for f in endo_files]}")
-    
-    for peak_file in endo_files:
-        sample_name = peak_file.stem
-        try:
-            peaks_df = analyzer.load_peak_data(str(peak_file))
-            logger.info(f"Successfully loaded {len(peaks_df)} peaks from {peak_file.name}")
-            endo_peaks[sample_name] = peaks_df
-        except Exception as e:
-            logger.error(f"Failed to load {peak_file}: {str(e)}")
-
+    if not exo_peaks or not endo_peaks:
+        raise ValueError("No peak files found in one or both directories")
+        
     # Load CpG islands
     logger.info(f"Loading CpG islands from: {args.cpg_islands}")
     logger.info(f"CpG file exists: {os.path.exists(args.cpg_islands)}")

@@ -18,24 +18,33 @@ conda activate snakemake
 
 mkdir -p logs
 
-# Define base directory
+# Base paths
 BASE_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG"
-
-# Define directories relative to base
 WORKING_DIR="${BASE_DIR}/iterative_alternative"
-DATA_DIR="${WORKING_DIR}/results_1b"
-PEAKS_DIR="${WORKING_DIR}/results_2_align2_005/peaks/narrow"
-OUTPUT_DIR="${WORKING_DIR}/results_5_align2_005/peaks_common_promoters_NSC"
 GTF_PATH="${BASE_DIR}/DATA/gencode.vM10.annotation.gtf"
 
-echo "Creating output directory..."
-mkdir -p "${OUTPUT_DIR}"
+# Process both narrow and broad peaks
+for PEAK_TYPE in narrow broad; do
+    echo "Processing ${PEAK_TYPE} peaks..."
+    
+    # Input paths
+    PEAKS_DIR="${WORKING_DIR}/results_2_align2_005/peaks/${PEAK_TYPE}"
 
-echo "Running gene annotation analysis..."
-python -u ../scripts/peaks_common/peaks_common_promoters_NSC.py \
-    --gtf-path "${GTF_PATH}" \
-    --peaks-dir "${PEAKS_DIR}" \
-    --output-dir "${OUTPUT_DIR}" \
-    2>&1 | tee "logs/peaks_common_promoters_NSC.out"
+    # Output paths 
+    OUTPUT_DIR="${WORKING_DIR}/results_5_align2_005/peaks_common_promoters_NSC_${PEAK_TYPE}"
 
-echo "Analysis complete. Results are in ${OUTPUT_DIR}"
+    # Create output directories
+    echo "Creating directory structure for ${PEAK_TYPE} peaks..."
+    rm -rf "${OUTPUT_DIR}"
+    mkdir -p "${OUTPUT_DIR}"
+
+    # Run analysis script
+    python -u ../scripts/peaks_common/peaks_common_promoters_NSC.py \
+        --gtf-path "${GTF_PATH}" \
+        --peaks-dir "${PEAKS_DIR}" \
+        --output-dir "${OUTPUT_DIR}" \
+        --peak-type "${PEAK_TYPE}" \
+        2>&1 | tee "logs/peaks_common_promoters_NSC_${PEAK_TYPE}.out"
+
+    echo "Analysis complete for ${PEAK_TYPE} peaks. Results are in ${OUTPUT_DIR}"
+done

@@ -155,6 +155,7 @@ def main():
     parser.add_argument('--peaks-dir', required=True, help='Directory containing narrowPeak files')
     parser.add_argument('--output-dir', required=True, help='Output directory for plots')
     parser.add_argument('--cpg-path', required=True, help='Path to CpG islands annotation file')
+    parser.add_argument('--peak-type', required=True, choices=['narrow', 'broad'], help='Type of peaks to process: narrow or broad')
     args = parser.parse_args()
     
     # Load gene annotations
@@ -166,10 +167,10 @@ def main():
     # Create output directory
     os.makedirs(args.output_dir, exist_ok=True)
     
-    # Define peak files
+    # Define peak files based on peak type
     peak_files = {
-        'endo': os.path.join(args.peaks_dir, "NPCs_endo_combined.narrowPeak"),
-        'exo': os.path.join(args.peaks_dir, "NPCs_exo_combined.narrowPeak")
+        'endo': os.path.join(args.peaks_dir, f"NPCs_endo_combined.{args.peak_type}Peak"),
+        'exo': os.path.join(args.peaks_dir, f"NPCs_exo_combined.{args.peak_type}Peak")
     }
     
     # Process files

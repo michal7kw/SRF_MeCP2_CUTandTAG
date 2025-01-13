@@ -22,7 +22,9 @@ source /opt/common/tools/ric.cosr/miniconda3/bin/activate /beegfs/scratch/ric.br
 
 # Create output directories
 RESULTS_DIR="results_1b"
-mkdir -p ${RESULTS_DIR}/qc/distribution_plots
+OUTPUT_DIR="additional_scripts" 
+
+mkdir -p ${OUTPUT_DIR}/distribution_plots
 
 # Get sample lists for Neurons
 NEURONS_EXO=($(ls ../DATA/EXOGENOUS/NeuV*_R1_001.fastq.gz | xargs -n 1 basename | sed 's/_R1_001.fastq.gz//'))
@@ -61,12 +63,12 @@ generate_matrices() {
         -S $exo_bigwigs $endo_bigwigs \
         --skipZeros \
         --numberOfProcessors 8 \
-        -o ${RESULTS_DIR}/qc/distribution_plots/${output_prefix}_matrix.gz
+        -o ${OUTPUT_DIR}/distribution_plots/${output_prefix}_matrix.gz
     
     # Plot profile
     plotProfile \
-        -m ${RESULTS_DIR}/qc/distribution_plots/${output_prefix}_matrix.gz \
-        -o ${RESULTS_DIR}/qc/distribution_plots/${output_prefix}_profile.png \
+        -m ${OUTPUT_DIR}/distribution_plots/${output_prefix}_matrix.gz \
+        -o ${OUTPUT_DIR}/distribution_plots/${output_prefix}_profile.png \
         --plotTitle "MeCP2 distribution at ${region} (${cell_type})" \
         --averageType mean \
         --perGroup \

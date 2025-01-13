@@ -22,18 +22,26 @@ mkdir -p logs
 
 # Base directories
 BASE_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG"
-PROJ_DIR="${BASE_DIR}/iterative_alternative"
+WORKING_DIR="${BASE_DIR}/iterative_alternative"
 
-# Analysis directories
-PEAKS_DIR="${PROJ_DIR}/results_2_align2_005/peaks/narrow"
-OUTPUT_DIR="${PROJ_DIR}/results_5_align2_005/peaks_annotation_NSC_combined_R"
+# Process both narrow and broad peaks
+for PEAK_TYPE in narrow broad; do
+    echo "Processing ${PEAK_TYPE} peaks..."
+    
+    # Input paths
+    PEAKS_DIR="${WORKING_DIR}/results_2_align2_005/peaks/${PEAK_TYPE}"
+    
+    # Output paths
+    OUTPUT_DIR="${WORKING_DIR}/results_5_align2_005/peaks_annotation_NSC_combined_R_${PEAK_TYPE}"
 
-# Remove OUTPUT_DIR if it exists and recreate it
-rm -rf "${OUTPUT_DIR}"
-mkdir -p "${OUTPUT_DIR}"
+    # Remove OUTPUT_DIR if it exists and recreate it
+    rm -rf "${OUTPUT_DIR}"
+    mkdir -p "${OUTPUT_DIR}"
 
-# Run the R script with quoted arguments
-Rscript ../scripts/peaks_annotation/peaks_annotation_NSC_combined_R.R \
-    --peaks-dir "${PEAKS_DIR}" \
-    --output-dir "${OUTPUT_DIR}" \
-    2>&1 | tee "logs/peaks_annotation_NSC_combined_R.out" 
+    # Run the R script with quoted arguments
+    Rscript ../scripts/peaks_annotation/peaks_annotation_NSC_combined_R.R \
+        --peaks-dir "${PEAKS_DIR}" \
+        --output-dir "${OUTPUT_DIR}" \
+        --peak-type "${PEAK_TYPE}" \
+        2>&1 | tee "logs/peaks_annotation_NSC_combined_R_${PEAK_TYPE}.out"
+done
