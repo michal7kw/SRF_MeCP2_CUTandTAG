@@ -110,6 +110,7 @@ iterative_alternative/analyze_mecp2_cpg_enrichment_align2_005/
 iterative_alternative/results_1/
 iterative_alternative/results_2_align1_005/
 iterative_alternative/results_5_align1_005/
+iterative_alternative/results_5_align2_005/new_to_do
 
 # Files larger than 100MB (GitHub's file size limit)
 *.[!g][!i][!t]* filter=lfs diff=lfs merge=lfs -text size>=100M

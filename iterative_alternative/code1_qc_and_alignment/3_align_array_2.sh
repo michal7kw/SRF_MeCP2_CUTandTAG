@@ -16,10 +16,9 @@
 GENOME_INDEX="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/mm10_bowtie2_index/mm10"
 MIN_FRAGMENT=100
 MAX_FRAGMENT=700
-SORT_MEMORY="16G"
+SORT_MEMORY="8G"
 THREADS=32
 TMP_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative/tmpb"
-TOTAL_MEMORY="64G"
 
 INPUT_DIR="results_1"
 RESULTS_DIR="results_1b"
