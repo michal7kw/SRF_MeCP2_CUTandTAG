@@ -1,4 +1,0 @@
-chr,peak_start,peak_end,gene_name,signalValue,source,regulation,log2FoldChange,padj,binding_category
-chr17,12206954,12207650,Agpat4,"{15616: 12.3343, 20096: 18.788}","['exo', 'endo']",unchanged,0.487018245,2.06407e-05,both-exo-enriched
-chr8,80991441,80992101,Usp38,"{35880: 18.6136, 46877: 6.1475}","['exo', 'endo']",unchanged,0.086439471,0.397874032,both-exo-enriched
-chr8,129233823,129234866,2610044O15Rik8,"{36961: 30.2915, 48365: 34.7773}","['exo', 'endo']",unchanged,-0.348936344,0.002042647,both-exo-enriched
