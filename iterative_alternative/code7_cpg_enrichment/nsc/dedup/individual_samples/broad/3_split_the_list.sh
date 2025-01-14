@@ -7,11 +7,11 @@
 #SBATCH --ntasks=1
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/cpg_enrichment/nsc/dedup/individual_samples/narrow/split_the_list.err"
-#SBATCH --output="logs/cpg_enrichment/nsc/dedup/individual_samples/narrow/split_the_list.out"
+#SBATCH --error="logs/cpg_enrichment/nsc/dedup/individual_samples/broad/split_the_list.err"
+#SBATCH --output="logs/cpg_enrichment/nsc/dedup/individual_samples/broad/split_the_list.out"
 
 CELL_LINE="NSC"
-PEAKS="narrow"
+PEAKS="broad"
 
 BASE_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG"
 WORKING_DIR="${BASE_DIR}/iterative_alternative"

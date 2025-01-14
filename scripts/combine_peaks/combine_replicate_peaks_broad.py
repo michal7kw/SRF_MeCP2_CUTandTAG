@@ -126,7 +126,12 @@ def main():
     args = parser.parse_args()
     
     # Define file patterns based on condition
-    if args.condition == 'endo':
+    # if args.condition == 'endo':
+    #     pattern = 'NSCv'
+    # else:
+    #     pattern = 'NSCM'
+    # !!!!!!!!!!! AAAAAAAAAAAAAA !!!!!!!!!!
+    if args.condition == 'exo':
         pattern = 'NSCv'
     else:
         pattern = 'NSCM'

@@ -8,11 +8,11 @@
 #SBATCH --mail-type=ALL
 #SBATCH --exclusive
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/cpg_enrichment/nsc/dedup/individual_samples/narrow/analyze_coding_sequences.err"
-#SBATCH --output="logs/cpg_enrichment/nsc/dedup/individual_samples/narrow/analyze_coding_sequences.out"
+#SBATCH --error="logs/cpg_enrichment/nsc/dedup/individual_samples/broad/analyze_coding_sequences.err"
+#SBATCH --output="logs/cpg_enrichment/nsc/dedup/individual_samples/broad/analyze_coding_sequences.out"
 
 CELL_LINE="NSC"
-PEAKS="narrow"
+PEAKS="broad"
 
 BASE_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG"
 WORKING_DIR="${BASE_DIR}/iterative_alternative"
