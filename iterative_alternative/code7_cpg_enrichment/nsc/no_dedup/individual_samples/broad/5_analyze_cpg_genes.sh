@@ -7,11 +7,11 @@
 #SBATCH --ntasks=1
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/cpg_enrichment/nsc/no_dedup/individual_samples/narrow/analyze_cpg_genes.err"
-#SBATCH --output="logs/cpg_enrichment/nsc/no_dedup/individual_samples/narrow/analyze_cpg_genes.out"
+#SBATCH --error="logs/cpg_enrichment/nsc/no_dedup/individual_samples/broad/analyze_cpg_genes.err"
+#SBATCH --output="logs/cpg_enrichment/nsc/no_dedup/individual_samples/broad/analyze_cpg_genes.out"
 
 CELL_LINE="NSC"
-PEAKS="narrow"
+PEAKS="broad"
 
 BASE_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG"
 WORKING_DIR="${BASE_DIR}/iterative_alternative"
