@@ -7,8 +7,8 @@
 #SBATCH --ntasks=1
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/cpg_enrichment/nsc/no_dedup/individual_samples/broad/analyze_cpg_genes.err"
-#SBATCH --output="logs/cpg_enrichment/nsc/no_dedup/individual_samples/broad/analyze_cpg_genes.out"
+#SBATCH --error="logs/cpg_enrichment/nsc/no_dedup/individual_samples/broad/analyze_cpg_genes_with_flanking.err"
+#SBATCH --output="logs/cpg_enrichment/nsc/no_dedup/individual_samples/broad/analyze_cpg_genes_with_flanking.out"
 
 CELL_LINE="NSC"
 PEAKS="broad"

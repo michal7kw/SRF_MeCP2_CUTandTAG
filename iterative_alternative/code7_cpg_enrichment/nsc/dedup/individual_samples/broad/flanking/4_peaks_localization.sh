@@ -7,8 +7,8 @@
 #SBATCH --ntasks=1
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/cpg_enrichment/nsc/dedup/individual_samples/broad/peaks_localization.err"
-#SBATCH --output="logs/cpg_enrichment/nsc/dedup/individual_samples/broad/peaks_localization.out"
+#SBATCH --error="logs/cpg_enrichment/nsc/dedup/individual_samples/broad/peaks_localization_with_flanking.err"
+#SBATCH --output="logs/cpg_enrichment/nsc/dedup/individual_samples/broad/peaks_localization_with_flanking.out"
 
 CELL_LINE="NSC"
 PEAKS="broad"

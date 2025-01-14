@@ -7,8 +7,8 @@
 #SBATCH --ntasks=16
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/cpg_enrichment/nsc/dedup/from_individual_samples/narrow/cpg_enrichment_consistent_peaks.err"
-#SBATCH --output="logs/cpg_enrichment/nsc/dedup/from_individual_samples/narrow/cpg_enrichment_consistent_peaks.out"
+#SBATCH --error="logs/cpg_enrichment/nsc/dedup/individual_samples/narrow/cpg_enrichment_consistent_peaks.err"
+#SBATCH --output="logs/cpg_enrichment/nsc/dedup/individual_samples/narrow/cpg_enrichment_consistent_peaks.out"
 #SBATCH --array=0-9  # Process in 10 chunks
 
 ALIGNMENT="results_1b"

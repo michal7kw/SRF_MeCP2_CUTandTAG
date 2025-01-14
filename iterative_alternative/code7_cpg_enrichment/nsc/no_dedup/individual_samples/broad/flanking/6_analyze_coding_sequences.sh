@@ -8,8 +8,8 @@
 #SBATCH --mail-type=ALL
 #SBATCH --exclusive
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/cpg_enrichment/nsc/no_dedup/individual_samples/broad/analyze_coding_sequences.err"
-#SBATCH --output="logs/cpg_enrichment/nsc/no_dedup/individual_samples/broad/analyze_coding_sequences.out"
+#SBATCH --error="logs/cpg_enrichment/nsc/no_dedup/individual_samples/broad/analyze_coding_sequences_with_flanking.err"
+#SBATCH --output="logs/cpg_enrichment/nsc/no_dedup/individual_samples/broad/analyze_coding_sequences_with_flanking.out"
 
 CELL_LINE="NSC"
 PEAKS="broad"
