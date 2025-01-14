@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=align_1
 #SBATCH --account=kubacki.michal
-#SBATCH --mem=32GB
+#SBATCH --mem=64GB
 #SBATCH --time=12:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=32
@@ -63,7 +63,7 @@ SAMPLE=${ALL_SAMPLES[$SLURM_ARRAY_TASK_ID]}
 # Set parameters
 GENOME_INDEX="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/mm10_bowtie2_index/mm10"
 MAX_FRAGMENT=1000
-SORT_MEMORY="32G"
+SORT_MEMORY="8G"
 THREADS=32
 TMP_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative/tmp"
 

@@ -53,9 +53,9 @@ read_peak_file <- function(file_path) {
 }
 
 # Read the three peak files
-endo_only_peaks <- read_peak_file("mecp2_cpg_enrichment_parallel_endo_only.csv")
-exo_only_peaks <- read_peak_file("mecp2_cpg_enrichment_parallel_exo_only.csv")
-both_peaks <- read_peak_file("mecp2_cpg_enrichment_parallel_both.csv")
+endo_only_peaks <- read_peak_file("cpg_enrichment_endo_only.csv")
+exo_only_peaks <- read_peak_file("cpg_enrichment_exo_only.csv")
+both_peaks <- read_peak_file("cpg_enrichment_both.csv")
 
 # Get TSS annotations
 txdb <- TxDb.Mmusculus.UCSC.mm10.knownGene

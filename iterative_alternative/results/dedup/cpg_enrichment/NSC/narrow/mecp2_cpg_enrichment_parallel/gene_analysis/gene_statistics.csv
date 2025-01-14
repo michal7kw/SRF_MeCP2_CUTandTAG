@@ -1,0 +1,4 @@
+category,unique_genes,mean_distance,median_distance
+Both,2468,35.644904458598724,0
+Endo Only,1061,55.47427502338634,0
+Exo Only,774,19.718670076726344,0

@@ -76,9 +76,9 @@ process_gene_data <- function(file_path, category) {
 }
 
 # Read the TSS-proximal peaks data
-endo_genes <- process_gene_data("endo_only_tss_peaks.csv", "Endo Only")
-exo_genes <- process_gene_data("exo_only_tss_peaks.csv", "Exo Only")
-both_genes <- process_gene_data("both_tss_peaks.csv", "Both")
+endo_genes <- process_gene_data("peaks_annotation/endo_only_tss_peaks.csv", "Endo Only")
+exo_genes <- process_gene_data("peaks_annotation/exo_only_tss_peaks.csv", "Exo Only")
+both_genes <- process_gene_data("peaks_annotation/both_tss_peaks.csv", "Both")
 
 # Combine all gene data
 all_genes <- bind_rows(endo_genes, exo_genes, both_genes)
@@ -133,7 +133,7 @@ tryCatch({
 # Calculate enrichment scores for dual-targeted regions
 calculate_enrichment_scores <- function(both_data) {
     # Read the original peak files to get signal values
-    both_peaks <- read_csv("mecp2_cpg_enrichment_parallel_both.csv")
+    both_peaks <- read_csv("cpg_enrichment_both.csv")
     
     enrichment_scores <- both_peaks %>%
         select(chr, start, end, exo_signal, endo_signal, enrichment) %>%

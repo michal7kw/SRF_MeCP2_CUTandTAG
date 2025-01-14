@@ -489,7 +489,7 @@ def main():
     save_categorized_results(results, args.results_dir, args.peak_type)
     
     # Print summary
-    print("\nAnalysis Summary:")
+    print(f"\nAnalysis Summary for {args.peak_type} peaks:")
     print(results['category'].value_counts())
     
     # Save detailed statistics

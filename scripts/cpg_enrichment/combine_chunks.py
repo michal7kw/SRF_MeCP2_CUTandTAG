@@ -6,7 +6,7 @@ import argparse
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Combine chunk files from CPG enrichment analysis')
-    parser.add_argument('--results-dir', required=True,
+    parser.add_argument('--work-dir', required=True,
                       help='Directory containing the chunk files')
     return parser.parse_args()
 
@@ -29,7 +29,7 @@ def read_chunk_safely(file_path):
 
 def main():
     args = parse_args()
-    chunks = sorted(glob.glob(os.path.join(args.results_dir, "chunk_*.csv")))
+    chunks = sorted(glob.glob(os.path.join(args.work_dir, "chunk_*.csv")))
     print(f"Found {len(chunks)} chunk files")
 
     dfs = []
@@ -43,7 +43,7 @@ def main():
         sys.exit(1)
 
     combined = pd.concat(dfs, ignore_index=True)
-    output_file = os.path.join(args.results_dir, "mecp2_cpg_enrichment_parallel.csv")
+    output_file = os.path.join(args.work_dir, "cpg_enrichment_parallel.csv")
     combined.to_csv(output_file, index=False)
     print(f"Combined {len(dfs)} valid chunks into {output_file}")
     print(f"Total rows in combined file: {len(combined)}")
