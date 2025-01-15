@@ -44,6 +44,7 @@ python ${SCRIPT_DIR}/cpg_enrichment_2_rep_in_peaks.py \
     --chunk-id $SLURM_ARRAY_TASK_ID \
     --total-chunks 10 \
     --exo-peaks ${PEAKS_BASE_DIR}/exo \
-    --endo-peaks ${PEAKS_BASE_DIR}/endo
+    --endo-peaks ${PEAKS_BASE_DIR}/endo \
+    --cell-type ${CELL_LINE}
 
     

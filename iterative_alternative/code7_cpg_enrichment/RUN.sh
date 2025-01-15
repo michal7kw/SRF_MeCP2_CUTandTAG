@@ -1,0 +1,25 @@
+### NEU
+
+sbatch code7_cpg_enrichment/neu/no_dedup/individual_samples/broad/across_peaks_bw_signal_1_rep/1_cpg_enrichment.sh 
+sbatch code7_cpg_enrichment/neu/no_dedup/individual_samples/broad/across_peaks_bw_signal_2_rep/1_cpg_enrichment.sh 
+sbatch code7_cpg_enrichment/neu/no_dedup/individual_samples/broad/across_cpgs_bw_signal_1_rep/1_cpg_enrichment.sh 
+sbatch code7_cpg_enrichment/neu/no_dedup/individual_samples/broad/across_cpgs_bw_signal_2_rep/1_cpg_enrichment.sh 
+
+sbatch code7_cpg_enrichment/neu/no_dedup/individual_samples/broad/across_peaks_bw_signal_1_rep/2_combine_chunks.sh 
+sbatch code7_cpg_enrichment/neu/no_dedup/individual_samples/broad/across_peaks_bw_signal_2_rep/2_combine_chunks.sh
+sbatch code7_cpg_enrichment/neu/no_dedup/individual_samples/broad/across_cpgs_bw_signal_1_rep/2_combine_chunks.sh 
+sbatch code7_cpg_enrichment/neu/no_dedup/individual_samples/broad/across_cpgs_bw_signal_2_rep/2_combine_chunks.sh 
+
+
+
+### NSC
+
+sbatch code7_cpg_enrichment/nsc/no_dedup/individual_samples/broad/across_peaks_bw_signal_1_rep/1_cpg_enrichment.sh 
+sbatch code7_cpg_enrichment/nsc/no_dedup/individual_samples/broad/across_peaks_bw_signal_2_rep/1_cpg_enrichment.sh 
+sbatch code7_cpg_enrichment/nsc/no_dedup/individual_samples/broad/across_cpgs_bw_signal_1_rep/1_cpg_enrichment.sh 
+sbatch code7_cpg_enrichment/nsc/no_dedup/individual_samples/broad/across_cpgs_bw_signal_2_rep/1_cpg_enrichment.sh 
+
+sbatch code7_cpg_enrichment/nsc/no_dedup/individual_samples/broad/across_peaks_bw_signal_1_rep/2_combine_chunks.sh 
+sbatch code7_cpg_enrichment/nsc/no_dedup/individual_samples/broad/across_peaks_bw_signal_2_rep/2_combine_chunks.sh
+sbatch code7_cpg_enrichment/nsc/no_dedup/individual_samples/broad/across_cpgs_bw_signal_1_rep/2_combine_chunks.sh 
+sbatch code7_cpg_enrichment/nsc/no_dedup/individual_samples/broad/across_cpgs_bw_signal_2_rep/2_combine_chunks.sh 

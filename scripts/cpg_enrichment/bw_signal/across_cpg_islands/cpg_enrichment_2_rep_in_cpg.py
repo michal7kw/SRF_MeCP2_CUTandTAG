@@ -293,6 +293,8 @@ def main():
                        help='Directory containing exogenous peak files')
     parser.add_argument('--endo-peaks-dir', type=str, required=True,
                        help='Directory containing endogenous peak files')
+    parser.add_argument('--cell-type', type=str, required=True, choices=['Neu', 'NSC'],
+                       help='Cell type to analyze (Neu or NSC)')
     args = parser.parse_args()
 
     # Initialize analyzer
@@ -310,16 +312,16 @@ def main():
     exo_bigwigs = {
         f.stem: str(f)
         for f in bigwig_dir.glob("*.bw")
-        if f.stem.startswith(('NeuV', 'NSCv'))
+        if f.stem.startswith(f'{args.cell_type}v') or f.stem.startswith(f'{args.cell_type}V')  # Match v or V
     }
     
     endo_bigwigs = {
         f.stem: str(f)
         for f in bigwig_dir.glob("*.bw")
-        if f.stem.startswith(('NeuM', 'NSCM'))
+        if f.stem.startswith(f'{args.cell_type}M')  # Only match specified cell type
     }
 
-    logger.info(f"Found {len(exo_bigwigs)} exogenous and {len(endo_bigwigs)} endogenous bigWig files")
+    logger.info(f"Found {len(exo_bigwigs)} exogenous and {len(endo_bigwigs)} endogenous bigWig files for {args.cell_type}")
     
     # Load peak files
     exo_peaks_list = analyzer.load_peak_files(args.exo_peaks_dir)
