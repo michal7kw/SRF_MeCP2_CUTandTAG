@@ -16,6 +16,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 CPG_WINDOW = 0
+NUM_REPS = 1
 
 @dataclass
 class EnrichmentConfig:
@@ -121,11 +122,11 @@ class MeCP2CpGAnalyzer:
                 ]
                 endo_overlaps_by_rep.append(overlaps)
 
-            # Check if we have peaks in at least 1 replicate
+            # Check if we have peaks in at least NUM_REPS replicates
             exo_rep_with_peaks = sum(1 for overlaps in exo_overlaps_by_rep if not overlaps.empty)
             endo_rep_with_peaks = sum(1 for overlaps in endo_overlaps_by_rep if not overlaps.empty)
 
-            if exo_rep_with_peaks < 1 and endo_rep_with_peaks < 1:
+            if exo_rep_with_peaks < NUM_REPS and endo_rep_with_peaks < NUM_REPS:
                 continue
 
             # Use CpG island boundaries (± 500bp) for signal calculation
@@ -147,12 +148,12 @@ class MeCP2CpGAnalyzer:
                 region_end
             )
             
-            # Modified consistency check - now requires at least 1 replicate
-            exo_consistent = sum(1 for s in exo_replicates if s > 0) >= 1
-            endo_consistent = sum(1 for s in endo_replicates if s > 0) >= 1
+            # Check for signal in at least NUM_REPS replicates
+            exo_has_signal = sum(1 for s in exo_replicates if s > 0) >= NUM_REPS
+            endo_has_signal = sum(1 for s in endo_replicates if s > 0) >= NUM_REPS
             
             # Skip if not enough signal in replicates
-            if not (exo_consistent or endo_consistent):
+            if not (exo_has_signal or endo_has_signal):
                 continue
             
             # Perform statistical test between replicates if both have signals
@@ -178,15 +179,25 @@ class MeCP2CpGAnalyzer:
             else:
                 enrichment = float('inf') if exo_signal > 0 else 0.0
             
-            # Modified binding type determination
-            if sum(1 for s in exo_replicates if s > 0) >= 1 and sum(1 for s in endo_replicates if s > 0) >= 1:
+            # Determine binding type by signal
+            if exo_has_signal and endo_has_signal:
                 binding_type = 'both'
-            elif sum(1 for s in exo_replicates if s > 0) >= 1:
+            elif exo_has_signal:
                 binding_type = 'exo_only'
-            elif sum(1 for s in endo_replicates if s > 0) >= 1:
+            elif endo_has_signal:
                 binding_type = 'endo_only'
             else:
                 continue
+
+            # Determine binding type by peaks
+            if exo_rep_with_peaks >= NUM_REPS and endo_rep_with_peaks >= NUM_REPS:
+                binding_type_by_peaks = 'both'
+            elif exo_rep_with_peaks >= NUM_REPS:
+                binding_type_by_peaks = 'exo_only'
+            elif endo_rep_with_peaks >= NUM_REPS:
+                binding_type_by_peaks = 'endo_only'
+            else:
+                binding_type_by_peaks = 'none'
             
             # Check significance - modified to be more permissive
             is_significant = (
@@ -211,6 +222,7 @@ class MeCP2CpGAnalyzer:
                 'enrichment': enrichment,
                 'pvalue': pvalue,
                 'binding_type': binding_type,
+                'binding_type_by_peaks': binding_type_by_peaks,
                 'significant': is_significant,
                 
                 # Replicate info

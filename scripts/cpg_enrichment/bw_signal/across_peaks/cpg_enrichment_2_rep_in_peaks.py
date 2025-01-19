@@ -16,6 +16,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 CPG_WINDOW = 0
+NUM_REPS = 2
 
 @dataclass
 class EnrichmentConfig:
@@ -121,12 +122,12 @@ class MeCP2CpGAnalyzer:
                 ]
                 endo_overlaps_by_rep.append(overlaps)
             
-            # Check if we have peaks in at least 2 replicates
+            # Check if we have peaks in at least NUM_REPS replicates
             exo_rep_with_peaks = sum(1 for overlaps in exo_overlaps_by_rep if not overlaps.empty)
             endo_rep_with_peaks = sum(1 for overlaps in endo_overlaps_by_rep if not overlaps.empty)
             
-            # Skip if neither condition has at least 2 replicates with peaks
-            if exo_rep_with_peaks < 2 and endo_rep_with_peaks < 2:
+            # Skip if neither condition has at least NUM_REPS replicates with peaks
+            if exo_rep_with_peaks < NUM_REPS and endo_rep_with_peaks < NUM_REPS:
                 continue
             
             # Get the outer bounds of all overlapping peaks
@@ -157,9 +158,9 @@ class MeCP2CpGAnalyzer:
                 region_end
             )
             
-            # Check for signal in at least 1 replicate
-            exo_has_signal = sum(1 for s in exo_replicates if s > 0) >= 1
-            endo_has_signal = sum(1 for s in endo_replicates if s > 0) >= 1
+            # Check for signal in at least NUM_REPS replicate
+            exo_has_signal = sum(1 for s in exo_replicates if s > 0) >= NUM_REPS
+            endo_has_signal = sum(1 for s in endo_replicates if s > 0) >= NUM_REPS
             
             if not (exo_has_signal or endo_has_signal):
                 continue
@@ -196,6 +197,16 @@ class MeCP2CpGAnalyzer:
             else:
                 continue
             
+            # Determine binding type by peaks
+            if exo_rep_with_peaks >= NUM_REPS and endo_rep_with_peaks >= NUM_REPS:
+                binding_type_by_peaks = 'both'
+            elif exo_rep_with_peaks >= NUM_REPS:
+                binding_type_by_peaks = 'exo_only'
+            elif endo_rep_with_peaks >= NUM_REPS:
+                binding_type_by_peaks = 'endo_only'
+            else:
+                binding_type_by_peaks = 'none'
+            
             # Store results with replicate information
             enrichment_data.append({
                 'chr': cpg['chr'],
@@ -206,6 +217,7 @@ class MeCP2CpGAnalyzer:
                 'enrichment': enrichment,
                 'pvalue': pvalue,
                 'binding_type': binding_type,
+                'binding_type_by_peaks': binding_type_by_peaks,
                 'significant': (
                     (enrichment >= self.config.min_fold_change if endo_signal > 0 else exo_signal > 0) and
                     exo_signal > self.config.min_signal_threshold and

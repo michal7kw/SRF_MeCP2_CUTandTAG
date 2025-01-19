@@ -1,0 +1,33 @@
+
+# configuration 1
+---
+base_dir: "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative"
+run_name: "cpg_enrichment_1_rep_in_cpg"
+cell_type: "NSC"
+alignment_type: "no_dedup"
+peaks_type: "broad"
+
+# configuration 2
+---
+base_dir: "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative"
+run_name: "cpg_enrichment_2_rep_in_cpg"
+cell_type: "NSC"
+alignment_type: "no_dedup"
+peaks_type: "broad"
+
+# configuration 3
+---
+base_dir: "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative"
+run_name: "cpg_enrichment_1_rep_in_peaks"
+cell_type: "NSC"
+alignment_type: "no_dedup"
+peaks_type: "broad"
+
+
+# configuration 4
+---
+base_dir: "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative"
+run_name: "cpg_enrichment_2_rep_in_peaks"
+cell_type: "NSC"
+alignment_type: "no_dedup"
+peaks_type: "broad"
