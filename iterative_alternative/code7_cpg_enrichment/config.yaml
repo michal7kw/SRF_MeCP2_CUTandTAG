@@ -31,3 +31,37 @@ run_name: "cpg_enrichment_2_rep_in_peaks"
 cell_type: "NSC"
 alignment_type: "no_dedup"
 peaks_type: "broad"
+
+
+# configuration 5
+---
+base_dir: "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative"
+run_name: "cpg_enrichment_1_rep_in_cpg"
+cell_type: "Neu"
+alignment_type: "no_dedup"
+peaks_type: "broad"
+
+# configuration 6
+---
+base_dir: "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative"
+run_name: "cpg_enrichment_2_rep_in_cpg"
+cell_type: "Neu"
+alignment_type: "no_dedup"
+peaks_type: "broad"
+
+# configuration 7
+---
+base_dir: "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative"
+run_name: "cpg_enrichment_1_rep_in_peaks"
+cell_type: "Neu"
+alignment_type: "no_dedup"
+peaks_type: "broad"
+
+
+# configuration 8
+---
+base_dir: "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative"
+run_name: "cpg_enrichment_2_rep_in_peaks"
+cell_type: "Neu"
+alignment_type: "no_dedup"
+peaks_type: "broad"
