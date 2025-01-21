@@ -298,7 +298,7 @@ def main():
     )
     
     # Save results
-    output_file = os.path.join(args.output_dir, f"enrichment_chunk_{args.chunk_id}.csv")
+    output_file = os.path.join(args.output_dir, f"chunk_{args.chunk_id}.csv")
     results.to_csv(output_file, index=False)
     
     logger.info(f"Completed chunk {args.chunk_id}. Found {len(results)} enriched regions.")
