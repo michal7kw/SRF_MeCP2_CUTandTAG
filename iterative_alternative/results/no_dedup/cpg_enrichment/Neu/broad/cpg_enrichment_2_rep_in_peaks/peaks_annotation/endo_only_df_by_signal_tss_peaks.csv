@@ -1,0 +1,3 @@
+seqnames,start,end,distanceToTSS,geneId,SYMBOL
+chr1,133163776,133164521,0,240753,Plekha6
+chr6,52240323,52240829,0,15395,Hoxa10
