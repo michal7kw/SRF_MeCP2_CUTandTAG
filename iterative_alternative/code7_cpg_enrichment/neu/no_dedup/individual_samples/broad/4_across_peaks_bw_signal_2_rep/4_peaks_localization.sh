@@ -55,9 +55,12 @@ conda activate snakemake
 
 # Convert the multi-line string to an array
 readarray -t DATA_ARRAY <<EOF
-both_df_by_signal_1.csv
-both_df_by_signal_1_5.csv
-both_df_by_signal_2.csv
+up_enriched_signal_1.csv
+up_enriched_signal_1_5.csv
+up_enriched_signal_2.csv
+down_enriched_signal_1.csv
+down_enriched_signal_08.csv
+down_enriched_signal_05.csv
 exo_only_df_by_signal.csv
 endo_only_df_by_signal.csv
 EOF
@@ -74,13 +77,20 @@ Rscript "${SCRIPT_DIR}/peaks_localization.R" \
 peaks_annotation/
 
 
-# both_df_by_signal_1.csv
-# both_df_by_signal_1_5.csv
-# both_df_by_signal_2.csv
-# both_df_by_peaks_1.csv
-# both_df_by_peaks_1_5.csv
-# both_df_by_peaks_2.csv
+# up_enriched_signal_1.csv
+# up_enriched_signal_1_5.csv
+# up_enriched_signal_2.csv
+# down_enriched_signal_1.csv
+# down_enriched_signal_08.csv
+# down_enriched_signal_05.csv
 # exo_only_df_by_signal.csv
 # endo_only_df_by_signal.csv
+
+# up_enriched_peaks_1.csv
+# up_enriched_peaks_1_5.csv
+# up_enriched_peaks_2.csv
+# down_enriched_peaks_1.csv
+# down_enriched_peaks_08.csv
+# down_enriched_peaks_05.csv
 # exo_only_df_by_peaks.csv
 # endo_only_df_by_peaks.csv
