@@ -1,0 +1,8 @@
+annotation,count,percentage
+3' UTR,1,12.5
+Distal Intergenic,1,12.5
+"Exon (ENSMUST00000073088.2/ENSMUST00000073088.2, exon 1 of 1)",1,12.5
+"Exon (ENSMUST00000117485.2/ENSMUST00000117485.2, exon 1 of 1)",1,12.5
+"Exon (ENSMUST00000166459.1/ENSMUST00000166459.1, exon 1 of 1)",1,12.5
+Promoter (1-2kb),1,12.5
+Promoter (<=1kb),2,25
