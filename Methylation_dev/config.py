@@ -5,11 +5,6 @@ import matplotlib.pyplot as plt
 from typing import List, Dict
 import argparse
 
-# Get experiment name from command line arguments if running as main script
-def get_experiment_name():
-    return os.environ.get('EXPERIMENT_NAME', 'align2_005')
-
-EXPERIMENT = get_experiment_name()
 
 # Configure logging
 logging.basicConfig(
@@ -25,7 +20,8 @@ plt.rcParams['figure.dpi'] = 100
 plt.rcParams['savefig.dpi'] = 300
 
 # Set working directory
-WORKING_DIR = "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/Methylation_dev"
+BASE_DIR = "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG"
+WORKING_DIR = f"{BASE_DIR}/Methylation_dev"
 os.chdir(WORKING_DIR)
 
 # Configuration settings
@@ -94,29 +90,33 @@ CONFIG = {
     }
 }
 
+DEDUPLICATION = "no_dedup"
+CELL_TYPE = "NSC"
+PEAK_CALLING = "broad"
+
 # File paths
 PATHS = {
-    'mecp2_dir': f"/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative/analyze_mecp2_cpg_enrichment_{EXPERIMENT}/NSC/mecp2_cpg_enrichment_parallel",
-    'mecp2_file': "mecp2_cpg_enrichment_parallel.csv",
-    'medip_dir': "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_medip/output_done/bigwig",
-    'gtf_file': "../DATA/gencode.vM10.annotation.gtf",
-    'genome_fasta': "../DATA/mm10.fa",
+    'mecp2_dir': f"{BASE_DIR}/iterative_alternative/results/{DEDUPLICATION}/cpg_enrichment/{CELL_TYPE}/{PEAK_CALLING}/cpg_enrichment_2_rep_in_peaks",
+    'mecp2_file': "cpg_enrichment_parallel.csv",
+    'medip_dir': f"/beegfs/scratch/ric.broccoli/kubacki.michal/DATA/MECP2/MEDIP/output_done",
+    'gtf_file': f"{BASE_DIR}/DATA/gencode.vM10.annotation.gtf",
+    'genome_fasta': f"{BASE_DIR}/DATA/mm10.fa",
     'output_dir': f"analyze_mecp2_cpg_enrichment_{EXPERIMENT}",
-    'cpg_islands_file': "../DATA/cpg_islands.bed",
+    'cpg_islands_file': f"{BASE_DIR}/DATA/cpg_islands.bed",
     'rnaseq': {
-        'NEU': '../iterative_alternative/DATA/DEA_NEU_filtered.csv',
-        'NSC': '../iterative_alternative/DATA/DEA_NSC_filtered.csv'
+        'NEU': f"{BASE_DIR}/iterative_alternative/DATA/DEA_NEU_filtered.csv",
+        'NSC': f"{BASE_DIR}/iterative_alternative/DATA/DEA_NSC_filtered.csv"
     },
     'cache_dir': os.path.join(WORKING_DIR, "analysis_cache"),
     'validation_data': {
-        'bisulfite_data': '../DATA/validation/bisulfite_data.csv',
-        'cpg_islands': '../DATA/validation/cpg_islands.bed',
-        'chromatin_state': '../DATA/validation/chromatin_states.bed'
+        'bisulfite_data': f"{BASE_DIR}/DATA/validation/bisulfite_data.csv",
+        'cpg_islands': f"{BASE_DIR}/DATA/validation/cpg_islands.bed",
+        'chromatin_state': f"{BASE_DIR}/DATA/validation/chromatin_states.bed"
     },
     'genome_features': {
-        'cpg_islands': '../DATA/features/cpg_islands.bed',
-        'regulatory_elements': '../DATA/features/regulatory_elements.bed',
-        'chromatin_states': '../DATA/features/chromatin_states.bed'
+        'cpg_islands': f"{BASE_DIR}/DATA/features/cpg_islands.bed",
+        'regulatory_elements': f"{BASE_DIR}/DATA/features/regulatory_elements.bed",
+        'chromatin_states': f"{BASE_DIR}/DATA/features/chromatin_states.bed"
     }
 }
 

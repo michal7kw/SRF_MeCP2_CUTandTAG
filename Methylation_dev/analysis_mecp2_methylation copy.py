@@ -377,6 +377,75 @@ peak_results = analyze_peak_methylation_patterns(
     ct,
     PATHS['output_dir']
 )
+
+#%% ########################## Run analysis for each cell type ############################################################
+# results = {}
+# tss_results = {}
+
+# for ct, expr_df in expression_data.items():
+#     # Merge datasets
+#     # Merges gene annotations with expression data and MeCP2 binding data
+#     # No files are created - this function only returns a merged DataFrame
+#     # See functions.py for implementation details
+#     merged_df = validate_and_merge_data(genes_df, expr_df, mecp2_binding)
+    
+#     # Calculate methylation levels
+#     # Creates:
+#     # - No files created directly - this function only returns a DataFrame with methylation metrics
+#     # - The returned DataFrame contains columns:
+#     #   - gene_id: Gene identifier
+#     #   - gene_name: Gene name
+#     #   - promoter_methylation: Methylation % in promoter region (0-100)
+#     #   - promoter_cpg_count: Number of CpG sites in promoter
+#     #   - gene_body_methylation: Methylation % in gene body (0-100)
+#     #   - gene_body_cpg_count: Number of CpG sites in gene body
+#     results[ct] = calculate_contextual_methylation(
+#         merged_df,
+#         PATHS['medip_dir'],
+#         ct,
+#         PATHS['genome_fasta'],
+#         n_processes=n_processes
+#     )
+    
+#     # Analyze TSS binding patterns
+#     logger.info(f"Performing TSS binding analysis for {ct}...")
+#     # Creates:
+#     # - {output_dir}/{cell_type}_tss_binding_patterns.pdf (Plot showing TSS binding patterns)
+#     # - {output_dir}/{cell_type}_tss_analysis.txt (Text file with binding statistics)
+#     # - {output_dir}/tss_binding/{cell_type}_exo_enriched.csv (CSV with exo-enriched genes)
+#     # - {output_dir}/tss_binding/{cell_type}_endo_only.csv (CSV with endo-only genes) 
+#     # - {output_dir}/tss_binding/{cell_type}_non_enriched.csv (CSV with non-enriched genes)
+#     tss_results[ct] = analyze_tss_binding_patterns(results[ct], ct, PATHS['output_dir'])
+
+#%% ########################## Load CpG islands ############################################################
+# cpg_islands = load_cpg_islands(PATHS['cpg_islands_file'])
+
+# results = {}
+# tss_results = {}
+
+# for ct, expr_df in expression_data.items():
+#     # Merge datasets
+#     merged_df = validate_and_merge_data(genes_df, expr_df, mecp2_binding)
+    
+#     # Identify CpG-associated genes
+#     cpg_genes = identify_cpg_associated_genes(merged_df, cpg_islands)
+    
+#     # Filter for analysis
+#     filtered_df = filter_for_analysis(merged_df, cpg_genes)
+    
+#     # Calculate methylation levels only for filtered genes
+#     results[ct] = calculate_contextual_methylation(
+#         filtered_df,
+#         PATHS['medip_dir'],
+#         ct,
+#         PATHS['genome_fasta'],
+#         n_processes=n_processes
+#     )
+    
+#     # Analyze TSS binding patterns
+#     logger.info(f"Performing TSS binding analysis for {ct}...")
+#     tss_results[ct] = analyze_tss_binding_patterns(results[ct], ct, PATHS['output_dir'])
+
 # #%%
 # Print all columns without wrapping
 pd.set_option('display.max_columns', None)
@@ -469,3 +538,239 @@ for ct, expr_df in expression_data.items():
 #%%
 print(tss_results['NSC'].keys())
 tss_results['NSC']['exo_enriched']
+
+# #%% Collect all results
+# analysis_results = {
+#     'methylation_results': results,
+#     'tss_results': tss_results,
+#     'genes_df': genes_df,
+#     'expression_data': expression_data,
+#     'mecp2_binding': mecp2_binding
+# }
+
+# #%%
+# print(analysis_results.keys())
+
+# ### Plots ########################################################################################################%% Initialize parameters
+
+# #%% Generate visualizations of methylation patterns
+# # Creates the following files/directories:
+# # - {output_dir}/methylation_plots/
+# #   - {cell_type}_methylation_expression.pdf - Scatterplots of methylation vs expression
+# #   - {cell_type}_methylation_vs_binding.pdf - Scatterplots of methylation vs binding signal
+# #   - {cell_type}_methylation_heatmap.pdf - Heatmap of methylation patterns
+# #   - {cell_type}_binding_proportions.pdf - Bar plots of binding type distributions
+# create_methylation_plots(results, PATHS['output_dir'])
+
+# #%% Perform statistical analysis on methylation data
+# # Creates the following files/directories:
+# # - No files or directories created directly - this function only performs statistical tests
+# #   and returns a dictionary of results that are later saved in statistical_analysis.txt
+# stats_results = perform_statistical_analysis(results)
+
+# #%%
+# print(stats_results.keys())
+# print(stats_results['NSC'])
+
+# #%% Save statistical analysis results
+# with open(f"{PATHS['output_dir']}/statistical_analysis.txt", 'w') as f:
+#     for cell_type, stats in stats_results.items():
+#         f.write(f"\n{cell_type} Analysis:\n")
+#         f.write("="*20 + "\n")
+#         for region, results in stats.items():
+#             f.write(f"\n{region.upper()}:\n")
+#             f.write("-"*20 + "\n")
+            
+#             for test_name, values in results.items():
+#                 f.write(f"{test_name}:\n")
+#                 f.write(f"Statistic: {values['statistic']}\n")
+#                 f.write(f"P-value: {values['pvalue']}\n") 
+
+# #%% Analyze genes regulated by MeCP2
+# methylation_data = analysis_results.get('methylation_results')
+
+# # Verify we have valid methylation data
+# if methylation_data is not None and isinstance(methylation_data, dict):
+#     # Verify each cell type has a DataFrame and add expression status
+#     valid_data = {}
+#     for cell_type, data in methylation_data.items():
+#         if isinstance(data, pd.DataFrame):
+#             # Create a copy and add expression status
+#             df = data.copy()
+#             df['expression_status'] = 'unchanged'
+#             df.loc[(df['log2FoldChange'] > 1) & (df['padj'] < 0.05), 'expression_status'] = 'upregulated'
+#             df.loc[(df['log2FoldChange'] < -1) & (df['padj'] < 0.05), 'expression_status'] = 'downregulated'
+#             valid_data[cell_type] = df
+#         else:
+#             logger.warning(f"Skipping {cell_type}: data is not in DataFrame format")
+    
+#     if valid_data:
+#         # Run analyses with the processed data
+#         create_mecp2_regulated_analysis(valid_data, PATHS['output_dir'])
+#         debug_regulated_genes_filtering(valid_data)
+#         print_regulated_summary_v2(valid_data)
+#         plot_significant_differences(valid_data, PATHS['output_dir'])
+#         plot_mecp2_regulatory_patterns(valid_data, PATHS['output_dir'])
+        
+#         # Run additional analyses
+#         try:
+#             analyze_methylation_patterns_detailed(valid_data, PATHS['output_dir'])
+#             logger.info("Completed detailed methylation analysis")
+#         except Exception as e:
+#             logger.error(f"Error in detailed methylation analysis: {str(e)}")
+        
+#         # Analyze binding enrichment
+#         binding_analysis = {}
+#         for cell_type, df in valid_data.items():
+#             logger.info(f"Analyzing binding enrichment for {cell_type}")
+#             cell_output_dir = os.path.join(PATHS['output_dir'], cell_type)
+#             os.makedirs(cell_output_dir, exist_ok=True)
+#             binding_analysis[cell_type] = analyze_binding_enrichment_groups(df, cell_output_dir)
+        
+#         # Special analyses
+#         analyze_exo_upregulated(valid_data, PATHS['output_dir'])
+#         analyze_binding_enrichment_detailed(valid_data, PATHS['output_dir'])
+#         analyze_exo_enriched_patterns(valid_data, PATHS['output_dir'], exo_enrichment_threshold=1.5)
+        
+#         # Create additional visualizations
+#         for cell_type, df in valid_data.items():
+#             create_additional_visualizations(df, cell_type, PATHS['output_dir'])
+#             create_exo_enriched_comparisons(df, cell_type, PATHS['output_dir'])
+#     else:
+#         logger.error("No valid methylation data found")
+# else:
+#     logger.error("Could not load methylation data from pipeline results")
+
+# #%% Debug data structure
+# print("\nMethylation data structure:")
+# if methylation_data:
+#     for cell_type, data in methylation_data.items():
+#         print(f"\n{cell_type}:")
+#         print(f"Type: {type(data)}")
+#         if isinstance(data, pd.DataFrame):
+#             print(f"Shape: {data.shape}")
+#             print("Columns:", data.columns.tolist())
+#         elif isinstance(data, dict):
+#             print("Keys:", data.keys())
+# else:
+#     print("No methylation data available")
+
+# #%% Cache methylation data for future use
+# if valid_data:
+#     save_to_cache('methylation_results', valid_data)
+#     logger.info("Saved processed methylation data to cache")
+
+# %%
+
+# #%% ########################## Initialize cell types ############################################################
+# cell_types = ['NSC', 'NEU']  # Define all cell types to analyze
+
+# #%% ########################## Run peak methylation analysis for each cell type ############################################################
+# peak_results_by_cell_type = {}
+
+# for ct in cell_types:
+#     logger.info(f"\n{'='*50}")
+#     logger.info(f"Analyzing cell type: {ct}")
+#     logger.info(f"{'='*50}")
+    
+#     # Merge datasets for this cell type
+#     merged_df = validate_and_merge_data(genes_df, expression_data[ct], mecp2_binding)
+    
+#     logger.info(f"\nMerged data for {ct}:")
+#     logger.info(f"Shape: {merged_df.shape}")
+#     logger.info("First few rows:")
+#     print(merged_df.head())
+    
+#     # Identify peaks associated with genes
+#     peak_regions = identify_peak_regions(merged_df, mecp2_binding)
+#     logger.info(f"\nIdentified {len(peak_regions)} peaks for {ct}")
+    
+#     if not peak_regions.empty:
+#         # Calculate methylation in peaks
+#         peak_methylation = calculate_peak_methylation(
+#             peak_regions,
+#             PATHS['medip_dir'],
+#             ct,
+#             PATHS['genome_fasta'],
+#             n_processes=n_processes
+#         )
+        
+#         # Analyze peak methylation patterns
+#         try:
+#             cell_results = analyze_peak_methylation_patterns(
+#                 peak_methylation,
+#                 expression_data[ct],
+#                 ct,
+#                 PATHS['output_dir']
+#             )
+#             peak_results_by_cell_type[ct] = {
+#                 'methylation_data': peak_methylation,
+#                 'analysis_results': cell_results
+#             }
+#             logger.info(f"\nSuccessfully analyzed peaks for {ct}")
+            
+#         except Exception as e:
+#             logger.error(f"Error analyzing peaks for {ct}: {str(e)}")
+#             continue
+#     else:
+#         logger.warning(f"No peaks identified for {ct}")
+#         continue
+
+# #%% ########################## Compare results between cell types ############################################################
+# if len(peak_results_by_cell_type) > 1:
+#     logger.info("\nComparing results between cell types...")
+    
+#     # Create comparison plots directory
+#     comparison_dir = os.path.join(PATHS['output_dir'], 'cell_type_comparisons')
+#     os.makedirs(comparison_dir, exist_ok=True)
+    
+#     # Combine data from all cell types
+#     combined_data = []
+#     for ct, results in peak_results_by_cell_type.items():
+#         methylation_data = results['methylation_data']
+#         methylation_data['cell_type'] = ct
+#         combined_data.append(methylation_data)
+    
+#     if combined_data:
+#         all_data = pd.concat(combined_data, ignore_index=True)
+        
+#         # Create comparison plots
+#         plt.figure(figsize=(12, 6))
+#         sns.boxplot(data=all_data, x='binding_type', y='methylation', hue='cell_type')
+#         plt.title('Peak Methylation by Binding Type and Cell Type')
+#         plt.xlabel('Binding Type')
+#         plt.ylabel('Methylation Level (%)')
+#         plt.xticks(rotation=45)
+#         plt.tight_layout()
+#         plt.savefig(os.path.join(comparison_dir, 'methylation_by_cell_type.pdf'))
+#         plt.close()
+        
+#         # Save combined statistics
+#         with open(os.path.join(comparison_dir, 'cell_type_comparison_stats.txt'), 'w') as f:
+#             f.write("Cell Type Comparison Statistics\n")
+#             f.write("="*50 + "\n\n")
+            
+#             for ct, results in peak_results_by_cell_type.items():
+#                 f.write(f"\n{ct} Summary:\n")
+#                 f.write("-"*30 + "\n")
+                
+#                 methylation_data = results['methylation_data']
+#                 f.write(f"Total peaks analyzed: {len(methylation_data)}\n")
+#                 f.write(f"Mean methylation: {methylation_data['methylation'].mean():.2f}%\n")
+#                 f.write(f"Mean CpG density: {methylation_data['cpg_density'].mean():.2f} CpGs/kb\n\n")
+
+# #%% ########################## Save results ############################################################
+# # Save all results to pickle file
+# logger.info("\nSaving results to file...")
+# results_file = os.path.join(PATHS['output_dir'], 'peak_methylation_results.pkl')
+# with open(results_file, 'wb') as f:
+#     pickle.dump(peak_results_by_cell_type, f)
+# logger.info(f"Results saved to {results_file}")
+
+# #%% ########################## Print summary ############################################################
+# logger.info("\nAnalysis Summary:")
+# logger.info("="*50)
+# for ct, results in peak_results_by_cell_type.items():
+#     logger.info(f"\n{ct}:")
+#     logger.info(f"- Peaks analyzed: {len(results['methylation_data'])}")
+#     logger.info(f"- Binding types: {results['methylation_data']['binding_type'].unique().tolist()}")
