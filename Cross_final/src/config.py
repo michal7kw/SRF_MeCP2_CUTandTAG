@@ -38,8 +38,9 @@ MEDIP_BIGWIG = {
 # SMARCB1 CUT&Tag data
 SMARCB1_PEAKS = {
     'BG': [
-        os.path.join(SMARCB1_DIR, f'peaks_alt/BG{i}_peaks.narrowPeak')
-        for i in range(1, 4)
+        os.path.join(SMARCB1_DIR, 'peaks_alt/BG1_peaks.narrowPeak'),
+        os.path.join(SMARCB1_DIR, 'peaks_alt/BG2_peaks.narrowPeak'),
+        os.path.join(SMARCB1_DIR, 'peaks_alt/BG3_peaks.narrowPeak')
     ],
     'BM': [
         os.path.join(SMARCB1_DIR, 'peaks_alt/BM3_peaks.narrowPeak')

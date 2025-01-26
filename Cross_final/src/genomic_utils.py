@@ -76,35 +76,87 @@ def get_gene_body_coords(gene_coords: pd.DataFrame,
 
 def calculate_peak_overlaps(peaks: List[str], 
                           regions: pd.DataFrame,
-                          threshold: float = 0.25) -> pd.DataFrame:
+                          threshold: float = 0.1) -> pd.DataFrame:
     """Calculate overlap between peaks and genomic regions."""
+    if regions.empty:
+        print("Warning: Empty regions dataframe provided")
+        return pd.DataFrame()
+        
     # Convert regions to BedTool format
     regions_df = regions.reset_index()
     regions_df = regions_df[['chromosome', 'start', 'end', 'gene']]
+    print(f"Processing {len(regions_df)} regions")
+    
+    # Ensure start and end are integers and start < end
+    regions_df['start'] = regions_df['start'].astype(int)
+    regions_df['end'] = regions_df['end'].astype(int)
+    regions_df.loc[regions_df['start'] > regions_df['end'], ['start', 'end']] = \
+        regions_df.loc[regions_df['start'] > regions_df['end'], ['end', 'start']].values
+        
     regions_bed = pybedtools.BedTool.from_dataframe(regions_df)
     
     overlaps = []
     for peak_file in peaks:
         try:
+            print(f"Processing peak file: {peak_file}")
             peaks_bed = pybedtools.BedTool(peak_file)
+            
+            # Count peaks for debugging
+            peak_count = 0
+            with open(peak_file) as f:
+                for _ in f:
+                    peak_count += 1
+            print(f"Found {peak_count} peaks in {peak_file}")
+            
             # Use -wo to get both original entries (A and B) plus the overlap width
             intersect = regions_bed.intersect(peaks_bed, wo=True)
             
+            # Process intersection results
+            intersection_count = 0
             for hit in intersect:
-                region_length = hit.end - hit.start
+                intersection_count += 1
+                region_length = int(hit.end) - int(hit.start)
+                if region_length <= 0:
+                    print(f"Warning: Invalid region length for {hit.name}: {region_length}")
+                    continue
+                    
                 # The overlap width is the last field when using -wo
                 overlap_length = float(hit[-1])
-                if overlap_length / region_length >= threshold:
-                    overlaps.append({
-                        'gene': hit.name,
-                        'peak_file': peak_file,
-                        'overlap_ratio': overlap_length / region_length
-                    })
+                overlap_ratio = overlap_length / region_length
+                
+                # Store all overlaps regardless of threshold
+                overlaps.append({
+                    'gene': hit.name,
+                    'peak_file': peak_file,
+                    'overlap_ratio': overlap_ratio,
+                    'overlap_length': overlap_length,
+                    'region_length': region_length,
+                    'peak_start': int(hit[6]),  # Peak coordinates
+                    'peak_end': int(hit[7]),
+                    'peak_score': float(hit[8]) if hit[8] != '.' else 0  # Peak score
+                })
+            
+            print(f"Found {intersection_count} intersections for {peak_file}")
+            
         except Exception as e:
             print(f"Error processing peak file {peak_file}: {str(e)}")
             continue
     
-    return pd.DataFrame(overlaps)
+    result_df = pd.DataFrame(overlaps)
+    if not result_df.empty:
+        # Filter by threshold after collecting all overlaps
+        result_df = result_df[result_df['overlap_ratio'] >= threshold].copy()
+        # Sort by overlap ratio
+        result_df.sort_values('overlap_ratio', ascending=False, inplace=True)
+        # Keep only the best overlap per gene-peak combination
+        result_df = result_df.loc[result_df.groupby(['gene', 'peak_file'])['overlap_ratio'].idxmax()]
+    
+    print(f"Final overlap results: {len(result_df)} entries")
+    if len(result_df) > 0:
+        print(f"Overlap ratio range: {result_df['overlap_ratio'].min():.3f} - {result_df['overlap_ratio'].max():.3f}")
+        print(f"Number of unique genes with peaks: {len(result_df['gene'].unique())}")
+    
+    return result_df
 
 def normalize_bigwig_values(values: List[float], 
                           method: str = 'rpm') -> List[float]:

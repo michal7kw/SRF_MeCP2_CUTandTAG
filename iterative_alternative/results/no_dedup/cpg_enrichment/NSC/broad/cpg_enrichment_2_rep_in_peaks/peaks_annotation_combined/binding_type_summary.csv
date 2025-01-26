@@ -1,0 +1,4 @@
+"binding_type","count","avg_enrichment","avg_cpg_score","tss_proximal"
+"both",12670,1.76081030890867,NA,11681
+"endo_only",33,0.337732554419681,NA,11681
+"exo_only",126,Inf,NA,11681

@@ -1,0 +1,4 @@
+binding_type,total_peaks,tss_peaks,tss_percentage
+both,12670,11566,91.2865035516969
+exo_only,126,95,75.3968253968254
+endo_only,32,20,62.5

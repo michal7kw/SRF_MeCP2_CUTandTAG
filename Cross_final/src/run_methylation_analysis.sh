@@ -17,6 +17,7 @@ SCRIPT_DIR="${WORKING_DIR}/src"
 
 # Create logs directory
 mkdir -p "${BASE_DIR}/logs/cross_analysis"
+mkdir -p "${WORKING_DIR}/results/methylation_analysis"
 
 cd $WORKING_DIR || exit 1
 
@@ -24,15 +25,18 @@ cd $WORKING_DIR || exit 1
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate
 conda activate snakemake
 
-echo "Starting methylation cross-analysis..."
+echo "Starting methylation and SMARCB1 enrichment analysis..."
 
 # Run the Python analysis script
-python ${SCRIPT_DIR}/methylation_analysis.py \
+python ${SCRIPT_DIR}/analyze_methylation_enrichment.py \
     2>&1 | tee -a "${BASE_DIR}/logs/cross_analysis/methylation_analysis.log"
 
 # Check if the script completed successfully
 if [ $? -eq 0 ]; then
     echo "Analysis completed successfully"
+    echo "Results are available in ${WORKING_DIR}/results/methylation_analysis/"
+    echo "Generated files:"
+    ls -l "${WORKING_DIR}/results/methylation_analysis/"
 else
     echo "Analysis failed with error code $?"
     exit 1
