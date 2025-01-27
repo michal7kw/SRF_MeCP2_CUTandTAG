@@ -10,6 +10,7 @@ from concurrent.futures import ProcessPoolExecutor
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import seaborn as sns
+from scipy import stats
 
 def load_gene_lists(base_dir: str) -> Dict[str, pd.DataFrame]:
     """Load the three gene lists with their peak regions."""
@@ -90,57 +91,91 @@ def calculate_region_methylation(region: pd.Series,
     return methylation_score, cpg_density
 
 def calculate_smarcb1_enrichment(region: pd.Series,
-                               bm_file_cpm: str,
-                               bm_file_rpkm: str,
-                               bg_files_cpm: List[str],
-                               bg_files_rpkm: List[str],
-                               window_size: int = 500) -> Tuple[float, float]:
-    """Calculate SMARCB1 enrichment (BM vs BG) for a region using both CPM and RPKM."""
+                               bm_file: str,
+                               bg_files: List[str],
+                               window_size: int = 500) -> float:
+    """Calculate SMARCB1 enrichment (BM vs BG) for a region."""
     
     chrom = region['seqnames']
     center = (region['start'] + region['end']) // 2
     start = max(0, center - window_size)
     end = center + window_size
     
-    # Get BM signals
-    bm_signal_cpm = get_region_signal(bm_file_cpm, chrom, start, end)
-    bm_signal_rpkm = get_region_signal(bm_file_rpkm, chrom, start, end)
+    # Get BM signal
+    bm_signal = get_region_signal(bm_file, chrom, start, end)
     
-    # Get average BG signals for CPM
-    bg_signals_cpm = []
-    for bg_file in bg_files_cpm:
+    # Get average BG signals
+    bg_signals = []
+    for bg_file in bg_files:
         bg_signal = get_region_signal(bg_file, chrom, start, end)
         if len(bg_signal) > 0:
-            bg_signals_cpm.append(bg_signal)
+            bg_signals.append(bg_signal)
     
-    # Get average BG signals for RPKM
-    bg_signals_rpkm = []
-    for bg_file in bg_files_rpkm:
-        bg_signal = get_region_signal(bg_file, chrom, start, end)
-        if len(bg_signal) > 0:
-            bg_signals_rpkm.append(bg_signal)
+    if not bg_signals or len(bm_signal) == 0:
+        return 0.0
     
-    if not bg_signals_cpm or not bg_signals_rpkm or len(bm_signal_cpm) == 0 or len(bm_signal_rpkm) == 0:
-        return 0.0, 0.0
+    # Calculate enrichment
+    mean_bg = np.mean(bg_signals, axis=0)
+    bg_mean = np.mean(mean_bg)
+    enrichment = np.mean(bm_signal) / bg_mean if bg_mean > 0 else 0.0
     
-    # Calculate enrichment for CPM
-    mean_bg_cpm = np.mean(bg_signals_cpm, axis=0)
-    bg_mean_cpm = np.mean(mean_bg_cpm)
-    enrichment_cpm = np.mean(bm_signal_cpm) / bg_mean_cpm if bg_mean_cpm > 0 else 0.0
+    return enrichment
+
+def remove_outliers(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
+    """Remove outliers using IQR method for specified columns."""
+    df_clean = df.copy()
+    for col in columns:
+        Q1 = df_clean[col].quantile(0.25)
+        Q3 = df_clean[col].quantile(0.75)
+        IQR = Q3 - Q1
+        df_clean = df_clean[
+            (df_clean[col] >= Q1 - 1.5 * IQR) & 
+            (df_clean[col] <= Q3 + 1.5 * IQR)
+        ]
+    return df_clean
+
+def calculate_statistics(data: pd.DataFrame, group_col: str, value_col: str) -> pd.DataFrame:
+    """Calculate summary statistics for each group."""
+    stats_df = data.groupby(group_col)[value_col].agg([
+        'count',
+        'mean',
+        'std',
+        'median',
+        lambda x: x.quantile(0.25),
+        lambda x: x.quantile(0.75)
+    ]).round(3)
+    stats_df.columns = ['count', 'mean', 'std', 'median', 'q25', 'q75']
+    return stats_df
+
+def run_statistical_tests(data: pd.DataFrame, group_col: str, value_col: str) -> pd.DataFrame:
+    """Run statistical tests between groups."""
+    categories = data[group_col].unique()
+    test_results = []
     
-    # Calculate enrichment for RPKM
-    mean_bg_rpkm = np.mean(bg_signals_rpkm, axis=0)
-    bg_mean_rpkm = np.mean(mean_bg_rpkm)
-    enrichment_rpkm = np.mean(bm_signal_rpkm) / bg_mean_rpkm if bg_mean_rpkm > 0 else 0.0
+    for i, cat1 in enumerate(categories):
+        for cat2 in categories[i+1:]:
+            group1 = data[data[group_col] == cat1][value_col]
+            group2 = data[data[group_col] == cat2][value_col]
+            
+            # Mann-Whitney U test
+            stat, pval = stats.mannwhitneyu(group1, group2, alternative='two-sided')
+            
+            test_results.append({
+                'group1': cat1,
+                'group2': cat2,
+                'statistic': stat,
+                'pvalue': pval
+            })
     
-    return enrichment_cpm, enrichment_rpkm
+    return pd.DataFrame(test_results)
 
 def analyze_methylation_and_smarcb1(gene_lists: Dict[str, pd.DataFrame],
                                   medip_dir: str,
                                   smarcb1_dir: str,
                                   genome_fasta: str,
+                                  output_dir: str,
                                   n_processes: int = None) -> pd.DataFrame:
-    """Analyze methylation levels and SMARCB1 enrichment for gene lists."""
+    """Analyze methylation levels and SMARCB1 enrichment for MeCP2-bound regions."""
     
     if n_processes is None:
         n_processes = max(1, os.cpu_count() - 1)
@@ -151,11 +186,9 @@ def analyze_methylation_and_smarcb1(gene_lists: Dict[str, pd.DataFrame],
     ip_files = [os.path.join(medip_dir, f"Medip_PP_output_r{i}.bw") for i in range(1, 4)]
     input_files = [os.path.join(medip_dir, f"Medip_PP_input_r{i}.bw") for i in range(1, 4)]
     
-    # SMARCB1 files with both normalizations
-    bm_file_cpm = os.path.join(smarcb1_dir, "BM3_CPM.bw")
-    bm_file_rpkm = os.path.join(smarcb1_dir, "BM3_RPKM.bw")
-    bg_files_cpm = [os.path.join(smarcb1_dir, f"BG{i}_CPM.bw") for i in range(1, 3)]
-    bg_files_rpkm = [os.path.join(smarcb1_dir, f"BG{i}_RPKM.bw") for i in range(1, 3)]
+    # SMARCB1 files (RPKM only)
+    bm_file = os.path.join(smarcb1_dir, "BM3_RPKM.bw")  # Exogenous MeCP2
+    bg_files = [os.path.join(smarcb1_dir, f"BG{i}_RPKM.bw") for i in range(1, 4)]  # Background
     
     with pysam.FastaFile(genome_fasta) as fasta:
         for category, df in gene_lists.items():
@@ -168,9 +201,9 @@ def analyze_methylation_and_smarcb1(gene_lists: Dict[str, pd.DataFrame],
                         region, ip_files, input_files, fasta
                     )
                     
-                    # Calculate SMARCB1 enrichment with both normalizations
-                    smarcb1_enrichment_cpm, smarcb1_enrichment_rpkm = calculate_smarcb1_enrichment(
-                        region, bm_file_cpm, bm_file_rpkm, bg_files_cpm, bg_files_rpkm
+                    # Calculate SMARCB1 enrichment
+                    smarcb1_enrichment = calculate_smarcb1_enrichment(
+                        region, bm_file, bg_files
                     )
                     
                     results.append({
@@ -181,73 +214,115 @@ def analyze_methylation_and_smarcb1(gene_lists: Dict[str, pd.DataFrame],
                         'end': region['end'],
                         'methylation_score': methylation_score,
                         'cpg_density': cpg_density,
-                        'smarcb1_enrichment_cpm': smarcb1_enrichment_cpm,
-                        'smarcb1_enrichment_rpkm': smarcb1_enrichment_rpkm
+                        'smarcb1_enrichment': smarcb1_enrichment
                     })
                     
                 except Exception as e:
                     print(f"Error processing region {region['seqnames']}:{region['start']}-{region['end']}: {str(e)}")
                     continue
     
-    return pd.DataFrame(results)
+    results_df = pd.DataFrame(results)
+    
+    # Save intermediate results
+    results_df.to_csv(os.path.join(output_dir, 'all_results.csv'), index=False)
+    
+    # Calculate and save statistics
+    stats_dir = os.path.join(output_dir, 'statistics')
+    os.makedirs(stats_dir, exist_ok=True)
+    
+    # Methylation statistics
+    meth_stats = calculate_statistics(results_df, 'category', 'methylation_score')
+    meth_stats.to_csv(os.path.join(stats_dir, 'methylation_statistics.csv'))
+    
+    meth_tests = run_statistical_tests(results_df, 'category', 'methylation_score')
+    meth_tests.to_csv(os.path.join(stats_dir, 'methylation_statistical_tests.csv'))
+    
+    # SMARCB1 statistics
+    smarcb1_stats = calculate_statistics(results_df, 'category', 'smarcb1_enrichment')
+    smarcb1_stats.to_csv(os.path.join(stats_dir, 'smarcb1_statistics.csv'))
+    
+    smarcb1_tests = run_statistical_tests(results_df, 'category', 'smarcb1_enrichment')
+    smarcb1_tests.to_csv(os.path.join(stats_dir, 'smarcb1_statistical_tests.csv'))
+    
+    return results_df
 
 def plot_results(results: pd.DataFrame, output_dir: str):
-    """Create visualization plots for the analysis results."""
+    """Create visualization plots with and without outliers."""
     
-    # Create output directory if it doesn't exist
-    os.makedirs(output_dir, exist_ok=True)
+    plot_dir = os.path.join(output_dir, 'plots')
+    os.makedirs(plot_dir, exist_ok=True)
     
-    # 1. Methylation distribution by category
-    plt.figure(figsize=(10, 6))
-    sns.boxplot(data=results, x='category', y='methylation_score')
-    plt.title('Methylation Score Distribution by Gene Category')
-    plt.savefig(os.path.join(output_dir, 'methylation_distribution.png'))
-    plt.close()
+    # Define columns for outlier removal
+    outlier_cols = ['methylation_score', 'smarcb1_enrichment']
+    results_no_outliers = remove_outliers(results, outlier_cols)
     
-    # 2. SMARCB1 enrichment by category (CPM)
-    plt.figure(figsize=(10, 6))
-    sns.boxplot(data=results, x='category', y='smarcb1_enrichment_cpm')
-    plt.title('SMARCB1 Enrichment (CPM) by Gene Category')
-    plt.savefig(os.path.join(output_dir, 'smarcb1_enrichment_cpm.png'))
-    plt.close()
+    # Function to create both versions of each plot
+    def create_dual_plots(plot_func, filename_prefix, **kwargs):
+        # With outliers
+        plot_func(results, os.path.join(plot_dir, f'{filename_prefix}_with_outliers.png'), 
+                 title_suffix='(with outliers)', **kwargs)
+        # Without outliers
+        plot_func(results_no_outliers, os.path.join(plot_dir, f'{filename_prefix}_no_outliers.png'),
+                 title_suffix='(without outliers)', **kwargs)
     
-    # 3. SMARCB1 enrichment by category (RPKM)
-    plt.figure(figsize=(10, 6))
-    sns.boxplot(data=results, x='category', y='smarcb1_enrichment_rpkm')
-    plt.title('SMARCB1 Enrichment (RPKM) by Gene Category')
-    plt.savefig(os.path.join(output_dir, 'smarcb1_enrichment_rpkm.png'))
-    plt.close()
+    def plot_boxplot(data, output_file, y_col, title_prefix, title_suffix=''):
+        plt.figure(figsize=(10, 6))
+        sns.boxplot(data=data, x='category', y=y_col)
+        plt.title(f'{title_prefix} {title_suffix}')
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        plt.savefig(output_file)
+        plt.close()
     
-    # 4. Methylation vs SMARCB1 enrichment scatter plots
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+    def plot_scatter(data, output_file, title_suffix=''):
+        plt.figure(figsize=(10, 6))
+        sns.scatterplot(data=data, x='methylation_score', y='smarcb1_enrichment',
+                       hue='category', alpha=0.6)
+        plt.title(f'Methylation vs SMARCB1 Enrichment\nin MeCP2-bound Regions {title_suffix}')
+        plt.tight_layout()
+        plt.savefig(output_file)
+        plt.close()
     
-    sns.scatterplot(data=results, x='methylation_score', y='smarcb1_enrichment_cpm', 
-                    hue='category', alpha=0.6, ax=ax1)
-    ax1.set_title('Methylation vs SMARCB1 (CPM)')
+    def plot_violin(data, output_file, y_col, title_prefix, title_suffix=''):
+        plt.figure(figsize=(10, 6))
+        sns.violinplot(data=data, x='category', y=y_col)
+        plt.title(f'{title_prefix} {title_suffix}')
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        plt.savefig(output_file)
+        plt.close()
     
-    sns.scatterplot(data=results, x='methylation_score', y='smarcb1_enrichment_rpkm', 
-                    hue='category', alpha=0.6, ax=ax2)
-    ax2.set_title('Methylation vs SMARCB1 (RPKM)')
+    # Create all plot versions
+    create_dual_plots(
+        lambda d, f, **k: plot_boxplot(d, f, 'methylation_score', 'Methylation Score Distribution', **k),
+        'methylation_boxplot'
+    )
     
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, 'methylation_vs_smarcb1.png'))
-    plt.close()
+    create_dual_plots(
+        lambda d, f, **k: plot_boxplot(d, f, 'smarcb1_enrichment', 'SMARCB1 Enrichment Distribution', **k),
+        'smarcb1_boxplot'
+    )
     
-    # 5. CpG density vs Methylation
-    plt.figure(figsize=(10, 6))
-    sns.scatterplot(data=results, x='cpg_density', y='methylation_score',
-                    hue='category', alpha=0.6)
-    plt.title('CpG Density vs Methylation Score')
-    plt.savefig(os.path.join(output_dir, 'cpg_density_vs_methylation.png'))
-    plt.close()
+    create_dual_plots(plot_scatter, 'methylation_vs_smarcb1')
     
-    # 6. Correlation between CPM and RPKM enrichment
-    plt.figure(figsize=(10, 6))
-    sns.scatterplot(data=results, x='smarcb1_enrichment_cpm', y='smarcb1_enrichment_rpkm',
-                    hue='category', alpha=0.6)
-    plt.title('SMARCB1 Enrichment: CPM vs RPKM')
-    plt.savefig(os.path.join(output_dir, 'cpm_vs_rpkm.png'))
-    plt.close()
+    create_dual_plots(
+        lambda d, f, **k: plot_violin(d, f, 'methylation_score', 'Methylation Score Distribution', **k),
+        'methylation_violin'
+    )
+    
+    create_dual_plots(
+        lambda d, f, **k: plot_violin(d, f, 'smarcb1_enrichment', 'SMARCB1 Enrichment Distribution', **k),
+        'smarcb1_violin'
+    )
+    
+    # Save correlation analysis
+    correlations = results.groupby('category').apply(
+        lambda x: pd.Series({
+            'correlation': stats.spearmanr(x['methylation_score'], x['smarcb1_enrichment'])[0],
+            'pvalue': stats.spearmanr(x['methylation_score'], x['smarcb1_enrichment'])[1]
+        })
+    )
+    correlations.to_csv(os.path.join(output_dir, 'statistics', 'methylation_smarcb1_correlations.csv'))
 
 def main():
     # Set paths
@@ -262,11 +337,8 @@ def main():
     
     # Run analysis
     results = analyze_methylation_and_smarcb1(
-        gene_lists, medip_dir, smarcb1_dir, genome_fasta
+        gene_lists, medip_dir, smarcb1_dir, genome_fasta, output_dir
     )
-    
-    # Save results
-    results.to_csv(os.path.join(output_dir, 'methylation_smarcb1_results.csv'), index=False)
     
     # Create plots
     plot_results(results, output_dir)
