@@ -120,3 +120,4 @@ iterative_alternative/results_5_align2_005/new_to_do
 !.gitattributes
 !.github/
 
+*.npy

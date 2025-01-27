@@ -1,0 +1,9 @@
+,,Peak_Height,Peak_Height,Peak_Width,Peak_Width,Peak_Area,Peak_Area
+,,mean,std,mean,std,mean,std
+Category,DataType,,,,,,
+down,methylation,0.522,,0.0,,155.07,
+down,smarcb1,24.945,,950.0,,19431.491,
+no_deg,methylation,0.281,,950.0,,186.845,
+no_deg,smarcb1,22.882,,950.0,,19499.596,
+up,methylation,0.466,,950.0,,329.513,
+up,smarcb1,26.157,,950.0,,22296.455,
