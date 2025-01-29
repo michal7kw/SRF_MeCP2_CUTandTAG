@@ -11,6 +11,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
+import config  # Add this import
 
 def load_gene_lists(base_dir: str) -> Dict[str, pd.DataFrame]:
     """Load the three gene lists with their peak regions."""
@@ -325,12 +326,13 @@ def plot_results(results: pd.DataFrame, output_dir: str):
     correlations.to_csv(os.path.join(output_dir, 'statistics', 'methylation_smarcb1_correlations.csv'))
 
 def main():
-    # Set paths
-    base_dir = "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/Cross_final/data"
-    medip_dir = "/beegfs/scratch/ric.broccoli/kubacki.michal/DATA/MECP2/MEDIP/output_done/bigwig"
-    smarcb1_dir = "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_SMARCB1/results/bigwig"
-    genome_fasta = "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/DATA/mm10.fa"
-    output_dir = "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/Cross_final/results/1analyze_methylation_enrichment"
+    # Update paths to use config
+    base_dir = os.path.join(config.BASE_DIR, "data")  # Since this script specifically needs the data dir
+    medip_dir = config.MEDIP_DIR
+    smarcb1_dir = config.SMARCB1_DIR
+    genome_fasta = config.GENOME_FASTA
+    output_dir = os.path.join(config.RESULTS_DIR, "1analyze_methylation_enrichment")
+    os.makedirs(output_dir, exist_ok=True)
     
     # Load gene lists
     gene_lists = load_gene_lists(base_dir)

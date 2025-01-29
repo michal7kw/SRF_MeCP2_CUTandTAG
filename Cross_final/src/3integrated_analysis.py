@@ -16,6 +16,7 @@ from Bio.Seq import Seq
 from dataclasses import dataclass
 import logging
 from pathlib import Path
+import config  # Add this import
 
 # Set up logging
 logging.basicConfig(
@@ -369,13 +370,13 @@ def load_and_clean_regions(file_path: str) -> pd.DataFrame:
     return df
 
 def main():
-    # Set paths
-    base_dir = "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG"
-    working_dir = os.path.join(base_dir, "Cross_final")
-    genome_fasta = "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/DATA/mm10.fa"
-    medip_dir = "/beegfs/scratch/ric.broccoli/kubacki.michal/DATA/MECP2/MEDIP/output_done/bigwig"
-    smarcb1_dir = "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_SMARCB1/results/bigwig"
-    output_dir = os.path.join(working_dir, "results/3integrated_analysis")
+    # Update paths to use config
+    base_dir = config.BASE_DIR
+    working_dir = config.BASE_DIR  # Since BASE_DIR already points to Cross_final
+    genome_fasta = config.GENOME_FASTA
+    medip_dir = config.MEDIP_DIR
+    smarcb1_dir = config.SMARCB1_DIR
+    output_dir = os.path.join(config.RESULTS_DIR, "3integrated_analysis")
     os.makedirs(output_dir, exist_ok=True)
     
     # Initialize config and analyzer

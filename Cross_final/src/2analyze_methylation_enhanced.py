@@ -13,6 +13,7 @@ import seaborn as sns
 from scipy import stats
 from Bio import SeqIO
 from Bio.Seq import Seq
+import config
 
 class EnhancedProfileAnalyzer:
     def __init__(self, 
@@ -114,9 +115,16 @@ class EnhancedProfileAnalyzer:
     def calculate_methylation_profile(self,
                                    regions: pd.DataFrame,
                                    ip_file: str,
-                                   input_file: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+                                   input_file: str,
+                                   center_on_tss: bool = False) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Calculate methylation profile with GC and CpG normalization.
+        
+        Args:
+            regions: DataFrame with genomic regions
+            ip_file: Path to IP bigWig file
+            input_file: Path to input bigWig file
+            center_on_tss: If True, center on TSS position instead of peak center
         
         Returns:
             Tuple of (basic_profile, gc_normalized_profile, cpg_normalized_profile)
@@ -129,12 +137,15 @@ class EnhancedProfileAnalyzer:
             for i, (_, region) in enumerate(regions.iterrows()):
                 try:
                     # Calculate window coordinates
-                    center = (region['start'] + region['end']) // 2
+                    if center_on_tss:
+                        center = int(region['tss_position'])
+                    else:
+                        center = (region['start'] + region['end']) // 2
                     start = max(0, center - self.window_size)
                     end = center + self.window_size
                     
                     # Get chromosome name
-                    chrom = str(region['seqnames'])
+                    chrom = str(region['chr'])
                     
                     # Verify coordinates
                     if not chrom or chrom == 'nan' or start >= end:
@@ -191,14 +202,16 @@ class EnhancedProfileAnalyzer:
     def calculate_smarcb1_profile(self,
                                 regions: pd.DataFrame,
                                 bm_file: str,
-                                bg_files: List[str]) -> Tuple[np.ndarray, np.ndarray]:
+                                bg_files: List[str],
+                                center_on_tss: bool = False) -> Tuple[np.ndarray, np.ndarray]:
         """
         Calculate SMARCB1 profile using BG samples as input controls.
         
         Args:
             regions: DataFrame with genomic regions
-            bm_file: Path to BM (MeCP2-expressing) bigWig file
-            bg_files: List of paths to BG (input control) bigWig files
+            bm_file: Path to BM bigWig file
+            bg_files: List of paths to BG bigWig files
+            center_on_tss: If True, center on TSS position instead of peak center
         
         Returns:
             Tuple of:
@@ -208,16 +221,17 @@ class EnhancedProfileAnalyzer:
         bm_matrix = np.zeros((len(regions), self.n_bins))
         bg_matrices = []
         
-        # Process BM signal
-        print("Processing BM signal...")
         with pyBigWig.open(bm_file) as bm_bw:
             for i, (_, region) in enumerate(regions.iterrows()):
                 try:
-                    center = (region['start'] + region['end']) // 2
+                    if center_on_tss:
+                        center = int(region['tss_position'])
+                    else:
+                        center = (region['start'] + region['end']) // 2
                     start = max(0, center - self.window_size)
                     end = center + self.window_size
                     
-                    chrom = str(region['seqnames'])
+                    chrom = str(region['chr'])
                     if not chrom or chrom == 'nan' or start >= end:
                         continue
                     
@@ -237,11 +251,16 @@ class EnhancedProfileAnalyzer:
             with pyBigWig.open(bg_file) as bg_bw:
                 for i, (_, region) in enumerate(regions.iterrows()):
                     try:
-                        center = (region['start'] + region['end']) // 2
-                        start = max(0, center - self.window_size)
-                        end = center + self.window_size
+                        if center_on_tss:
+                            tss = int(region['tss_position'])
+                            start = max(0, tss - self.window_size)
+                            end = tss + self.window_size
+                        else:
+                            center = (region['start'] + region['end']) // 2
+                            start = max(0, center - self.window_size)
+                            end = center + self.window_size
                         
-                        chrom = str(region['seqnames'])
+                        chrom = str(region['chr'])
                         if not chrom or chrom == 'nan' or start >= end:
                             continue
                         
@@ -293,17 +312,33 @@ class EnhancedProfileAnalyzer:
                                 gc_norm_profile: np.ndarray,
                                 cpg_norm_profile: np.ndarray,
                                 category: str,
-                                output_dir: str):
+                                output_dir: str,
+                                regions: pd.DataFrame = None):
         """Plot methylation profiles with different normalizations."""
         x = np.linspace(-self.window_size, self.window_size, self.n_bins)
+        
+        # Determine if this is a TSS-centered plot based on the output directory
+        is_tss = 'tss_centered' in output_dir
+        x_label = 'Distance from TSS (bp)' if is_tss else 'Distance from Peak Center (bp)'
+        center_type = 'TSS' if is_tss else 'Peak'
         
         plt.figure(figsize=(12, 6))
         plt.plot(x, basic_profile, label='Basic (IP/Input)', color='blue')
         plt.plot(x, gc_norm_profile, label='GC-normalized', color='red')
         plt.plot(x, cpg_norm_profile, label='CpG-normalized', color='green')
         plt.axvline(x=0, color='gray', linestyle='--', alpha=0.5)
-        plt.title(f'Methylation Profiles Around {category} Peaks')
-        plt.xlabel('Distance from Peak Center (bp)')
+        
+        # Add peak boundaries for TSS-centered plots
+        if is_tss and regions is not None:
+            # Calculate peak boundaries relative to TSS
+            for _, region in regions.iterrows():
+                start_dist = int(region['start']) - int(region['tss_position'])
+                end_dist = int(region['end']) - int(region['tss_position'])
+                if abs(start_dist) <= self.window_size and abs(end_dist) <= self.window_size:
+                    plt.axvspan(start_dist, end_dist, color='gray', alpha=0.1)
+        
+        plt.title(f'Methylation Profiles Around {category.capitalize()} {center_type}s')
+        plt.xlabel(x_label)
         plt.ylabel('Normalized Methylation Signal')
         plt.legend()
         plt.savefig(os.path.join(output_dir, f'{category}_methylation_profiles_comparison.png'))
@@ -318,16 +353,32 @@ class EnhancedProfileAnalyzer:
                             basic_profile: np.ndarray,
                             replicate_norm_profile: np.ndarray,
                             category: str,
-                            output_dir: str):
+                            output_dir: str,
+                            regions: pd.DataFrame = None):
         """Plot SMARCB1 profiles with different normalizations."""
         x = np.linspace(-self.window_size, self.window_size, self.n_bins)
+        
+        # Determine if this is a TSS-centered plot based on the output directory
+        is_tss = 'tss_centered' in output_dir
+        x_label = 'Distance from TSS (bp)' if is_tss else 'Distance from Peak Center (bp)'
+        center_type = 'TSS' if is_tss else 'Peak'
         
         plt.figure(figsize=(12, 6))
         plt.plot(x, basic_profile, label='Basic (BM/mean(BG))', color='blue')
         plt.plot(x, replicate_norm_profile, label='Replicate-normalized', color='red')
         plt.axvline(x=0, color='gray', linestyle='--', alpha=0.5)
-        plt.title(f'SMARCB1 Profiles Around {category} Peaks')
-        plt.xlabel('Distance from Peak Center (bp)')
+        
+        # Add peak boundaries for TSS-centered plots
+        if is_tss and regions is not None:
+            # Calculate peak boundaries relative to TSS
+            for _, region in regions.iterrows():
+                start_dist = int(region['start']) - int(region['tss_position'])
+                end_dist = int(region['end']) - int(region['tss_position'])
+                if abs(start_dist) <= self.window_size and abs(end_dist) <= self.window_size:
+                    plt.axvspan(start_dist, end_dist, color='gray', alpha=0.1)
+        
+        plt.title(f'SMARCB1 Profiles Around {category.capitalize()} {center_type}s')
+        plt.xlabel(x_label)
         plt.ylabel('SMARCB1 Enrichment')
         plt.legend()
         plt.savefig(os.path.join(output_dir, f'{category}_smarcb1_profiles_comparison.png'))
@@ -356,45 +407,126 @@ class EnhancedProfileAnalyzer:
         plt.savefig(output_path)
         plt.close()
 
+    def calculate_tss_profile(self,
+                            regions: pd.DataFrame,
+                            bigwig_file: str,
+                            window_size: int = 2000,
+                            bin_size: int = 50) -> np.ndarray:
+        """Calculate profile around TSS positions."""
+        n_bins = window_size * 2 // bin_size
+        profile_matrix = np.zeros((len(regions), n_bins))
+        
+        with pyBigWig.open(bigwig_file) as bw:
+            for i, (_, region) in enumerate(regions.iterrows()):
+                try:
+                    # Use TSS position as center
+                    tss = int(region['tss_position'])
+                    start = max(0, tss - window_size)
+                    end = tss + window_size
+                    
+                    chrom = str(region['chr'])
+                    if not chrom or chrom == 'nan' or start >= end:
+                        continue
+                    
+                    values = bw.stats(chrom, start, end, nBins=n_bins, type="mean")
+                    if values and not all(v is None for v in values):
+                        profile_matrix[i] = [v if v is not None else 0 for v in values]
+                except Exception as e:
+                    print(f"Error processing TSS region {chrom}:{start}-{end}: {str(e)}")
+                    continue
+        
+        # Average across all regions, excluding zeros
+        mean_profile = np.zeros(n_bins)
+        for i in range(n_bins):
+            col_values = profile_matrix[:, i]
+            valid_values = col_values[col_values != 0]
+            mean_profile[i] = np.mean(valid_values) if len(valid_values) > 0 else 0
+        
+        return mean_profile
+
+    def plot_tss_profiles(self,
+                         methylation_profile: np.ndarray,
+                         smarcb1_profile: np.ndarray,
+                         category: str,
+                         output_dir: str):
+        """Plot methylation and SMARCB1 profiles around TSS."""
+        x = np.linspace(-self.window_size, self.window_size, self.n_bins)
+        
+        # Plot methylation profile
+        plt.figure(figsize=(10, 6))
+        plt.plot(x, methylation_profile, color='blue')
+        plt.axvline(x=0, color='red', linestyle='--', label='TSS')
+        plt.title(f'Methylation Profile Around TSS ({category})')
+        plt.xlabel('Distance from TSS (bp)')
+        plt.ylabel('Methylation Signal')
+        plt.legend()
+        plt.savefig(os.path.join(output_dir, f'{category}_tss_methylation_profile.png'))
+        plt.close()
+        
+        # Plot SMARCB1 profile
+        plt.figure(figsize=(10, 6))
+        plt.plot(x, smarcb1_profile, color='green')
+        plt.axvline(x=0, color='red', linestyle='--', label='TSS')
+        plt.title(f'SMARCB1 Profile Around TSS ({category})')
+        plt.xlabel('Distance from TSS (bp)')
+        plt.ylabel('SMARCB1 Signal')
+        plt.legend()
+        plt.savefig(os.path.join(output_dir, f'{category}_tss_smarcb1_profile.png'))
+        plt.close()
+        
+        # Save profile data
+        np.save(os.path.join(output_dir, f'{category}_tss_methylation.npy'), methylation_profile)
+        np.save(os.path.join(output_dir, f'{category}_tss_smarcb1.npy'), smarcb1_profile)
+
 def load_and_clean_regions(file_path: str) -> pd.DataFrame:
     """Load and clean region data, ensuring proper coordinate formatting."""
     df = pd.read_csv(file_path)
     
     # Drop rows with NaN values in essential columns
-    df = df.dropna(subset=['seqnames', 'start', 'end'])
+    df = df.dropna(subset=['chr', 'start', 'end', 'tss_position'])
     
     # Clean chromosome names
-    df['seqnames'] = df['seqnames'].astype(str).str.replace('.0', '')
+    df['chr'] = df['chr'].astype(str).str.replace('.0', '')
     
     # Convert coordinates to integers (handling floating point values)
     df['start'] = df['start'].astype(float).astype(int)
     df['end'] = df['end'].astype(float).astype(int)
+    df['tss_position'] = df['tss_position'].astype(float).astype(int)
     
     # Validate coordinates
     df = df[df['start'] >= 0]
     df = df[df['end'] > df['start']]
     
     # Remove any remaining invalid entries
-    df = df[~df['seqnames'].str.contains('nan')]
+    df = df[~df['chr'].str.contains('nan')]
     
     print(f"Loaded {len(df)} valid regions after cleaning")
     return df
 
 def main():
-    # Set paths
-    base_dir = "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/Cross_final"
-    genome_fasta = "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/DATA/mm10.fa"
-    medip_dir = "/beegfs/scratch/ric.broccoli/kubacki.michal/DATA/MECP2/MEDIP/output_done/bigwig"
-    smarcb1_dir = "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_SMARCB1/results/bigwig"
-    output_dir = os.path.join(base_dir, "results/2analyze_methylation_enhanced")
-    os.makedirs(output_dir, exist_ok=True)
+    # Update paths to use config
+    base_dir = config.BASE_DIR
+    genome_fasta = config.GENOME_FASTA
+    medip_dir = config.MEDIP_DIR
+    smarcb1_dir = config.SMARCB1_DIR
+    output_dir = os.path.join(config.RESULTS_DIR, "2analyze_methylation_enhanced")
+    
+    # Create separate directories for peak and TSS analyses
+    peak_output_dir = os.path.join(output_dir, "peak_centered")
+    tss_output_dir = os.path.join(output_dir, "tss_centered")
+    os.makedirs(peak_output_dir, exist_ok=True)
+    os.makedirs(tss_output_dir, exist_ok=True)
     
     # Initialize analyzer
     analyzer = EnhancedProfileAnalyzer(genome_fasta)
     
-    # Store profiles for comparison
-    methylation_profiles = {}
-    smarcb1_profiles = {}
+    # Store profiles for comparison - peak centered
+    peak_methylation_profiles = {}
+    peak_smarcb1_profiles = {}
+    
+    # Store profiles for comparison - TSS centered
+    tss_methylation_profiles = {}
+    tss_smarcb1_profiles = {}
     
     # Process each category
     for category in ['up', 'down', 'no_deg']:
@@ -422,56 +554,98 @@ def main():
         plt.savefig(os.path.join(output_dir, f'{category}_region_length_histogram.png'))
         plt.close()
 
-        
-        # Calculate methylation profiles
-        print("Calculating methylation profiles...")
-        basic_meth, gc_norm_meth, cpg_norm_meth = analyzer.calculate_methylation_profile(
+        # Calculate peak-centered methylation profiles
+        print("Calculating peak-centered methylation profiles...")
+        basic_meth_peak, gc_norm_meth_peak, cpg_norm_meth_peak = analyzer.calculate_methylation_profile(
             regions,
             os.path.join(medip_dir, "Medip_PP_output_r1.bw"),
             os.path.join(medip_dir, "Medip_PP_input_r1.bw")
         )
+        peak_methylation_profiles[category] = basic_meth_peak
         
-        # Store methylation profile for comparison
-        methylation_profiles[category] = basic_meth
-        
-        # Plot methylation profiles
+        # Plot peak-centered methylation profiles
         analyzer.plot_methylation_profiles(
-            basic_meth, gc_norm_meth, cpg_norm_meth,
-            category, output_dir
+            basic_meth_peak, gc_norm_meth_peak, cpg_norm_meth_peak,
+            category, peak_output_dir, regions
         )
         
-        # Calculate SMARCB1 profiles
-        print("Calculating SMARCB1 profiles...")
-        basic_smarcb1, replicate_norm_smarcb1 = analyzer.calculate_smarcb1_profile(
+        # Calculate peak-centered SMARCB1 profiles
+        print("Calculating peak-centered SMARCB1 profiles...")
+        basic_smarcb1_peak, replicate_norm_smarcb1_peak = analyzer.calculate_smarcb1_profile(
             regions,
             os.path.join(smarcb1_dir, "BM3_RPKM.bw"),
             [os.path.join(smarcb1_dir, f"BG{i}_RPKM.bw") for i in range(1, 4)]
         )
+        peak_smarcb1_profiles[category] = basic_smarcb1_peak
         
-        # Store SMARCB1 profile for comparison
-        smarcb1_profiles[category] = basic_smarcb1
-        
-        # Plot SMARCB1 profiles
+        # Plot peak-centered SMARCB1 profiles
         analyzer.plot_smarcb1_profiles(
-            basic_smarcb1, replicate_norm_smarcb1,
-            category, output_dir
+            basic_smarcb1_peak, replicate_norm_smarcb1_peak,
+            category, peak_output_dir, regions
+        )
+        
+        # Calculate TSS-centered profiles
+        print("Calculating TSS-centered profiles...")
+        # For methylation
+        basic_meth_tss, gc_norm_meth_tss, cpg_norm_meth_tss = analyzer.calculate_methylation_profile(
+            regions,
+            os.path.join(medip_dir, "Medip_PP_output_r1.bw"),
+            os.path.join(medip_dir, "Medip_PP_input_r1.bw"),
+            center_on_tss=True
+        )
+        tss_methylation_profiles[category] = basic_meth_tss
+        
+        # Plot TSS-centered methylation profiles with peak boundaries
+        analyzer.plot_methylation_profiles(
+            basic_meth_tss, gc_norm_meth_tss, cpg_norm_meth_tss,
+            category, tss_output_dir, regions
+        )
+        
+        # For SMARCB1
+        basic_smarcb1_tss, replicate_norm_smarcb1_tss = analyzer.calculate_smarcb1_profile(
+            regions,
+            os.path.join(smarcb1_dir, "BM3_RPKM.bw"),
+            [os.path.join(smarcb1_dir, f"BG{i}_RPKM.bw") for i in range(1, 4)],
+            center_on_tss=True
+        )
+        tss_smarcb1_profiles[category] = basic_smarcb1_tss
+        
+        # Plot TSS-centered SMARCB1 profiles with peak boundaries
+        analyzer.plot_smarcb1_profiles(
+            basic_smarcb1_tss, replicate_norm_smarcb1_tss,
+            category, tss_output_dir, regions
         )
         
         print(f"Completed analysis for {category}")
     
-    # Plot comparisons across categories
+    # Plot peak-centered comparisons across categories
     analyzer.plot_comparison_across_categories(
-        methylation_profiles,
-        'Methylation Profiles Comparison Across Categories',
+        peak_methylation_profiles,
+        'Peak-Centered Methylation Profiles Comparison',
         'Methylation Signal',
-        os.path.join(output_dir, 'methylation_category_comparison.png')
+        os.path.join(peak_output_dir, 'methylation_category_comparison.png')
     )
     
     analyzer.plot_comparison_across_categories(
-        smarcb1_profiles,
-        'SMARCB1 Profiles Comparison Across Categories',
+        peak_smarcb1_profiles,
+        'Peak-Centered SMARCB1 Profiles Comparison',
         'SMARCB1 Enrichment',
-        os.path.join(output_dir, 'smarcb1_category_comparison.png')
+        os.path.join(peak_output_dir, 'smarcb1_category_comparison.png')
+    )
+
+    # Plot TSS-centered comparisons across categories
+    analyzer.plot_comparison_across_categories(
+        tss_methylation_profiles,
+        'TSS-Centered Methylation Profiles Comparison',
+        'Methylation Signal',
+        os.path.join(tss_output_dir, 'methylation_category_comparison.png')
+    )
+    
+    analyzer.plot_comparison_across_categories(
+        tss_smarcb1_profiles,
+        'TSS-Centered SMARCB1 Profiles Comparison',
+        'SMARCB1 Signal',
+        os.path.join(tss_output_dir, 'smarcb1_category_comparison.png')
     )
 
 if __name__ == "__main__":

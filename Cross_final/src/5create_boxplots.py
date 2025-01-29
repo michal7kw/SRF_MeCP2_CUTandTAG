@@ -9,6 +9,7 @@ import os
 from typing import Dict, List, Tuple
 import logging
 from pathlib import Path
+import config  # Add this import
 
 # Set up logging
 logging.basicConfig(
@@ -198,11 +199,11 @@ def run_statistical_tests(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(results)
 
 def main():
-    # Set paths
-    base_dir = "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG"
-    working_dir = os.path.join(base_dir, "Cross_final")
-    profiles_dir = os.path.join(working_dir, "results/3integrated_analysis")
-    output_dir = os.path.join(working_dir, "results/5create_boxplots")
+    # Update paths to use config
+    base_dir = config.BASE_DIR
+    working_dir = config.BASE_DIR  # Since BASE_DIR already points to Cross_final
+    profiles_dir = os.path.join(config.RESULTS_DIR, "3integrated_analysis")
+    output_dir = os.path.join(config.RESULTS_DIR, "5create_boxplots")
     os.makedirs(output_dir, exist_ok=True)
     
     logger.info(f"Working with profiles directory: {profiles_dir}")

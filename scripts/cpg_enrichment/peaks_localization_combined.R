@@ -33,25 +33,48 @@ read_peak_file <- function(file_path) {
     # Read CSV file
     peaks_df <- read.csv(file_path, check.names = FALSE)
     
+    # Print column names and their lengths for debugging
+    cat("Column lengths:\n")
+    for (col in names(peaks_df)) {
+        cat(sprintf("%s: %d\n", col, length(peaks_df[[col]])))
+    }
+    
+    # Check if all columns have the same length
+    lengths <- sapply(peaks_df, length)
+    if (length(unique(lengths)) > 1) {
+        stop("Inconsistent column lengths in input file:\n",
+             paste(names(peaks_df), lengths, sep=": ", collapse="\n"))
+    }
+    
     # Convert to GRanges object
-    gr <- GRanges(
-        seqnames = peaks_df[["chr"]],
-        ranges = IRanges(
-            start = peaks_df[["start"]],
-            end = peaks_df[["end"]]
-        ),
-        # Add metadata columns
-        exo_signal = peaks_df[["exo_signal"]],
-        endo_signal = peaks_df[["endo_signal"]],
-        enrichment = peaks_df[["enrichment"]],
-        pvalue = peaks_df[["pvalue"]],
-        binding_type = peaks_df[["binding_type"]],
-        binding_type_by_peaks = peaks_df[["binding_type_by_peaks"]],
-        significant = peaks_df[["significant"]],
-        cpg_score = peaks_df[["cpg_score"]],
-        cpg_name = peaks_df[["cpg_name"]],
-        region_length = peaks_df[["region_length"]]
-    )
+    gr <- tryCatch({
+        GRanges(
+            seqnames = peaks_df[["chr"]],
+            ranges = IRanges(
+                start = peaks_df[["start"]],
+                end = peaks_df[["end"]]
+            ),
+            # Add metadata columns
+            exo_signal = peaks_df[["exo_signal"]],
+            endo_signal = peaks_df[["endo_signal"]],
+            enrichment = peaks_df[["enrichment"]],
+            pvalue = peaks_df[["pvalue"]],
+            binding_type = peaks_df[["binding_type"]],
+            binding_type_by_peaks = peaks_df[["binding_type_by_peaks"]],
+            significant = peaks_df[["significant"]],
+            cpg_score = peaks_df[["cpg_score"]],
+            cpg_name = peaks_df[["cpg_name"]],
+            cpg_length = peaks_df[["cpg_length"]],
+            region_length = peaks_df[["region_length"]],
+            region_start = peaks_df[["region_start"]],
+            region_end = peaks_df[["region_end"]]
+        )
+    }, error = function(e) {
+        # Print the first few rows of the dataframe for debugging
+        print("First few rows of the input data:")
+        print(head(peaks_df))
+        stop("Error creating GRanges object: ", e$message)
+    })
     
     return(gr)
 }
@@ -94,6 +117,8 @@ annotate_peaks_comprehensive <- function(peaks) {
     anno_df$endo_signal <- NA
     anno_df$enrichment <- NA
     anno_df$cpg_score <- NA
+    anno_df$region_start <- NA
+    anno_df$region_end <- NA
     
     # Transfer metadata using overlaps
     anno_df$binding_type[queryHits(overlaps)] <- peaks$binding_type[subjectHits(overlaps)]
@@ -102,6 +127,8 @@ annotate_peaks_comprehensive <- function(peaks) {
     anno_df$endo_signal[queryHits(overlaps)] <- peaks$endo_signal[subjectHits(overlaps)]
     anno_df$enrichment[queryHits(overlaps)] <- peaks$enrichment[subjectHits(overlaps)]
     anno_df$cpg_score[queryHits(overlaps)] <- peaks$cpg_score[subjectHits(overlaps)]
+    anno_df$region_start[queryHits(overlaps)] <- peaks$region_start[subjectHits(overlaps)]
+    anno_df$region_end[queryHits(overlaps)] <- peaks$region_end[subjectHits(overlaps)]
     
     # Save complete annotation
     write.csv(anno_df, "peaks_annotation_combined/complete_peak_annotation.csv", row.names = FALSE)
@@ -200,6 +227,8 @@ anno_df$exo_signal <- NA
 anno_df$endo_signal <- NA
 anno_df$enrichment <- NA
 anno_df$cpg_score <- NA
+anno_df$region_start <- NA
+anno_df$region_end <- NA
 
 # Transfer metadata using overlaps
 anno_df$binding_type[queryHits(overlaps)] <- peaks$binding_type[subjectHits(overlaps)]
@@ -208,6 +237,8 @@ anno_df$exo_signal[queryHits(overlaps)] <- peaks$exo_signal[subjectHits(overlaps
 anno_df$endo_signal[queryHits(overlaps)] <- peaks$endo_signal[subjectHits(overlaps)]
 anno_df$enrichment[queryHits(overlaps)] <- peaks$enrichment[subjectHits(overlaps)]
 anno_df$cpg_score[queryHits(overlaps)] <- peaks$cpg_score[subjectHits(overlaps)]
+anno_df$region_start[queryHits(overlaps)] <- peaks$region_start[subjectHits(overlaps)]
+anno_df$region_end[queryHits(overlaps)] <- peaks$region_end[subjectHits(overlaps)]
 
 # Function to get TSS peaks
 get_tss_peaks <- function(anno_df, binding_type = NULL) {
@@ -218,6 +249,9 @@ get_tss_peaks <- function(anno_df, binding_type = NULL) {
     
     tss_peaks <- df %>%
         filter(abs(distanceToTSS) <= 3000) %>%
+        mutate(tss_position = ifelse(strand == "+", 
+                                   start - distanceToTSS, 
+                                   end + distanceToTSS)) %>%
         select(
             chr = seqnames,
             start,
@@ -231,8 +265,13 @@ get_tss_peaks <- function(anno_df, binding_type = NULL) {
             significant,
             cpg_score,
             cpg_name,
+            cpg_length,
+            region_start,
+            region_end,
             region_length,
             distanceToTSS,
+            tss_position,
+            strand,
             geneId,
             SYMBOL
         )

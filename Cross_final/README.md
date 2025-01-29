@@ -1,3 +1,13 @@
+# To do
+- list of the genes enriched in smarcb1 (more in BM more than BG) for all the genes from DEA analysis
+- smarcb1 profiles around TSS (for the genes selected based on MeCP2 binding)
+   - for up, down, no_deg:
+- methylation profiles around TSS (for the genes selected based on MeCP2 binding)
+   - for up, down, no_deg:
+- smarcb1 profiles around TSS (for all the other genes)
+
+to show that MeCP2 "attracts" the SMARCB1 to the TSS, and iduces up regulation
+
 # Cross Analysis Pipeline
 
 This pipeline analyzes methylation patterns and SMARCB1 binding in different gene sets.
