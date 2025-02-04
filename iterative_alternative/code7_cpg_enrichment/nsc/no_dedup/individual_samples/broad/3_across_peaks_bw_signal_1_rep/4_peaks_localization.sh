@@ -74,9 +74,7 @@ Rscript "${SCRIPT_DIR}/peaks_localization.R" \
     --work-dir "${RESULTS_DIR}" \
     --data-to-analyze "${CURRENT_FILE}"
 
-peaks_annotation/
-
-
+# peaks_annotation/
 # up_enriched_signal_1.csv
 # up_enriched_signal_1_5.csv
 # up_enriched_signal_2.csv

@@ -393,3 +393,130 @@ def plot_exo_only_distributions_no_length_distribution(exo_only_df, title=None):
     plt.xticks(x, x.astype(int))
     plt.tight_layout()
     plt.show()
+
+
+def plot_neu_only_distributions(neu_only_df, title=None):
+    # Distribution plots
+    plt.figure(figsize=(15, 5))
+
+    # Plot overlapped signal distributions
+    plt.subplot(1, 3, 1)
+    sns.histplot(data=neu_only_df, x='neu_signal', bins=50, alpha=0.5, label='neu Signal', color='blue')
+    sns.histplot(data=neu_only_df, x='nsc_signal', bins=50, alpha=0.5, label='nsc Signal', color='red')
+    if title is None:
+        _title = 'Distribution of Signals'
+    else:
+        _title = f'Distribution of Signals\n{title}'
+    plt.title(_title)
+    plt.xlabel('Signal Value')
+    plt.ylabel('Count')
+    plt.legend()
+
+    # Plot overlapped length distributions
+    plt.subplot(1, 3, 2)
+    sns.histplot(data=neu_only_df, x='region_length', bins=50, alpha=0.5, label='Region Length', color='blue')
+    sns.histplot(data=neu_only_df, x='cpg_length', bins=50, alpha=0.5, label='CpG Length', color='red')
+    if title is None:
+        _title = 'Distribution of Lengths'
+    else:
+        _title = f'Distribution of Lengths\n{title}'
+    plt.title(_title)
+    plt.xlabel('Length')
+    plt.ylabel('Count')
+    plt.legend()
+
+    # Count peaks per region
+    plt.subplot(1, 3, 3)
+    neu_peak_counts = neu_only_df['neu_replicates_with_peaks'].value_counts()
+    nsc_peak_counts = neu_only_df['nsc_replicates_with_peaks'].value_counts()
+
+    x = np.arange(max(max(neu_peak_counts.index), max(nsc_peak_counts.index)) + 1)
+    width = 0.35
+
+    # Create bars and store them to add labels
+    neu_bars = plt.bar(x - width/2, [neu_peak_counts.get(i, 0) for i in x], width, label='neu', color='blue', alpha=0.5)
+    nsc_bars = plt.bar(x + width/2, [nsc_peak_counts.get(i, 0) for i in x], width, label='nsc', color='red', alpha=0.5)
+
+    # Add count labels on top of each bar
+    for bars in [neu_bars, nsc_bars]:
+        for bar in bars:
+            height = bar.get_height()
+            plt.text(bar.get_x() + bar.get_width()/2., height,
+                    f'{int(height)}',
+                    ha='center', va='bottom')
+    if title is None:
+        _title = 'Number of Replicates with Peaks'
+    else:
+        _title = f'Number of Replicates with Peaks\n{title}'
+    plt.title(_title)
+    plt.xlabel('Number of Replicates')
+    plt.ylabel('Count')
+    plt.legend()
+
+    plt.xticks(x, x.astype(int))
+    plt.tight_layout()
+    plt.show()
+
+
+
+def plot_nsc_only_distributions(nsc_only_df, title=None):
+    # Distribution plots
+    plt.figure(figsize=(15, 5))
+
+    # Plot overlapped signal distributions
+    plt.subplot(1, 3, 1)
+    sns.histplot(data=nsc_only_df, x='nsc_signal', bins=50, alpha=0.5, label='nsc Signal', color='blue')
+    sns.histplot(data=nsc_only_df, x='neu_signal', bins=50, alpha=0.5, label='neu Signal', color='red')
+    if title is None:
+        _title = 'Distribution of Signals'
+    else:
+        _title = f'Distribution of Signals\n{title}'
+    plt.title(_title)
+    plt.xlabel('Signal Value')
+    plt.ylabel('Count')
+    plt.legend()
+
+    # Plot overlapped length distributions
+    plt.subplot(1, 3, 2)
+    sns.histplot(data=nsc_only_df, x='region_length', bins=50, alpha=0.5, label='Region Length', color='blue')
+    sns.histplot(data=nsc_only_df, x='cpg_length', bins=50, alpha=0.5, label='CpG Length', color='red')
+    if title is None:
+        _title = 'Distribution of Lengths'
+    else:
+        _title = f'Distribution of Lengths\n{title}'
+    plt.title(_title)
+    plt.xlabel('Length')
+    plt.ylabel('Count')
+    plt.legend()
+
+    # Count peaks per region
+    plt.subplot(1, 3, 3)
+    neu_peak_counts = nsc_only_df['neu_replicates_with_peaks'].value_counts()
+    nsc_peak_counts = nsc_only_df['nsc_replicates_with_peaks'].value_counts()
+
+    x = np.arange(max(max(neu_peak_counts.index), max(nsc_peak_counts.index)) + 1)
+    width = 0.35
+
+    # Create bars and store them to add labels
+    neu_bars = plt.bar(x - width/2, [neu_peak_counts.get(i, 0) for i in x], width, label='neu', color='blue', alpha=0.5)
+    nsc_bars = plt.bar(x + width/2, [nsc_peak_counts.get(i, 0) for i in x], width, label='nsc', color='red', alpha=0.5)
+
+    # Add count labels on top of each bar
+    for bars in [nsc_bars, nsc_bars]:
+        for bar in bars:
+            height = bar.get_height()
+            plt.text(bar.get_x() + bar.get_width()/2., height,
+                    f'{int(height)}',
+                    ha='center', va='bottom')
+    if title is None:
+        _title = 'Number of Replicates with Peaks'
+    else:
+        _title = f'Number of Replicates with Peaks\n{title}'
+    plt.title(_title)
+    plt.xlabel('Number of Replicates')
+    plt.ylabel('Count')
+    plt.legend()
+
+    plt.xticks(x, x.astype(int))
+    plt.tight_layout()
+    plt.show()
