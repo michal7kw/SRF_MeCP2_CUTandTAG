@@ -73,3 +73,10 @@ base_dir: "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/itera
 run_name: "neu_vs_nsc_exo"
 alignment_type: "no_dedup"
 peaks_type: "broad"
+
+# configuration 10
+---
+base_dir: "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative"
+run_name: "neu_vs_nsc_endo"
+alignment_type: "no_dedup"
+peaks_type: "broad"

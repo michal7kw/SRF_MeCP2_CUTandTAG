@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 def plot_enrichment_distribution(df, factor=3, title=None):
     """
-    Create histogram of enrichment values for regions bound by both ExoC and EndoC.
+    Create histogram of enrichment values for regions bound by both Exo and Endo.
     
     Args:
         df: DataFrame containing enrichment values
@@ -33,9 +33,59 @@ def plot_enrichment_distribution(df, factor=3, title=None):
     plt.xlabel('Enrichment Score', fontsize=12)
     plt.ylabel('Number of Regions', fontsize=12)
     if title is None:
-        title = 'Distribution of Enrichment Values\nin Regions Bound by Both ExoC and EndoC'
+        title = 'Distribution of Enrichment Values\nin Regions Bound by Both Exo and Endo'
     else:
-        title = f'Distribution of Enrichment Values\nin Regions Bound by Both ExoC and EndoC\n{title}'
+        title = f'Distribution of Enrichment Values\nin Regions Bound by Both Exo and Endo\n{title}'
+    plt.title(title, fontsize=14, pad=15)
+
+    # Add vertical line at enrichment = 1
+    plt.axvline(x=1, color='red', linestyle='--', linewidth=2,
+                label='Enrichment = 1 (No difference)')
+
+    # Set x-axis limits based on the actual data range
+    plt.xlim(range_min, range_max)
+
+    # Add legend with better positioning
+    plt.legend(loc='upper right')
+
+    # Adjust layout to prevent label cutoff
+    plt.tight_layout()
+    
+    plt.show()
+    
+    return range_min, range_max
+
+def plot_enrichment_distribution_neu_vs_nsc(df, factor=3, title=None):
+    """
+    Create histogram of enrichment values for regions bound by both Neu and NSC.
+    
+    Args:
+        df: DataFrame containing enrichment values
+        factor: Factor to multiply IQR by for determining plot range (default=3)
+        title: Optional custom title for the plot
+    """
+    plt.figure(figsize=(10, 6))
+
+    # Calculate reasonable range based on data distribution
+    q1, q3 = df['enrichment'].quantile([0.25, 0.75])
+    iqr = q3 - q1
+    range_min = max(0, q1 - factor * iqr)  # Don't go below 0 for enrichment
+    range_max = q3 + factor * iqr
+
+    # Plot histogram with better binning and transparency
+    n, bins, patches = plt.hist(df['enrichment'], bins=50, edgecolor='black', alpha=0.7,
+                              color='#2196F3', density=False, range=(range_min, range_max))
+
+    # Add grid for better readability
+    plt.grid(True, alpha=0.3)
+
+    # Improve axis labels and title
+    plt.xlabel('Enrichment Score', fontsize=12)
+    plt.ylabel('Number of Regions', fontsize=12)
+    if title is None:
+        title = 'Distribution of Enrichment Values\nin Regions Bound by Both Neu and NSC'
+    else:
+        title = f'Distribution of Enrichment Values\nin Regions Bound by Both Neu and NSC\n{title}'
     plt.title(title, fontsize=14, pad=15)
 
     # Add vertical line at enrichment = 1
