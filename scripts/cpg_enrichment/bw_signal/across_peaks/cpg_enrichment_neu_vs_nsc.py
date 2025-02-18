@@ -19,7 +19,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 CPG_WINDOW = 0
-NUM_REPS = 2
+NUM_REPS = 1
 
 @dataclass
 class EnrichmentConfig:
