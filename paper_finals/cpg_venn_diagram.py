@@ -33,7 +33,7 @@ OUTPUT_DIRS = [
 ]
 
 def categorize_binding(row):
-    binding_type = row['binding_type_by_peaks']
+    binding_type = row['binding_type']
     if binding_type == 'both':
         return 'both'
     elif binding_type == 'exo_only':
