@@ -305,9 +305,9 @@ generate_mecp2_tss_heatmaps <- function() {
       
       # Read the CpG islands file
       cpg_islands <- tryCatch({
-        import(cpg_islands_file)
+        read.table(cpg_islands_file, header=FALSE, sep="\t")
       }, error = function(e) {
-        stop("Error importing CpG islands BED file: ", e$message)
+        stop("Error reading CpG islands BED file: ", e$message)
       })
       
       # Create a simplified version with unique names
@@ -315,7 +315,7 @@ generate_mecp2_tss_heatmaps <- function() {
       names(cpg_islands_clean) <- paste0("cpg_", seq_along(cpg_islands_clean))
       
       # Write to a temporary file
-      export(cpg_islands_clean, clean_cpg_file)
+      write.table(cpg_islands_clean, clean_cpg_file, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE)
       
       return(clean_cpg_file)
     }
