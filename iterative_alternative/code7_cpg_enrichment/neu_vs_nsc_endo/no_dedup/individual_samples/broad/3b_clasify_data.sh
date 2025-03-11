@@ -7,8 +7,8 @@
 #SBATCH --ntasks=1
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/cpg_enrichment/neu_vs_nsc_endo/Enrichment_analysis_intra_cell.err"
-#SBATCH --output="logs/cpg_enrichment/neu_vs_nsc_endo/Enrichment_analysis_intra_cell.out"
+# SBATCH --error="logs/Enrichment_analysis_intra_cell.err"
+# SBATCH --output="logs/Enrichment_analysis_intra_cell.out"
 
 BASE_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG"
 WORKING_DIR="${BASE_DIR}/iterative_alternative"

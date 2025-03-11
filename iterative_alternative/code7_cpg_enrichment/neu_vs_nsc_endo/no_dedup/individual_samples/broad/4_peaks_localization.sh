@@ -5,11 +5,11 @@
 #SBATCH --time=1:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --array=0-9
+#SBATCH --array=0-11
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="logs/cpg_enrichment/neu_vs_nsc_endo/peaks_localization_neu_vs_nsc_endo.err"
-#SBATCH --output="logs/cpg_enrichment/neu_vs_nsc_endo/peaks_localization_neu_vs_nsc_endo.out"
+#SBATCH --error="logs/peaks_localization_neu_vs_nsc_endo.err"
+#SBATCH --output="logs/peaks_localization_neu_vs_nsc_endo.out"
 
 BASE_DIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG"
 CONFIGURATION_NUMBER=10
@@ -69,6 +69,8 @@ down_enriched_signal_08.csv
 down_enriched_signal_05.csv
 neu_only_df_by_signal.csv
 nsc_only_df_by_signal.csv
+endo_list_neu.csv
+endo_list_nsc.csv
 EOF
 
 # Get the current file to process based on array task ID

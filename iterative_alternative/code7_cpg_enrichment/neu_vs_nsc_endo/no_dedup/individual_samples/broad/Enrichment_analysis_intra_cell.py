@@ -375,6 +375,24 @@ nsc_only_df_by_signal.to_csv(f'{OUTPUT_LISTS_PATH}/nsc_only_df_by_signal.csv', i
 neu_only_df_by_peaks.to_csv(f'{OUTPUT_LISTS_PATH}/neu_only_df_by_peaks.csv', index=False)
 nsc_only_df_by_peaks.to_csv(f'{OUTPUT_LISTS_PATH}/nsc_only_df_by_peaks.csv', index=False)
 
+# %% [markdown]
+# # Create endogenous lists for neurons and NSCs
+
+# %%
+# Create endogenous list for neurons (all peaks in neurons)
+# This includes both neuron-only peaks and peaks present in both cell types
+endo_list_neu = pd.concat([neu_only_df_by_peaks, both_df_by_peaks])
+print(f"Number of peaks in endo_list_neu: {len(endo_list_neu)}")
+
+# Create endogenous list for NSCs (all peaks in NSCs)
+# This includes both NSC-only peaks and peaks present in both cell types
+endo_list_nsc = pd.concat([nsc_only_df_by_peaks, both_df_by_peaks])
+print(f"Number of peaks in endo_list_nsc: {len(endo_list_nsc)}")
+
+# Save the endogenous lists
+endo_list_neu.to_csv(f'{OUTPUT_LISTS_PATH}/endo_list_neu.csv', index=False)
+endo_list_nsc.to_csv(f'{OUTPUT_LISTS_PATH}/endo_list_nsc.csv', index=False)
+
 # %%
 
 
