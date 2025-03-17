@@ -5,7 +5,7 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-def plot_enrichment_distribution(df, factor=3, title=None):
+def plot_enrichment_distribution(df, factor=3, title=None, color='#2196F3', alpha=0.7, enrichment_lines=[1]):
     """
     Create histogram of enrichment values for regions bound by both Exo and Endo.
     
@@ -13,6 +13,9 @@ def plot_enrichment_distribution(df, factor=3, title=None):
         df: DataFrame containing enrichment values
         factor: Factor to multiply IQR by for determining plot range (default=3)
         title: Optional custom title for the plot
+        color: Color of the histogram bars (default='#2196F3')
+        alpha: Transparency of the histogram bars (default=0.7)
+        enrichment_lines: List of enrichment values at which to draw vertical lines (default=[1])
     """
     plt.figure(figsize=(10, 6))
 
@@ -23,8 +26,8 @@ def plot_enrichment_distribution(df, factor=3, title=None):
     range_max = q3 + factor * iqr
 
     # Plot histogram with better binning and transparency
-    n, bins, patches = plt.hist(df['enrichment'], bins=50, edgecolor='black', alpha=0.7,
-                              color='#2196F3', density=False, range=(range_min, range_max))
+    n, bins, patches = plt.hist(df['enrichment'], bins=50, edgecolor='black', alpha=alpha,
+                              color=color, density=False, range=(range_min, range_max))
 
     # Add grid for better readability
     plt.grid(True, alpha=0.3)
@@ -38,9 +41,10 @@ def plot_enrichment_distribution(df, factor=3, title=None):
         title = f'Distribution of Enrichment Values\nin Regions Bound by Both Exo and Endo\n{title}'
     plt.title(title, fontsize=14, pad=15)
 
-    # Add vertical line at enrichment = 1
-    plt.axvline(x=1, color='red', linestyle='--', linewidth=2,
-                label='Enrichment = 1 (No difference)')
+    # Add vertical line at specified enrichment values
+    for enrichment_value in enrichment_lines:
+        plt.axvline(x=enrichment_value, color='red', linestyle='--', linewidth=2,
+                    label=f'Enrichment = {enrichment_value}')
 
     # Set x-axis limits based on the actual data range
     plt.xlim(range_min, range_max)

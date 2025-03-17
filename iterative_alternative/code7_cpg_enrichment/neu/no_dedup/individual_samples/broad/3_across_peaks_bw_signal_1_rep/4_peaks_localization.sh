@@ -54,15 +54,26 @@ source /opt/common/tools/ric.cosr/miniconda3/bin/activate
 conda activate snakemake
 
 # Convert the multi-line string to an array
+# readarray -t DATA_ARRAY <<EOF
+# up_enriched_signal_1.csv
+# up_enriched_signal_1_5.csv
+# up_enriched_signal_2.csv
+# down_enriched_signal_1.csv
+# down_enriched_signal_08.csv
+# down_enriched_signal_05.csv
+# exo_only_df_by_signal.csv
+# endo_only_df_by_signal.csv
+# EOF
+
 readarray -t DATA_ARRAY <<EOF
-up_enriched_signal_1.csv
-up_enriched_signal_1_5.csv
-up_enriched_signal_2.csv
-down_enriched_signal_1.csv
-down_enriched_signal_08.csv
-down_enriched_signal_05.csv
-exo_only_df_by_signal.csv
-endo_only_df_by_signal.csv
+up_enriched_signal_1_exo_over_20.csv
+up_enriched_signal_1_5_exo_over_20.csv
+up_enriched_signal_2_exo_over_20.csv
+down_enriched_signal_1_exo_over_20.csv
+down_enriched_signal_08_exo_over_20.csv
+down_enriched_signal_05_exo_over_20.csv
+exo_only_df_by_signal_exo_over_20.csv
+endo_only_df_by_signal_exo_over_20.csv
 EOF
 
 # Get the current file to process based on array task ID

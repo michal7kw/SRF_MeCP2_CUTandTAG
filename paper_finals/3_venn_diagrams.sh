@@ -17,5 +17,5 @@ cd $WORKING_DIR || exit 1
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate
 conda activate snakemake
 
-python cpg_venn_diagram.py
-python cpg_venn_diagram_alt.py
+# python 3_cpg_venn_diagram.py
+python 3_cpg_venn_diagram_alt.py

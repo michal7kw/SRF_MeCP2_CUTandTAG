@@ -14,6 +14,69 @@ library(gridExtra)
 library(RColorBrewer)
 library(R6)
 
+# Color palette for different sample types
+COLORS <- list(
+  "NSC_ENDO" = "#83CBEB",
+  "NSC_EXO" = "#0070C0",
+  "NEU_ENDO" = "#FF9999",
+  "NEU_EXO" = "#FF3300"
+)
+
+# Enhanced logging system
+log_message <- function(message, level = "INFO") {
+  timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+  cat(paste0("[", timestamp, "] [", level, "] ", message, "\n"))
+}
+
+# Cache management system
+CacheManager <- R6::R6Class("CacheManager",
+  public = list(
+    cache_dir = NULL,
+    force_recompute = FALSE,
+    
+    initialize = function(cache_dir, force_recompute = FALSE) {
+      self$cache_dir <- cache_dir
+      self$force_recompute <- force_recompute
+      dir.create(self$cache_dir, showWarnings = FALSE, recursive = TRUE)
+      log_message(paste("Initialized cache manager at:", cache_dir))
+    },
+    
+    get_cache_path = function(key, extension = "") {
+      file.path(self$cache_dir, paste0(digest::digest(key, algo = "sha1"), extension))
+    },
+    
+    exists = function(key, extension = "") {
+      cache_path <- self$get_cache_path(key, extension)
+      file.exists(cache_path)
+    },
+    
+    save = function(key, extension = "", data = NULL, file_path = NULL) {
+      cache_path <- self$get_cache_path(key, extension)
+      if (!is.null(file_path)) {
+        file.copy(file_path, cache_path, overwrite = TRUE)
+      } else if (!is.null(data)) {
+        saveRDS(data, cache_path)
+      }
+      cache_path
+    },
+    
+    load = function(key, extension = "") {
+      cache_path <- self$get_cache_path(key, extension)
+      if (!file.exists(cache_path)) return(NULL)
+      if (grepl("\\.rds$", extension)) {
+        readRDS(cache_path)
+      } else {
+        cache_path
+      }
+    },
+    
+    clear = function() {
+      unlink(file.path(self$cache_dir, "*"), recursive = TRUE)
+      log_message("Cache cleared")
+    }
+  )
+)
+
 #### SAMPLES ####
 # /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative/results/no_dedup/peaks/narrow$ ls -1 *.filtered.narrowPeak
 # NeuM2_narrow_peaks.filtered.narrowPeak
@@ -40,12 +103,12 @@ library(R6)
 # NeuV3,Neuron,Exogenous
 # NSCv1,NSC,Exogenous
 # NSCv2,NSC,Exogenous
-# NSCv3,NSC,Exogenous
+# NSCv3,Exogenous
 
 setwd("/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/paper_finals")
 OUTPUT_DIR <- "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/paper_finals/outputs"
 BIGWIG_DIR <- "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative/results_1b/bigwig"
-PEAKS_DIR <- "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative/results/no_dedup/peaks/narrow"
+PEAKS_DIR <- "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/iterative_alternative/results/no_dedup/peaks/broad"
 TSS_BED <- "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/DATA/mm10_TSS.bed"
 GENCODE_GTF <- "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeCP2_CUTandTAG/DATA/gencode.vM25.annotation.gtf"
 
@@ -58,11 +121,9 @@ dir.create(OUTPUT_DIR, showWarnings = FALSE, recursive = TRUE)
 # Set this to TRUE to force recomputation of all matrices and heatmaps
 FORCE_RECOMPUTE <- TRUE
 
-# Enhanced logging system
-log_message <- function(message, level = "INFO") {
-  timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
-  cat(paste0("[", timestamp, "] [", level, "] ", message, "\n"))
-}
+# Initialize cache manager
+CACHE_DIR <- file.path(OUTPUT_DIR, "cache")
+cache_manager <- CacheManager$new(CACHE_DIR, FORCE_RECOMPUTE)
 
 # Execution timer class
 Timer <- R6::R6Class("Timer",
@@ -112,14 +173,24 @@ ProgressTracker <- R6::R6Class("ProgressTracker",
 
 # Function to compute matrix using deepTools
 compute_matrix <- function(bw_files, regions, output_file, upstream=5000, downstream=5000, use_scale_regions=FALSE, force_recompute=FORCE_RECOMPUTE) {
-  # Check if output file already exists
-  if (file.exists(output_file) && !force_recompute) {
-    log_message(paste("Matrix file already exists, skipping:", output_file))
-    return(output_file)
-  } else if (file.exists(output_file) && force_recompute) {
-    log_message(paste("Matrix file exists but force_recompute=TRUE, regenerating:", output_file))
-    # Remove the existing file to ensure clean regeneration
-    file.remove(output_file)
+  # Create cache key based on input parameters
+  cache_key <- list(
+    bw_files = bw_files,
+    regions = regions,
+    upstream = upstream,
+    downstream = downstream,
+    use_scale_regions = use_scale_regions,
+    modification_times = file.info(c(bw_files, regions))$mtime
+  )
+  
+  # Check cache first
+  if (!force_recompute) {
+    cached_file <- cache_manager$load(cache_key, ".matrix.gz")
+    if (!is.null(cached_file)) {
+      log_message("Using cached matrix file")
+      file.copy(cached_file, output_file, overwrite = TRUE)
+      return(output_file)
+    }
   }
   
   log_message(paste0("Computing matrix for ", ifelse(use_scale_regions, "TSS-to-TES", "TSS-centered"), " analysis..."))
@@ -160,11 +231,16 @@ compute_matrix <- function(bw_files, regions, output_file, upstream=5000, downst
     log_message(paste("Matrix computation failed with exit code:", system_result), "ERROR")
   }
   
+  # Cache the result
+  if (system_result == 0) {
+    cache_manager$save(cache_key, ".matrix.gz", file_path = output_file)
+  }
+  
   return(output_file)
 }
 
 # Function to plot heatmap using deepTools
-plot_heatmap <- function(matrix_file, output_file, title="", zmin=0, zmax=0.3, use_scale_regions=FALSE, force_recompute=FORCE_RECOMPUTE) {
+plot_heatmap <- function(matrix_file, output_file, title="", zmin=0, zmax=0.3, use_scale_regions=FALSE, force_recompute=FORCE_RECOMPUTE, sample_type=NULL) {
   # Check if output file already exists
   if (file.exists(output_file) && !force_recompute) {
     log_message(paste("Output file already exists, skipping:", output_file))
@@ -184,7 +260,7 @@ plot_heatmap <- function(matrix_file, output_file, title="", zmin=0, zmax=0.3, u
     # For TSS to TES heatmaps
     cmd <- paste0("plotHeatmap -m ", matrix_file,
                  " -o ", output_file,
-                 " --colorMap 'Blues'",
+                 " --colorMap 'viridis'",
                  " --whatToShow 'heatmap and colorbar'",
                  " --zMin ", zmin, " --zMax ", zmax,
                  " --heatmapHeight 15",
@@ -198,7 +274,7 @@ plot_heatmap <- function(matrix_file, output_file, title="", zmin=0, zmax=0.3, u
     # Original TSS-centered heatmaps
     cmd <- paste0("plotHeatmap -m ", matrix_file,
                  " -o ", output_file,
-                 " --colorMap 'Blues'",
+                 " --colorMap 'viridis'",
                  " --whatToShow 'heatmap and colorbar'",
                  " --zMin ", zmin, " --zMax ", zmax,
                  " --heatmapHeight 15",
@@ -222,7 +298,7 @@ plot_heatmap <- function(matrix_file, output_file, title="", zmin=0, zmax=0.3, u
 }
 
 # Function to plot profile using deepTools - fixed parameters
-plot_profile <- function(matrix_file, output_file, title="", force_recompute=FORCE_RECOMPUTE) {
+plot_profile <- function(matrix_file, output_file, title="", force_recompute=FORCE_RECOMPUTE, sample_types=NULL) {
   # Check if output file already exists
   if (file.exists(output_file) && !force_recompute) {
     log_message(paste("Output file already exists, skipping:", output_file))
@@ -238,32 +314,15 @@ plot_profile <- function(matrix_file, output_file, title="", force_recompute=FOR
   log_message(paste0("Output will be saved to: ", basename(output_file)))
   log_message(paste0("Title: ", title))
   
-  # Get the number of samples in the matrix
-  # Use computeMatrixOperations to get info about the matrix
-  temp_info_file <- tempfile()
-  cmd_info <- paste0("computeMatrixOperations info -m ", matrix_file, " > ", temp_info_file)
-  log_message("Getting matrix info:")
-  log_message(cmd_info)
-  system(cmd_info)
-  
-  # Read the first few lines to determine number of samples
-  info_lines <- readLines(temp_info_file, n=20)
-  file.remove(temp_info_file)
-  
-  # Find the line with sample info
-  sample_line <- grep("sample_labels", info_lines, value=TRUE)
-  if (length(sample_line) > 0) {
-    # Extract sample count
-    sample_count <- length(strsplit(gsub(".*\\[|\\].*", "", sample_line), ",")[[1]])
-    log_message(paste("Detected", sample_count, "samples in matrix"))
+  # Get colors based on sample types
+  colors <- NULL
+  if (!is.null(sample_types)) {
+    colors <- sapply(sample_types, function(type) COLORS[[type]])
+    colors <- paste(colors, collapse=" ")
   } else {
-    # Default to 2 if we can't determine
-    sample_count <- 2
-    log_message("Could not determine sample count, defaulting to 2")
+    # Default colors if no sample types specified
+    colors <- paste(COLORS$NEU_ENDO, COLORS$NEU_EXO, COLORS$NSC_ENDO, COLORS$NSC_EXO, collapse=" ")
   }
-  
-  # Generate enough colors
-  colors <- paste(rep(c("blue", "red", "green", "orange", "purple", "brown"), length.out=sample_count), collapse=" ")
   
   cmd <- paste0("plotProfile -m ", matrix_file,
                " -o ", output_file,
@@ -375,183 +434,138 @@ prepare_annotation_files <- function(temp_dir, force_recompute=FORCE_RECOMPUTE) 
 
 # Function to generate heatmaps and metaprofiles for Mecp2 Endo and Exo around TSS
 generate_mecp2_tss_heatmaps <- function(temp_dir, annotation_files) {
-  tracker <- ProgressTracker$new(18)  # Total number of main steps
+  tracker <- ProgressTracker$new(18)
   
-  log_message("=== Starting MeCP2 heatmap generation ===")
-  tracker$increment()
+  # Create a function to get or compute matrix
+  get_or_compute_matrix <- function(bw_files, regions, output_file, use_scale_regions = FALSE, ...) {
+    if (file.exists(output_file) && !FORCE_RECOMPUTE) {
+      log_message(paste("Reusing existing matrix:", basename(output_file)))
+      return(output_file)
+    }
+    compute_matrix(bw_files, regions, output_file, use_scale_regions = use_scale_regions, ...)
+  }
   
   # Define sample groups
-  endo_samples <- c("NeuM2", "NeuM3", "NSCM1", "NSCM2", "NSCM3")
-  exo_samples <- c("NeuV1", "NeuV2", "NeuV3", "NSCv1", "NSCv2", "NSCv3")
+  sample_groups <- list(
+    neuron_endo = c("NeuM2", "NeuM3"),
+    neuron_exo = c("NeuV1", "NeuV2", "NeuV3"),
+    nsc_endo = c("NSCM1", "NSCM2", "NSCM3"),
+    nsc_exo = c("NSCv1", "NSCv2", "NSCv3")
+  )
   
-  log_message(paste("Endogenous samples:", paste(endo_samples, collapse=", ")))
-  log_message(paste("Exogenous samples:", paste(exo_samples, collapse=", ")))
+  # Pre-compute all matrices in parallel if possible
+  matrices <- list()
+  for (group_name in names(sample_groups)) {
+    bw_files <- file.path(BIGWIG_DIR, paste0(sample_groups[[group_name]], ".bw"))
+    
+    # TSS matrices
+    matrices[[paste0(group_name, "_tss")]] <- get_or_compute_matrix(
+      bw_files,
+      annotation_files$tss,
+      file.path(temp_dir, paste0(group_name, "_tss_matrix.gz"))
+    )
+    
+    # TSS to TES matrices
+    matrices[[paste0(group_name, "_tss_tes")]] <- get_or_compute_matrix(
+      bw_files,
+      annotation_files$gene_regions,
+      file.path(temp_dir, paste0(group_name, "_tss_tes_matrix.gz")),
+      use_scale_regions = TRUE
+    )
+  }
   
-  # Group by cell type and MeCP2 type
-  neuron_endo <- c("NeuM2", "NeuM3")
-  nsc_endo <- c("NSCM1", "NSCM2", "NSCM3")
-  neuron_exo <- c("NeuV1", "NeuV2", "NeuV3")
-  nsc_exo <- c("NSCv1", "NSCv2", "NSCv3")
+  # Function to generate plots for a group
+  generate_group_plots <- function(group_name, sample_type) {
+    # TSS to TES heatmap
+    plot_heatmap(
+      matrices[[paste0(group_name, "_tss_tes")]],
+      file.path(OUTPUT_DIR, paste0(group_name, "_tss_tes_heatmap.png")),
+      title = paste(group_name, "MeCP2 gene body coverage"),
+      use_scale_regions = TRUE,
+      sample_type = sample_type
+    )
+    
+    # TSS heatmap
+    plot_heatmap(
+      matrices[[paste0(group_name, "_tss")]],
+      file.path(OUTPUT_DIR, paste0(group_name, "_tss_heatmap.png")),
+      title = paste(group_name, "MeCP2 around TSS"),
+      sample_type = sample_type
+    )
+    
+    # TSS profile
+    plot_profile(
+      matrices[[paste0(group_name, "_tss")]],
+      file.path(OUTPUT_DIR, paste0(group_name, "_tss_profile.png")),
+      title = paste(group_name, "MeCP2 around TSS"),
+      sample_types = c(sample_type)
+    )
+
+    # TSS to TES profile
+    plot_profile(
+      matrices[[paste0(group_name, "_tss_tes")]],
+      file.path(OUTPUT_DIR, paste0(group_name, "_tss_tes_profile.png")),
+      title = paste(group_name, "MeCP2 gene body coverage"),
+      sample_types = c(sample_type)
+    )
+  }
   
-  # Create temporary matrix files
-  log_message(paste("Temporary directory:", temp_dir))
+  # Generate all individual plots
+  generate_group_plots("neuron_endo", "NEU_ENDO")
+  generate_group_plots("neuron_exo", "NEU_EXO")
+  generate_group_plots("nsc_endo", "NSC_ENDO")
+  generate_group_plots("nsc_exo", "NSC_EXO")
   
-  # Generate matrices and heatmaps for Neuron Endogenous vs Exogenous
-  log_message("=== Processing Neuron Endogenous vs Exogenous ===")
-  neuron_endo_bw <- file.path(BIGWIG_DIR, paste0(neuron_endo, ".bw"))
-  neuron_exo_bw <- file.path(BIGWIG_DIR, paste0(neuron_exo, ".bw"))
+  # Generate combined plots
+  generate_combined_plots <- function(cell_type) {
+    endo_group <- paste0(cell_type, "_endo")
+    exo_group <- paste0(cell_type, "_exo")
+    endo_type <- paste0(toupper(cell_type), "_ENDO")
+    exo_type <- paste0(toupper(cell_type), "_EXO")
+    
+    # Combined TSS matrix
+    combined_matrix <- get_or_compute_matrix(
+      c(file.path(BIGWIG_DIR, paste0(sample_groups[[endo_group]][1], ".bw")),
+        file.path(BIGWIG_DIR, paste0(sample_groups[[exo_group]][1], ".bw"))),
+      annotation_files$tss,
+      file.path(temp_dir, paste0(cell_type, "_combined_tss_matrix.gz"))
+    )
+
+    # Combined TSS to TES matrix
+     combined_tss_tes_matrix <- get_or_compute_matrix(
+      c(file.path(BIGWIG_DIR, paste0(sample_groups[[endo_group]][1], ".bw")),
+        file.path(BIGWIG_DIR, paste0(sample_groups[[exo_group]][1], ".bw"))),
+      annotation_files$gene_regions,
+      file.path(temp_dir, paste0(cell_type, "_combined_tss_tes_matrix.gz")),
+      use_scale_regions = TRUE
+    )
+    
+    # Combined plots
+    plot_heatmap(
+      combined_matrix,
+      file.path(OUTPUT_DIR, paste0(cell_type, "_endo_vs_exo_tss_heatmap.png")),
+      title = paste(cell_type, "Endogenous vs Exogenous MeCP2 around TSS")
+    )
+    
+    plot_profile(
+      combined_matrix,
+      file.path(OUTPUT_DIR, paste0(cell_type, "_endo_vs_exo_tss_profile.png")),
+      title = paste(cell_type, "Endogenous vs Exogenous MeCP2 around TSS"),
+      sample_types = c(endo_type, exo_type)
+    )
+
+    # Combined TSS to TES plots
+    plot_profile(
+      combined_tss_tes_matrix,
+      file.path(OUTPUT_DIR, paste0(cell_type, "_endo_vs_exo_tss_tes_profile.png")),
+      title = paste(cell_type, "Endogenous vs Exogenous MeCP2 gene body coverage"),
+      sample_types = c(endo_type, exo_type)
+    )
+  }
   
-  log_message(paste("Neuron Endogenous bigwig files:", paste(basename(neuron_endo_bw), collapse=", ")))
-  log_message(paste("Neuron Exogenous bigwig files:", paste(basename(neuron_exo_bw), collapse=", ")))
-  
-  # Combine bigwig files for each group
-  neuron_endo_matrix <- file.path(temp_dir, "neuron_endo_tss_matrix.gz")
-  neuron_exo_matrix <- file.path(temp_dir, "neuron_exo_tss_matrix.gz")
-  
-  # Compute matrices for TSS-centered analysis
-  log_message("=== Computing TSS-centered matrices for Neurons ===")
-  compute_matrix(neuron_endo_bw, annotation_files$tss, neuron_endo_matrix)
-  tracker$increment()
-  compute_matrix(neuron_exo_bw, annotation_files$tss, neuron_exo_matrix)
-  tracker$increment()
-  
-  # Create TSS to TES matrices
-  log_message("=== Computing TSS-to-TES matrices for Neurons ===")
-  neuron_endo_tss_tes_matrix <- file.path(temp_dir, "neuron_endo_tss_tes_matrix.gz")
-  neuron_exo_tss_tes_matrix <- file.path(temp_dir, "neuron_exo_tss_tes_matrix.gz")
-  
-  # Compute matrices for TSS to TES analysis
-  compute_matrix(neuron_endo_bw, annotation_files$gene_regions, neuron_endo_tss_tes_matrix, upstream=5000, downstream=5000, use_scale_regions=TRUE)
-  tracker$increment()
-  compute_matrix(neuron_exo_bw, annotation_files$gene_regions, neuron_exo_tss_tes_matrix, upstream=5000, downstream=5000, use_scale_regions=TRUE)
-  tracker$increment()
-  
-  # Plot TSS to TES heatmaps
-  log_message("=== Plotting TSS-to-TES heatmaps for Neurons ===")
-  neuron_endo_tss_tes_heatmap <- file.path(OUTPUT_DIR, "neuron_endo_tss_tes_heatmap.png")
-  plot_heatmap(neuron_endo_tss_tes_matrix, neuron_endo_tss_tes_heatmap, "Endogenous", use_scale_regions=TRUE)
-  tracker$increment()
-  
-  neuron_exo_tss_tes_heatmap <- file.path(OUTPUT_DIR, "neuron_exo_tss_tes_heatmap.png")
-  plot_heatmap(neuron_exo_tss_tes_matrix, neuron_exo_tss_tes_heatmap, "Exogenous", use_scale_regions=TRUE)
-  tracker$increment()
-  
-  # Plot heatmaps for TSS-centered analysis
-  log_message("=== Plotting TSS-centered heatmaps for Neurons ===")
-  neuron_endo_heatmap <- file.path(OUTPUT_DIR, "neuron_endo_tss_heatmap.png")
-  plot_heatmap(neuron_endo_matrix, neuron_endo_heatmap, "Neuron Endogenous MeCP2 around TSS")
-  tracker$increment()
-  
-  neuron_exo_heatmap <- file.path(OUTPUT_DIR, "neuron_exo_tss_heatmap.png")
-  plot_heatmap(neuron_exo_matrix, neuron_exo_heatmap, "Neuron Exogenous MeCP2 around TSS")
-  tracker$increment()
-  
-  # Plot profiles
-  log_message("=== Plotting TSS-centered profiles for Neurons ===")
-  neuron_endo_profile <- file.path(OUTPUT_DIR, "neuron_endo_tss_profile.png")
-  plot_profile(neuron_endo_matrix, neuron_endo_profile, "Neuron Endogenous MeCP2 around TSS")
-  tracker$increment()
-  
-  neuron_exo_profile <- file.path(OUTPUT_DIR, "neuron_exo_tss_profile.png")
-  plot_profile(neuron_exo_matrix, neuron_exo_profile, "Neuron Exogenous MeCP2 around TSS")
-  tracker$increment()
-  
-  # Generate matrices and heatmaps for NSC Endogenous vs Exogenous
-  log_message("=== Processing NSC Endogenous vs Exogenous ===")
-  nsc_endo_bw <- file.path(BIGWIG_DIR, paste0(nsc_endo, ".bw"))
-  nsc_exo_bw <- file.path(BIGWIG_DIR, paste0(nsc_exo, ".bw"))
-  
-  log_message(paste("NSC Endogenous bigwig files:", paste(basename(nsc_endo_bw), collapse=", ")))
-  log_message(paste("NSC Exogenous bigwig files:", paste(basename(nsc_exo_bw), collapse=", ")))
-  
-  # Combine bigwig files for each group
-  nsc_endo_matrix <- file.path(temp_dir, "nsc_endo_tss_matrix.gz")
-  nsc_exo_matrix <- file.path(temp_dir, "nsc_exo_tss_matrix.gz")
-  
-  # Compute matrices for TSS-centered analysis
-  log_message("=== Computing TSS-centered matrices for NSCs ===")
-  compute_matrix(nsc_endo_bw, annotation_files$tss, nsc_endo_matrix)
-  tracker$increment()
-  compute_matrix(nsc_exo_bw, annotation_files$tss, nsc_exo_matrix)
-  tracker$increment()
-  
-  # Create TSS to TES matrices for NSC
-  log_message("=== Computing TSS-to-TES matrices for NSCs ===")
-  nsc_endo_tss_tes_matrix <- file.path(temp_dir, "nsc_endo_tss_tes_matrix.gz")
-  nsc_exo_tss_tes_matrix <- file.path(temp_dir, "nsc_exo_tss_tes_matrix.gz")
-  
-  # Compute matrices for TSS to TES analysis
-  compute_matrix(nsc_endo_bw, annotation_files$gene_regions, nsc_endo_tss_tes_matrix, upstream=5000, downstream=5000, use_scale_regions=TRUE)
-  tracker$increment()
-  compute_matrix(nsc_exo_bw, annotation_files$gene_regions, nsc_exo_tss_tes_matrix, upstream=5000, downstream=5000, use_scale_regions=TRUE)
-  tracker$increment()
-  
-  # Plot TSS to TES heatmaps for NSC
-  log_message("=== Plotting TSS-to-TES heatmaps for NSCs ===")
-  nsc_endo_tss_tes_heatmap <- file.path(OUTPUT_DIR, "nsc_endo_tss_tes_heatmap.png")
-  plot_heatmap(nsc_endo_tss_tes_matrix, nsc_endo_tss_tes_heatmap, "Endogenous", use_scale_regions=TRUE)
-  tracker$increment()
-  
-  nsc_exo_tss_tes_heatmap <- file.path(OUTPUT_DIR, "nsc_exo_tss_tes_heatmap.png")
-  plot_heatmap(nsc_exo_tss_tes_matrix, nsc_exo_tss_tes_heatmap, "Exogenous", use_scale_regions=TRUE)
-  tracker$increment()
-  
-  # Plot heatmaps
-  log_message("=== Plotting TSS-centered heatmaps for NSCs ===")
-  nsc_endo_heatmap <- file.path(OUTPUT_DIR, "nsc_endo_tss_heatmap.png")
-  plot_heatmap(nsc_endo_matrix, nsc_endo_heatmap, "NSC Endogenous MeCP2 around TSS")
-  tracker$increment()
-  
-  nsc_exo_heatmap <- file.path(OUTPUT_DIR, "nsc_exo_tss_heatmap.png")
-  plot_heatmap(nsc_exo_matrix, nsc_exo_heatmap, "NSC Exogenous MeCP2 around TSS")
-  tracker$increment()
-  
-  # Plot profiles
-  log_message("=== Plotting TSS-centered profiles for NSCs ===")
-  nsc_endo_profile <- file.path(OUTPUT_DIR, "nsc_endo_tss_profile.png")
-  plot_profile(nsc_endo_matrix, nsc_endo_profile, "NSC Endogenous MeCP2 around TSS")
-  tracker$increment()
-  
-  nsc_exo_profile <- file.path(OUTPUT_DIR, "nsc_exo_tss_profile.png")
-  plot_profile(nsc_exo_matrix, nsc_exo_profile, "NSC Exogenous MeCP2 around TSS")
-  tracker$increment()
-  
-  # Create combined plots for comparison
-  # Combine Endo vs Exo for Neurons
-  log_message("=== Creating combined comparison plots ===")
-  neuron_combined_matrix <- file.path(temp_dir, "neuron_combined_tss_matrix.gz")
-  compute_matrix(c(neuron_endo_bw[1], neuron_exo_bw[1]), annotation_files$tss, neuron_combined_matrix)
-  tracker$increment()
-  
-  neuron_combined_heatmap <- file.path(OUTPUT_DIR, "neuron_endo_vs_exo_tss_heatmap.png")
-  plot_heatmap(neuron_combined_matrix, neuron_combined_heatmap, "Neuron Endogenous vs Exogenous MeCP2 around TSS")
-  tracker$increment()
-  
-  neuron_combined_profile <- file.path(OUTPUT_DIR, "neuron_endo_vs_exo_tss_profile.png")
-  plot_profile(neuron_combined_matrix, neuron_combined_profile, "Neuron Endogenous vs Exogenous MeCP2 around TSS")
-  tracker$increment()
-  
-  # Combine Endo vs Exo for NSCs
-  nsc_combined_matrix <- file.path(temp_dir, "nsc_combined_tss_matrix.gz")
-  compute_matrix(c(nsc_endo_bw[1], nsc_exo_bw[1]), annotation_files$tss, nsc_combined_matrix)
-  tracker$increment()
-  
-  nsc_combined_heatmap <- file.path(OUTPUT_DIR, "nsc_endo_vs_exo_tss_heatmap.png")
-  plot_heatmap(nsc_combined_matrix, nsc_combined_heatmap, "NSC Endogenous vs Exogenous MeCP2 around TSS")
-  tracker$increment()
-  
-  nsc_combined_profile <- file.path(OUTPUT_DIR, "nsc_endo_vs_exo_tss_profile.png")
-  plot_profile(nsc_combined_matrix, nsc_combined_profile, "NSC Endogenous vs Exogenous MeCP2 around TSS")
-  tracker$increment()
-  
-  # Create combined TSS to TES plots
-  neuron_combined_tss_tes_matrix <- file.path(temp_dir, "neuron_combined_tss_tes_matrix.gz")
-  compute_matrix(c(neuron_endo_bw[1], neuron_exo_bw[1]), annotation_files$gene_regions, neuron_combined_tss_tes_matrix, upstream=5000, downstream=5000, use_scale_regions=TRUE)
-  tracker$increment()
-  
-  neuron_combined_tss_tes_heatmap <- file.path(OUTPUT_DIR, "neuron_endo_vs_exo_tss_tes_heatmap.png")
-  plot_heatmap(neuron_combined_tss_tes_matrix, neuron_combined_tss_tes_heatmap, "Neuron Endogenous vs Exogenous", use_scale_regions=TRUE)
-  tracker$increment()
+  # Generate combined plots for both cell types
+  generate_combined_plots("neuron")
+  generate_combined_plots("nsc")
   
   log_message("=== Analysis completed ===")
 }
