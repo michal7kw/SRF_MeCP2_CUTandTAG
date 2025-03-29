@@ -354,22 +354,15 @@ def plot_gene_body_profile(matrices, labels, colors, output_file, title="MeCP2 g
     # For gene body plots, we need to create a custom x-axis
     n_bins = matrices[0].shape[0]
     
-    # Calculate bin positions based on our matrix structure
-    upstream_bins = int(n_bins / 3)  # 1/3 of bins for upstream
-    body_bins = int(n_bins / 3)      # 1/3 of bins for gene body
-    downstream_bins = n_bins - upstream_bins - body_bins  # Remaining bins for downstream
-    
-    tss_idx = upstream_bins
-    tes_idx = upstream_bins + body_bins
-    
-    # Log bin positions for verification
-    logger.info(f"Plot bins: total={n_bins}, upstream={upstream_bins}, body={body_bins}, downstream={downstream_bins}")
-    logger.info(f"TSS at bin {tss_idx}, TES at bin {tes_idx}")
+    # Assuming the structure is [upstream bins, body bins, downstream bins]
+    upstream_bins = 100  # 5000bp / 50bp
+    body_bins = 100      # Fixed body bins
+    downstream_bins = 100  # 5000bp / 50bp
     
     # Check raw signals at TSS and TES
     for i, (matrix, label) in enumerate(zip(matrices, labels)):
-        tss_signal = matrix[tss_idx]
-        tes_signal = matrix[tes_idx]
+        tss_signal = matrix[upstream_bins]
+        tes_signal = matrix[upstream_bins + body_bins]
         logger.info(f"{label} - TSS signal: {tss_signal:.2f}, TES signal: {tes_signal:.2f}, Ratio: {tss_signal/tes_signal if tes_signal > 0 else 0:.2f}")
     
     # Create x-axis labels
@@ -381,11 +374,11 @@ def plot_gene_body_profile(matrices, labels, colors, output_file, title="MeCP2 g
     x_labels.append("-5kb")
     
     # Add TSS
-    x_ticks.append(tss_idx)
+    x_ticks.append(upstream_bins)
     x_labels.append("TSS")
     
     # Add TES
-    x_ticks.append(tes_idx)
+    x_ticks.append(upstream_bins + body_bins)
     x_labels.append("TES")
     
     # Add downstream end
@@ -407,8 +400,8 @@ def plot_gene_body_profile(matrices, labels, colors, output_file, title="MeCP2 g
     plt.xticks(x_ticks, x_labels)
     
     # Add vertical lines at TSS and TES
-    plt.axvline(x=tss_idx, color='gray', linestyle='--', alpha=0.5)
-    plt.axvline(x=tes_idx, color='gray', linestyle='--', alpha=0.5)
+    plt.axvline(x=upstream_bins, color='gray', linestyle='--', alpha=0.5)
+    plt.axvline(x=upstream_bins + body_bins, color='gray', linestyle='--', alpha=0.5)
     
     plt.tight_layout()
     plt.savefig(output_file, dpi=300)
@@ -481,21 +474,14 @@ def plot_side_by_side_gene_body(matrices, labels, colors, output_file, title_pre
     # For gene body plots, we need to create a custom x-axis
     n_bins = matrices[0].shape[0]
     
-    # Calculate bin positions based on our matrix structure
-    upstream_bins = int(n_bins / 3)  # 1/3 of bins for upstream
-    body_bins = int(n_bins / 3)      # 1/3 of bins for gene body
-    downstream_bins = n_bins - upstream_bins - body_bins  # Remaining bins for downstream
-    
-    tss_idx = upstream_bins
-    tes_idx = upstream_bins + body_bins
-    
-    # Log bin positions for verification
-    logger.info(f"Side-by-side plot bins: total={n_bins}, upstream={upstream_bins}, body={body_bins}, downstream={downstream_bins}")
-    logger.info(f"TSS at bin {tss_idx}, TES at bin {tes_idx}")
+    # Assuming the structure is [upstream bins, body bins, downstream bins]
+    upstream_bins = 100  # 5000bp / 50bp
+    body_bins = 100      # Fixed body bins
+    downstream_bins = 100  # 5000bp / 50bp
     
     # Create x-axis labels
     x_labels = ["-5kb", "TSS", "TES", "+5kb"]
-    x_ticks = [0, tss_idx, tes_idx, n_bins - 1]
+    x_ticks = [0, upstream_bins, upstream_bins + body_bins, n_bins - 1]
     
     # Create continuous x-axis
     x = np.arange(n_bins)
@@ -506,8 +492,8 @@ def plot_side_by_side_gene_body(matrices, labels, colors, output_file, title_pre
         axs[i].grid(alpha=0.3)
         
         # Add vertical lines at TSS and TES
-        axs[i].axvline(x=tss_idx, color='gray', linestyle='--', alpha=0.5)
-        axs[i].axvline(x=tes_idx, color='gray', linestyle='--', alpha=0.5)
+        axs[i].axvline(x=upstream_bins, color='gray', linestyle='--', alpha=0.5)
+        axs[i].axvline(x=upstream_bins + body_bins, color='gray', linestyle='--', alpha=0.5)
         
         # Add y-axis label for first plot only
         if i == 0:
@@ -535,7 +521,7 @@ def load_peaks(peaks_dir, sample_name):
         sample_name (str): Name of the sample.
 
     Returns:
-        pybedtools.BedTool: A BedTool object containing the peaks, or None if no peak file is found.
+        pybedtools.BedTool: A BedTool object containing the peaks.
     """
     peak_file = None
     for ext in ["narrowPeak", "broadPeak"]:
@@ -544,12 +530,10 @@ def load_peaks(peaks_dir, sample_name):
             peak_file = temp_peak_file
             break
     
-    # Check if peak_file is None here, before trying to use os.path.exists()
-    if peak_file is None:
-        logger.error(f"No peak file found for sample {sample_name}")
+    if not os.path.exists(peak_file):
+        logger.error(f"Peak file not found: {peak_file}")
         return None
     
-    # At this point, peak_file should not be None
     logger.info(f"Loading peaks from {peak_file}")
     peaks = BedTool(peak_file)
     logger.info(f"Loaded {len(peaks)} peaks for {sample_name}")
@@ -568,17 +552,13 @@ def debug_matrices(matrices, sample_names, output_dir):
         sample_names (list): A list of sample names.
         output_dir (str): Path to the output directory where the debug files will be saved.
     """
-    # Calculate bin positions based on our matrix structure
-    n_bins = matrices[0].shape[0]
-    upstream_bins = int(n_bins / 3)  # 1/3 of bins for upstream
-    body_bins = int(n_bins / 3)      # 1/3 of bins for gene body
+    # For each matrix, check the signal at TSS and TES
+    upstream_bins = 100  # 5000bp / 50bp
+    body_bins = 100      # Fixed body bins
     
     # Positions to check
-    tss_idx = upstream_bins
-    tes_idx = upstream_bins + body_bins
-    
-    logger.info(f"Debug matrix bins: total={n_bins}, upstream={upstream_bins}, body={body_bins}")
-    logger.info(f"TSS at bin {tss_idx}, TES at bin {tes_idx}")
+    tss_idx = upstream_bins  # The TSS position
+    tes_idx = upstream_bins + body_bins  # The TES position
     
     # Create a dataframe to store the values
     df = pd.DataFrame({
@@ -627,36 +607,6 @@ def debug_matrices(matrices, sample_names, output_dir):
     plt.savefig(os.path.join(output_dir, 'debug_raw_signals.png'), dpi=300)
     logger.info(f"Debug raw signal plot saved to {os.path.join(output_dir, 'debug_raw_signals.png')}")
 
-def verify_matrix_structure(matrix):
-    """
-    Verify the structure of the computed matrix and determine the correct bin positions for TSS and TES.
-    
-    Args:
-        matrix (numpy.ndarray): The matrix to verify.
-        
-    Returns:
-        tuple: A tuple containing the bin positions for TSS and TES.
-    """
-    logger.info(f"Matrix shape: {matrix.shape}")
-    
-    # For our matrix structure, we assume that the bins are organized as:
-    # [upstream bins, body bins, downstream bins]
-    n_bins = matrix.shape[-1]  # Total number of bins - use the last dimension
-    
-    # Calculate bin positions based on our parameters
-    upstream_bins = int(n_bins * 0.333 * 0.5)  # Approximately 1/3 of total bins, divided by 2
-    body_bins = int(n_bins * 0.333)            # Approximately 1/3 of total bins
-    downstream_bins = n_bins - upstream_bins - body_bins
-    
-    tss_bin = upstream_bins
-    tes_bin = upstream_bins + body_bins
-    
-    logger.info(f"Matrix structure: total bins={n_bins}, upstream={upstream_bins}, body={body_bins}, downstream={downstream_bins}")
-    logger.info(f"Calculated TSS bin position: {tss_bin}")
-    logger.info(f"Calculated TES bin position: {tes_bin}")
-    
-    return tss_bin, tes_bin
-
 def main():
     """
     Main function to execute MeCP2 profiling and visualization.
@@ -683,7 +633,7 @@ def main():
     parser.add_argument("--downstream", type=int, default=5000, help="Downstream distance (bp)")
     parser.add_argument("--bin-size", type=int, default=50, help="Bin size (bp)")
     parser.add_argument("--body-bins", type=int, default=100, help="Number of bins for gene body")
-    parser.add_argument("--threads", type=int, default=32, help="Number of threads")
+    parser.add_argument("--threads", type=int, default=8, help="Number of threads")
     
     args = parser.parse_args()
     
@@ -745,12 +695,6 @@ def main():
         
         # Debug: Check for NaN or anomalies in the averaged matrix
         logger.info(f"Averaged matrix for {group_name}: min={np.min(gene_body_matrices[group_name])}, max={np.max(gene_body_matrices[group_name])}")
-    
-    # Verify matrix structure
-    for group_name, matrix in gene_body_matrices.items():
-        logger.info(f"Verifying matrix structure for {group_name}")
-        tss_bin, tes_bin = verify_matrix_structure(matrix)
-        logger.info(f"{group_name}: TSS at bin {tss_bin}, TES at bin {tes_bin}")
     
     # Run debug function to check TSS and TES signals
     debug_matrices(
@@ -856,7 +800,6 @@ def main():
         for sample in sample_files:
             peaks = load_peaks(args.peaks_dir, sample)
             if peaks is None:
-                logger.warning(f"Skipping peak analysis for sample {sample} due to missing peak file")
                 continue
             
             # Get bigWig file for this sample

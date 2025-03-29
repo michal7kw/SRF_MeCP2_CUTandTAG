@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=2_heatmaps_peaks_and_genes
 #SBATCH --account=kubacki.michal
-#SBATCH --mem=32GB
+#SBATCH --mem=64GB
 #SBATCH --time=24:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=32
@@ -148,6 +148,22 @@ if python 2_heatmaps_peaks_and_genes.py \
     DURATION=$((END_TIME - START_TIME))
     log_success "Python script execution completed successfully"
     log_info "Execution time: $((DURATION / 3600)) hours, $(((DURATION % 3600) / 60)) minutes and $((DURATION % 60)) seconds"
+    
+    # Check debug files
+    log_info "Checking debug files..."
+    if [ -f "${OUTPUT_DIR}/debug_raw_signals.png" ] && [ -f "${OUTPUT_DIR}/debug_tss_tes_signals.csv" ]; then
+        log_info "Debug data generated successfully:"
+        log_info "Debug Plot: ${OUTPUT_DIR}/debug_raw_signals.png"
+        log_info "Debug Data: ${OUTPUT_DIR}/debug_tss_tes_signals.csv"
+        
+        # Print TSS/TES ratio information
+        if [ -f "${OUTPUT_DIR}/debug_tss_tes_signals.csv" ]; then
+            log_info "TSS/TES Signal Ratios:"
+            tail -n +2 "${OUTPUT_DIR}/debug_tss_tes_signals.csv" | while IFS=, read -r sample tss_signal tes_signal ratio; do
+                log_info "$sample: TSS=$tss_signal, TES=$tes_signal, Ratio=$ratio"
+            done
+        fi
+    fi
     
     # Check if output files were created
     log_info "Checking output files..."
