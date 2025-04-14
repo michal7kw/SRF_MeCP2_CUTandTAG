@@ -8,6 +8,7 @@ DATA/
 data/
 logs/
 ImageExtraction/git_image_results
+ImageExtraction/git_pdf_results
 
 # Compressed files
 *.7z
@@ -122,3 +123,11 @@ iterative_alternative/results_5_align2_005/new_to_do
 !.github/
 
 *.npy
+ImageExtraction/
+Cross_final/results
+*.csv
+iterative_alternative/results*/
+Methylation_dev\plots
+*.pdf
+*.png
+*.html

@@ -6,6 +6,7 @@ It calculates and visualizes the average signal intensity of MeCP2 around these 
 The script supports parallel processing to speed up the computation and generates publication-quality figures.
 """
 
+# %%
 import os
 import numpy as np
 import pandas as pd
@@ -109,62 +110,115 @@ def extract_signal_scale_regions(args):
         numpy.ndarray: A numpy array containing the average signal intensity for each bin in the combined region
                        (upstream, gene body, downstream). Returns a zero-filled array if an error occurs.
     """
-    bw_file, chrom, start, end, upstream, downstream, body_bins, bin_size = args
+    bw_file, chrom, start, end, strand, upstream, downstream, body_bins, bin_size = args
     
     try:
         bw = pyBigWig.open(bw_file)
         
-        # Calculate actual regions
-        upstream_start = max(0, start - upstream)  # Ensure start is not negative
-        upstream_end = start
-        body_start = start
-        body_end = end
-        downstream_start = end
-        downstream_end = end + downstream
-        
-        # Initialize signal arrays for each region
-        upstream_signal = np.zeros(int(upstream / bin_size))
+        # Determine biological TSS and TES based on strand
+        if strand == '+':
+            tss = start
+            tes = end
+        elif strand == '-':
+            tss = end
+            tes = start
+        else:
+            # Handle unexpected strand values, maybe default to '+' or log a warning
+            logger.warning(f"Unexpected strand '{strand}' for {chrom}:{start}-{end}. Assuming '+' strand.")
+            tss = start
+            tes = end
+            strand = '+' # Set strand to '+' to avoid reversal later
+
+        # --- Calculate genomic coordinates for each region based on strand ---
+
+        # Upstream region (relative to TSS)
+        if strand == '+':
+            up_coord_start = max(0, tss - upstream)
+            up_coord_end = tss
+        else: # strand == '-'
+            up_coord_start = tss
+            up_coord_end = tss + upstream
+
+        # Body region (TSS to TES)
+        if strand == '+':
+            body_coord_start = tss
+            body_coord_end = tes
+        else: # strand == '-'
+            body_coord_start = tes # Note: tes < tss for '-' strand
+            body_coord_end = tss
+
+        # Downstream region (relative to TES)
+        if strand == '+':
+            down_coord_start = tes
+            down_coord_end = tes + downstream
+        else: # strand == '-'
+            down_coord_start = max(0, tes - downstream)
+            down_coord_end = tes
+
+        # --- Initialize signal arrays ---
+        upstream_num_bins = int(upstream / bin_size)
+        downstream_num_bins = int(downstream / bin_size)
+        upstream_signal = np.zeros(upstream_num_bins)
         body_signal = np.zeros(body_bins)
-        downstream_signal = np.zeros(int(downstream / bin_size))
-        
-        # Extract upstream signal
-        if upstream > 0:
-            upstream_bins = np.linspace(upstream_start, upstream_end, int(upstream / bin_size) + 1, dtype=int)
-            for i in range(len(upstream_bins) - 1):
+        downstream_signal = np.zeros(downstream_num_bins)
+
+        # --- Extract upstream signal ---
+        if upstream > 0 and up_coord_end > up_coord_start:
+            upstream_bins = np.linspace(up_coord_start, up_coord_end, upstream_num_bins + 1, dtype=int)
+            for i in range(upstream_num_bins):
                 bin_start = upstream_bins[i]
                 bin_end = upstream_bins[i + 1]
-                try:
-                    upstream_signal[i] = bw.stats(chrom, bin_start, bin_end, type="mean")[0] or 0
-                except:
-                    upstream_signal[i] = 0
-        
-        # Extract body signal (scaled)
-        if body_end > body_start:
-            # Create evenly spaced bins across the gene body
-            body_bin_size = (body_end - body_start) / body_bins
-            for i in range(body_bins):
-                bin_start = body_start + int(i * body_bin_size)
-                bin_end = body_start + int((i + 1) * body_bin_size)
-                if bin_end > bin_start:
+                if bin_end > bin_start: # Ensure bin has size > 0
                     try:
-                        body_signal[i] = bw.stats(chrom, bin_start, bin_end, type="mean")[0] or 0
-                    except:
-                        body_signal[i] = 0
-        
-        # Extract downstream signal
-        if downstream > 0:
-            downstream_bins = np.linspace(downstream_start, downstream_end, int(downstream / bin_size) + 1, dtype=int)
-            for i in range(len(downstream_bins) - 1):
+                        upstream_signal[i] = bw.stats(chrom, bin_start, bin_end, type="mean")[0] or 0
+                    except Exception as e:
+                        # logger.debug(f"Error extracting upstream signal bin {i} in {bw_file} at {chrom}:{bin_start}-{bin_end}: {str(e)}")
+                        upstream_signal[i] = 0 # Assign 0 if there's an error or no data
+
+        # --- Extract body signal (scaled) ---
+        if body_coord_end > body_coord_start:
+            gene_len = body_coord_end - body_coord_start
+            if gene_len > 0 and body_bins > 0:
+                body_bin_size = gene_len / body_bins
+                for i in range(body_bins):
+                    # Use float calculation for bin boundaries then convert to int
+                    bin_start_f = body_coord_start + i * body_bin_size
+                    bin_end_f = body_coord_start + (i + 1) * body_bin_size
+                    bin_start = int(bin_start_f)
+                    bin_end = int(bin_end_f)
+
+                    # Adjust last bin to exact end coordinate to avoid rounding issues
+                    if i == body_bins - 1:
+                        bin_end = body_coord_end
+
+                    # Ensure bin has size > 0 and start < end
+                    if bin_end > bin_start:
+                        try:
+                            body_signal[i] = bw.stats(chrom, bin_start, bin_end, type="mean")[0] or 0
+                        except Exception as e:
+                            # logger.debug(f"Error extracting body signal bin {i} in {bw_file} at {chrom}:{bin_start}-{bin_end}: {str(e)}")
+                            body_signal[i] = 0
+
+        # --- Extract downstream signal ---
+        if downstream > 0 and down_coord_end > down_coord_start:
+            downstream_bins = np.linspace(down_coord_start, down_coord_end, downstream_num_bins + 1, dtype=int)
+            for i in range(downstream_num_bins):
                 bin_start = downstream_bins[i]
                 bin_end = downstream_bins[i + 1]
-                try:
-                    downstream_signal[i] = bw.stats(chrom, bin_start, bin_end, type="mean")[0] or 0
-                except:
-                    downstream_signal[i] = 0
-        
-        # Combine all signals
+                if bin_end > bin_start: # Ensure bin has size > 0
+                    try:
+                        downstream_signal[i] = bw.stats(chrom, bin_start, bin_end, type="mean")[0] or 0
+                    except Exception as e:
+                        # logger.debug(f"Error extracting downstream signal bin {i} in {bw_file} at {chrom}:{bin_start}-{bin_end}: {str(e)}")
+                        downstream_signal[i] = 0 # Assign 0 if there's an error or no data
+
+        # --- Combine signals and reverse if necessary ---
         signal = np.concatenate([upstream_signal, body_signal, downstream_signal])
-        
+
+        # Reverse the entire signal array for minus strand genes
+        if strand == '-':
+            signal = signal[::-1]
+
         bw.close()
         return signal
     
@@ -256,12 +310,22 @@ def compute_matrix_scale_regions(bw_files, regions, upstream=5000, downstream=50
     # Prepare arguments for parallel processing
     args_list = []
     for region in regions:
-        chrom = region.chrom
-        start = region.start
-        end = region.end
-        
+        try:
+            chrom = region.chrom
+            start = region.start
+            end = region.end
+            strand = region.strand # Assumes BED6 format
+            if strand not in ['+', '-']:
+                 logger.warning(f"Region {chrom}:{start}-{end} has invalid strand '{strand}'. Skipping.")
+                 continue # Skip this region if strand is invalid
+        except IndexError:
+            logger.error(f"Region {region} does not have strand information (column 6). Please provide a BED6 file for gene regions.")
+            # Decide how to handle: skip all, assume '+', or raise error? Let's skip this region.
+            logger.warning(f"Skipping region {region} due to missing strand.")
+            continue # Skip this region
+
         for bw_file in bw_files:
-            args_list.append((bw_file, chrom, start, end, upstream, downstream, body_bins, bin_size))
+            args_list.append((bw_file, chrom, start, end, strand, upstream, downstream, body_bins, bin_size))
     
     # Process in parallel
     with Pool(processes=n_processes) as pool:
@@ -656,7 +720,7 @@ def verify_matrix_structure(matrix):
     logger.info(f"Calculated TES bin position: {tes_bin}")
     
     return tss_bin, tes_bin
-
+# %%
 def main():
     """
     Main function to execute MeCP2 profiling and visualization.

@@ -97,27 +97,79 @@ analyze_genomic_regions <- function(peaks, name) {
                                 level = "transcript",
                                 verbose = FALSE)
     
-    # 2. Generate comprehensive plots
-    
-    # Pie chart of genomic annotations
-    pdf(paste0("peaks_annotation/", name, "_pie_chart.pdf"))
-    plotAnnoPie(detailed_anno)
-    dev.off()
-    
-    # 3. Generate detailed statistics
+    # 2. Generate detailed statistics and map annotations
     anno_stats <- as.data.frame(detailed_anno@anno) %>%
         group_by(annotation) %>%
         summarise(
             count = n(),
-            percentage = n() / nrow(.) * 100
+            .groups = 'drop' # Drop grouping for further operations
+        ) %>%
+        mutate(
+            percentage = count / sum(count) * 100,
+            # Map detailed annotations to broader categories for plotting
+            PlotCategory = case_when(
+                grepl("Promoter", annotation) ~ "Promoter",
+                grepl("UTR|Exon|Intron|Downstream", annotation) ~ "Gene Body",
+                grepl("Intergenic", annotation) ~ "Intergenic",
+                TRUE ~ "Other" # Fallback category
+            ),
+            # Ensure PlotCategory is a factor for consistent ordering in plot
+            PlotCategory = factor(PlotCategory, levels = c("Promoter", "Gene Body", "Intergenic", "Other"))
+        ) %>%
+        # Summarize again by the broader PlotCategory
+        group_by(PlotCategory) %>%
+        summarise(
+            TotalCount = sum(count),
+            TotalPercentage = sum(percentage),
+            .groups = 'drop'
         )
+
+    # 3. Create and save the pie chart using ggplot2
+    
+    # Define colors similar to the reference script
+    plot_colors <- c(
+        "Promoter" = "#3182bd",    # Blue for Promoter regions
+        "Gene Body" = "#fd8d3c",   # Orange for Gene Body (UTRs, Exons, Introns, Downstream)
+        "Intergenic" = "#e7969c",  # Pinkish Red for Intergenic
+        "Other" = "#bdbdbd"        # Grey for any other category
+    )
+
+    # Create the pie chart
+    pie_chart <- ggplot(anno_stats, aes(x = "", y = TotalPercentage, fill = PlotCategory)) +
+        geom_bar(stat = "identity", width = 1) +
+        coord_polar("y", start = 0) +
+        scale_fill_manual(values = plot_colors) +
+        theme_minimal() +
+        theme(
+            axis.title.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.x = element_blank(),
+            axis.ticks = element_blank(),
+            panel.grid = element_blank(),
+            plot.title = element_text(hjust = 0.5) # Center title
+        ) +
+        labs(
+            title = paste("Genomic Distribution of Peaks:", name),
+            fill = "Genomic Region"
+        )
+
+    # Save the plot
+    ggsave(paste0("peaks_annotation/", name, "_pie_chart.pdf"),
+           plot = pie_chart, width = 8, height = 6)
+    ggsave(paste0("peaks_annotation/", name, "_pie_chart.png"),
+           plot = pie_chart, width = 8, height = 6, dpi = 300)
+
+    # 4. Get promoter vs non-promoter stats (using original detailed stats)
+    promoter_stats_detailed <- as.data.frame(detailed_anno@anno) %>%
+        group_by(annotation) %>%
+        summarise(count = n(), .groups = 'drop')
     
     # 4. Get promoter vs non-promoter stats
     promoter_stats <- data.frame(
         region = c("Promoter", "Non-promoter"),
         count = c(
-            sum(anno_stats$count[grep("Promoter", anno_stats$annotation)]),
-            sum(anno_stats$count[!grepl("Promoter", anno_stats$annotation)])
+            sum(promoter_stats_detailed$count[grep("Promoter", promoter_stats_detailed$annotation)]),
+            sum(promoter_stats_detailed$count[!grepl("Promoter", promoter_stats_detailed$annotation)])
         )
     )
     promoter_stats$percentage <- promoter_stats$count / sum(promoter_stats$count) * 100

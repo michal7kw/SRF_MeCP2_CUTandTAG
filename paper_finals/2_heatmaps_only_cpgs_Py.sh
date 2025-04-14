@@ -91,14 +91,32 @@ if python 2_heatmaps_only_cpgs_Py.py \
     
     # Check if output files were created
     log_info "Checking output files..."
-    if [ -f "${OUTPUT_DIR}/all_samples_cpg_profile.png" ]; then
-        log_success "Output files generated successfully"
-        ls -lh ${OUTPUT_DIR}/*.png | awk '{print $9, "("$5")"}' | while read line; do
-            log_info "Generated: $line"
-        done
+    expected_files=(
+        "${OUTPUT_DIR}/neuron_endo_exo_cpg_profile.png"
+        "${OUTPUT_DIR}/neuron_endo_exo_side_by_side.png"
+        "${OUTPUT_DIR}/nsc_endo_exo_cpg_profile.png"
+        "${OUTPUT_DIR}/nsc_endo_exo_side_by_side.png"
+    )
+    
+    all_exist=true
+    for file in "${expected_files[@]}"; do
+        if [ ! -f "$file" ]; then
+            log_warning "Missing expected output file: $file"
+            all_exist=false
+        fi
+    done
+    
+    if $all_exist; then
+        log_success "All expected output files generated successfully"
     else
-        log_warning "Output files may not have been generated correctly"
+        log_warning "Some expected output files may be missing"
     fi
+    
+    # List all generated PNG files
+    log_info "Generated PNG files:"
+    ls -lh ${OUTPUT_DIR}/*.png | awk '{print $9, "("$5")"}' | while read line; do
+        log_info "$line"
+    done
 else
     EXIT_CODE=$?
     END_TIME=$(date +%s)

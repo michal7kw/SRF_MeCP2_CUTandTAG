@@ -26,7 +26,7 @@ def plot_enrichment_distribution(df, factor=3, title=None, color='#2196F3', alph
     range_max = q3 + factor * iqr
 
     # Plot histogram with better binning and transparency
-    n, bins, patches = plt.hist(df['enrichment'], bins=50, edgecolor='black', alpha=alpha,
+    n, bins, patches = plt.hist(df['enrichment'], bins=50, alpha=alpha,
                               color=color, density=False, range=(range_min, range_max))
 
     # Add grid for better readability
@@ -59,7 +59,7 @@ def plot_enrichment_distribution(df, factor=3, title=None, color='#2196F3', alph
     
     return range_min, range_max
 
-def plot_enrichment_distribution_neu_vs_nsc(df, factor=3, title=None):
+def plot_enrichment_distribution_neu_vs_nsc(df, factor=3, title=None, color='#2196F3'):
     """
     Create histogram of enrichment values for regions bound by both Neu and NSC.
     
@@ -67,6 +67,7 @@ def plot_enrichment_distribution_neu_vs_nsc(df, factor=3, title=None):
         df: DataFrame containing enrichment values
         factor: Factor to multiply IQR by for determining plot range (default=3)
         title: Optional custom title for the plot
+        color: Color of the histogram bars (default='#2196F3')
     """
     plt.figure(figsize=(10, 6))
 
@@ -77,8 +78,8 @@ def plot_enrichment_distribution_neu_vs_nsc(df, factor=3, title=None):
     range_max = q3 + factor * iqr
 
     # Plot histogram with better binning and transparency
-    n, bins, patches = plt.hist(df['enrichment'], bins=50, edgecolor='black', alpha=0.7,
-                              color='#2196F3', density=False, range=(range_min, range_max))
+    n, bins, patches = plt.hist(df['enrichment'], bins=50, alpha=0.7,
+                              color=color, density=False, range=(range_min, range_max))
 
     # Add grid for better readability
     plt.grid(True, alpha=0.3)
@@ -93,8 +94,8 @@ def plot_enrichment_distribution_neu_vs_nsc(df, factor=3, title=None):
     plt.title(title, fontsize=14, pad=15)
 
     # Add vertical line at enrichment = 1
-    plt.axvline(x=1, color='red', linestyle='--', linewidth=2,
-                label='Enrichment = 1 (No difference)')
+    plt.axvline(x=2, color='red', linestyle='--', linewidth=2,
+                label='Enrichment = 2')
 
     # Set x-axis limits based on the actual data range
     plt.xlim(range_min, range_max)
