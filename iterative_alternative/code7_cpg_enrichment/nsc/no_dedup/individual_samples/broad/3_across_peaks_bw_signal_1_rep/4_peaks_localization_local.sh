@@ -72,6 +72,7 @@ DATA_ARRAY=(
 "down_enriched_signal_05_exo_over_20.csv"
 "exo_only_df_by_signal_exo_over_20.csv"
 "endo_only_df_by_signal_exo_over_20.csv"
+"up_enriched_signal_2.csv"
 )
 
 # Loop through the files and process each one
@@ -82,7 +83,7 @@ for CURRENT_FILE in "${DATA_ARRAY[@]}"; do
 
     # Ensure Rscript is in PATH or provide full path
     # Use paths relative to the current directory (which is now WORKING_DIR)
-    Rscript "${SCRIPT_DIR}/peaks_localization.R" \
+    Rscript "${SCRIPT_DIR}/peaks_localization_nsc_tune.R" \
         --work-dir "${RESULTS_DIR}" \
         --data-to-analyze "${CURRENT_FILE}"
 

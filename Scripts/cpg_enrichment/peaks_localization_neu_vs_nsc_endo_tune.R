@@ -7,7 +7,6 @@ library(org.Mm.eg.db)  # For gene annotations
 library(clusterProfiler)
 library(ggplot2)
 library(gridExtra)
-library(GO.db) # Needed to fetch GO term descriptions
 
 # Initialize txdb object
 txdb <- TxDb.Mmusculus.UCSC.mm10.knownGene
@@ -70,8 +69,8 @@ read_peak_file <- function(file_path) {
             end = peaks_df$end
         ),
         # Add metadata columns that might be useful for analysis
-        exo_signal = peaks_df$exo_signal,
-        endo_signal = peaks_df$endo_signal,
+        neu_signal = peaks_df$neu_signal,
+        nsc_signal = peaks_df$nsc_signal,
         enrichment = peaks_df$enrichment,
         pvalue = peaks_df$pvalue,
         binding_type = peaks_df$binding_type,
@@ -98,79 +97,27 @@ analyze_genomic_regions <- function(peaks, name) {
                                 level = "transcript",
                                 verbose = FALSE)
     
-    # 2. Generate detailed statistics and map annotations
+    # 2. Generate comprehensive plots
+    
+    # Pie chart of genomic annotations
+    pdf(paste0("peaks_annotation/", name, "_pie_chart.pdf"))
+    plotAnnoPie(detailed_anno)
+    dev.off()
+    
+    # 3. Generate detailed statistics
     anno_stats <- as.data.frame(detailed_anno@anno) %>%
         group_by(annotation) %>%
         summarise(
             count = n(),
-            .groups = 'drop' # Drop grouping for further operations
-        ) %>%
-        mutate(
-            percentage = count / sum(count) * 100,
-            # Map detailed annotations to broader categories for plotting
-            PlotCategory = case_when(
-                grepl("Promoter", annotation) ~ "Promoter",
-                grepl("UTR|Exon|Intron|Downstream", annotation) ~ "Gene Body",
-                grepl("Intergenic", annotation) ~ "Intergenic",
-                TRUE ~ "Other" # Fallback category
-            ),
-            # Ensure PlotCategory is a factor for consistent ordering in plot
-            PlotCategory = factor(PlotCategory, levels = c("Promoter", "Gene Body", "Intergenic", "Other"))
-        ) %>%
-        # Summarize again by the broader PlotCategory
-        group_by(PlotCategory) %>%
-        summarise(
-            TotalCount = sum(count),
-            TotalPercentage = sum(percentage),
-            .groups = 'drop'
+            percentage = n() / nrow(.) * 100
         )
-
-    # 3. Create and save the pie chart using ggplot2
-    
-    # Define colors similar to the reference script
-    plot_colors <- c(
-        "Promoter" = "#3182bd",    # Blue for Promoter regions
-        "Gene Body" = "#fd8d3c",   # Orange for Gene Body (UTRs, Exons, Introns, Downstream)
-        "Intergenic" = "#e7969c",  # Pinkish Red for Intergenic
-        "Other" = "#bdbdbd"        # Grey for any other category
-    )
-
-    # Create the pie chart
-    pie_chart <- ggplot(anno_stats, aes(x = "", y = TotalPercentage, fill = PlotCategory)) +
-        geom_bar(stat = "identity", width = 1) +
-        coord_polar("y", start = 0) +
-        scale_fill_manual(values = plot_colors) +
-        theme_minimal() +
-        theme(
-            axis.title.x = element_blank(),
-            axis.title.y = element_blank(),
-            axis.text.x = element_blank(),
-            axis.ticks = element_blank(),
-            panel.grid = element_blank(),
-            plot.title = element_text(hjust = 0.5) # Center title
-        ) +
-        labs(
-            title = paste("Genomic Distribution of Peaks:", name),
-            fill = "Genomic Region"
-        )
-
-    # Save the plot
-    ggsave(paste0("peaks_annotation/", name, "_pie_chart.pdf"),
-           plot = pie_chart, width = 8, height = 6)
-    ggsave(paste0("peaks_annotation/", name, "_pie_chart.png"),
-           plot = pie_chart, width = 8, height = 6, dpi = 300)
-
-    # 4. Get promoter vs non-promoter stats (using original detailed stats)
-    promoter_stats_detailed <- as.data.frame(detailed_anno@anno) %>%
-        group_by(annotation) %>%
-        summarise(count = n(), .groups = 'drop')
     
     # 4. Get promoter vs non-promoter stats
     promoter_stats <- data.frame(
         region = c("Promoter", "Non-promoter"),
         count = c(
-            sum(promoter_stats_detailed$count[grep("Promoter", promoter_stats_detailed$annotation)]),
-            sum(promoter_stats_detailed$count[!grepl("Promoter", promoter_stats_detailed$annotation)])
+            sum(anno_stats$count[grep("Promoter", anno_stats$annotation)]),
+            sum(anno_stats$count[!grepl("Promoter", anno_stats$annotation)])
         )
     )
     promoter_stats$percentage <- promoter_stats$count / sum(promoter_stats$count) * 100
@@ -226,47 +173,79 @@ calculate_feature_enrichment <- function(peaks, name) {
                    pAdjustMethod = "BH",
                    pvalueCutoff = 0.05,
                    qvalueCutoff = 0.2)
-    # Filter results before plotting/saving
+    
+    # Plot results
     if (!is.null(ego) && nrow(ego) > 0) {
-        ego_df <- as.data.frame(ego)
         
-        # Define terms to remove
+        # Define GO terms to remove for plotting
         terms_to_remove <- c("GO:0000280", "GO:0022613", "GO:0043161")
         
-        # Filter out the specified terms
-        ego_filtered_df <- ego_df[!ego_df$ID %in% terms_to_remove, ]
-        
-        # Optional: Convert back to enrichResult object if needed,
-        # but dotplot can often handle the data frame.
-        # For simplicity, we'll use the filtered data frame directly if possible,
-        # or adjust if dotplot specifically requires the object structure.
-        # Let's assume dotplot works with the filtered data frame for now.
-        # If dotplot fails, we might need to reconstruct the enrichResult object.
-        
-        # Check if there are still rows after filtering
-        if (nrow(ego_filtered_df) > 0) {
-            # Plot filtered results
-            # Adjust showCategory if needed, e.g., show top 15 of remaining terms
-            num_categories_to_show <- min(15, nrow(ego_filtered_df))
-            
-            pdf(paste0("peaks_annotation/", name, "_GO_enrichment_filtered.pdf"))
-            # Use the filtered data frame for plotting
-            # Note: enrichplot::dotplot might need the enrichResult object.
-            # If this fails, we need to reconstruct ego or use ggplot directly.
-            # Let's try passing the filtered df first. If it errors, we'll adjust.
-            # Recreating enrichResult object to be safe for dotplot
-            ego_filtered <- ego
-            ego_filtered@result <- ego_filtered_df
-            
-            print(dotplot(ego_filtered, showCategory = num_categories_to_show, title = paste(name, "GO Enrichment (Filtered)")))
-            dev.off()
-            
-            # Save filtered results to CSV
-            write.csv(ego_filtered_df,
-                      file = paste0("peaks_annotation/", name, "_GO_enrichment_filtered.csv"))
+        # Filter the results within the enrichResult object for plotting
+        ego_filtered <- ego
+        # Ensure the result slot exists and is a dataframe before filtering
+        if (!is.null(ego@result) && is.data.frame(ego@result) && nrow(ego@result) > 0) {
+            ego_filtered@result <- ego@result[!ego@result$ID %in% terms_to_remove, ]
         } else {
-            message(paste("No significant GO terms remaining after filtering for", name))
+             # Handle cases where ego@result is NULL or not a dataframe or empty
+             ego_filtered@result <- data.frame() # Assign an empty dataframe
         }
+
+        # Define GO terms to prioritize for plotting
+        terms_to_prioritize <- c("GO:0021879", "GO:0106027", "GO:0048168")
+
+        # Check if the filtered object still has rows before plotting
+        if (nrow(ego_filtered@result) > 0) {
+            
+            # Get the filtered results as a data frame
+            filtered_results_df <- as.data.frame(ego_filtered)
+            
+            # Sort by p.adjust to find the top terms
+            sorted_df <- filtered_results_df[order(filtered_results_df$p.adjust), ]
+            
+            # Get the IDs of the top 15 significant terms
+            top15_ids <- head(sorted_df$ID, 10)
+            
+            # Identify which prioritized terms are present in the filtered results
+            prioritized_ids_present <- terms_to_prioritize[terms_to_prioritize %in% filtered_results_df$ID]
+            
+            # Combine top 15 and prioritized terms, ensuring uniqueness
+            final_ids_to_plot <- unique(c(top15_ids, prioritized_ids_present))
+            
+            # Create the final enrichResult object for plotting containing only the selected terms
+            ego_plot <- ego_filtered
+            ego_plot@result <- ego_filtered@result[ego_filtered@result$ID %in% final_ids_to_plot, ]
+            
+            # Determine the number of categories to actually show in the plot
+            num_categories_to_show <- length(final_ids_to_plot)
+            plot_title <- paste("GO Enrichment")
+
+            # Ensure we don't try to show more categories than available after filtering/prioritization
+            num_categories_to_show <- min(num_categories_to_show, nrow(ego_plot@result))
+
+            pdf(paste0("peaks_annotation/", name, "_GO_enrichment.pdf"))
+            # Plot using the prepared ego_plot object and parameters
+            if (num_categories_to_show > 0) {
+                 print(dotplot(ego_plot, showCategory = num_categories_to_show, title = plot_title))
+            } else {
+                 # Handle case where even prioritized terms might not exist or filtering leaves nothing
+                 plot.new()
+                 text(0.5, 0.5, paste("No terms to display for", name, "\n(after filtering/prioritization)"))
+                 title(main = plot_title)
+            }
+            dev.off()
+        } else {
+            message(paste("No significant GO terms left after filtering for plot:", name))
+            # Create an empty plot PDF
+            pdf(paste0("peaks_annotation/", name, "_GO_enrichment.pdf"))
+            plot.new()
+            text(0.5, 0.5, paste("No significant GO terms left after filtering for", name))
+            title(main = paste("GO Enrichment (Filtered)"))
+            dev.off()
+        }
+        
+        # Save the original, unfiltered results to CSV
+        write.csv(as.data.frame(ego),
+                 file = paste0("peaks_annotation/", name, "_GO_enrichment.csv"))
     }
     
     return(ego)
@@ -276,6 +255,14 @@ calculate_feature_enrichment <- function(peaks, name) {
 # Parse arguments
 opts <- parse_args(OptionParser(option_list=option_list))
 
+# Validate arguments
+if (is.null(opts$work_dir) || nchar(opts$work_dir) == 0) {
+    stop("Work directory path is empty or NULL")
+}
+if (is.null(opts$data_file) || nchar(opts$data_file) == 0) {
+    stop("Data file path is empty or NULL") 
+}
+
 # Add diagnostic prints
 print("Command line arguments received:")
 print(opts)
@@ -284,31 +271,40 @@ print(opts$work_dir)
 print("Data file to analyze:")
 print(opts$data_file)
 
-# Check if required arguments are provided
-if (is.null(opts$work_dir) || !is.character(opts$work_dir)) {
-    stop("Invalid or missing work directory path")
-}
-if (is.null(opts$data_file) || !is.character(opts$data_file)) {
-    stop("Invalid or missing data file path")
-}
+# Create working directory if it doesn't exist
+dir.create(opts$work_dir, recursive = TRUE, showWarnings = FALSE)
 
-# Set working directory
+# Set working directory with error handling
 tryCatch({
+    if (!dir.exists(opts$work_dir)) {
+        stop(paste("Directory does not exist and could not be created:", opts$work_dir))
+    }
     setwd(opts$work_dir)
+    # Print current working directory for verification
+    print(paste("Current working directory:", getwd()))
 }, error = function(e) {
-    stop(paste("Error setting working directory:", e$message))
+    stop(paste("Error setting working directory:", e$message, "\nPath:", opts$work_dir))
 })
+
+# Create peaks_annotation directory if it doesn't exist
+dir.create("peaks_annotation", showWarnings = FALSE, recursive = TRUE)
+
+# Verify the input file exists before trying to read it
+file_path <- file.path("lists", opts$data_file)
+if (!file.exists(file_path)) {
+    stop(paste("Input file does not exist:", file_path))
+}
 
 # Extract the base name without extension for output file naming
 file_base <- tools::file_path_sans_ext(opts$data_file)
 
-# Read peak file
-file_path <- file.path("lists", opts$data_file)
+# Read peak file with error handling
 message("Reading file: ", file_path)
-peaks <- read_peak_file(file_path)
-
-# Create peaks_annotation directory if it doesn't exist
-dir.create("peaks_annotation", showWarnings = FALSE)
+peaks <- tryCatch({
+    read_peak_file(file_path)
+}, error = function(e) {
+    stop(paste("Error reading peak file:", e$message, "\nFile:", file_path))
+})
 
 # Analyze peaks
 peaks_anno <- analyze_peaks(peaks, file_base)

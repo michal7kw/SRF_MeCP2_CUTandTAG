@@ -225,48 +225,60 @@ calculate_feature_enrichment <- function(peaks, name) {
                    pAdjustMethod = "BH",
                    pvalueCutoff = 0.05,
                    qvalueCutoff = 0.2)
-    # Filter results before plotting/saving
+    # Plot results and save full results
     if (!is.null(ego) && nrow(ego) > 0) {
-        ego_df <- as.data.frame(ego)
         
-        # Define terms to remove
-        terms_to_remove <- c("GO:0030326", "GO:0035113")
+        # Define GO terms to prioritize for plotting
+        terms_to_prioritize <- c("GO:0021953", "GO:0010976")
         
-        # Filter out the specified terms
-        ego_filtered_df <- ego_df[!ego_df$ID %in% terms_to_remove, ]
+        # Get the full results as a data frame
+        results_df <- as.data.frame(ego)
         
-        # Optional: Convert back to enrichResult object if needed,
-        # but dotplot can often handle the data frame.
-        # For simplicity, we'll use the filtered data frame directly if possible,
-        # or adjust if dotplot specifically requires the object structure.
-        # Let's assume dotplot works with the filtered data frame for now.
-        # If dotplot fails, we might need to reconstruct the enrichResult object.
+        # Sort by p.adjust to find the top terms
+        sorted_df <- results_df[order(results_df$p.adjust), ]
         
-        # Check if there are still rows after filtering
-        if (nrow(ego_filtered_df) > 0) {
-            # Plot filtered results
-            # Adjust showCategory if needed, e.g., show top 15 of remaining terms
-            num_categories_to_show <- min(15, nrow(ego_filtered_df))
-            
-            pdf(paste0("peaks_annotation/", name, "_GO_enrichment_filtered.pdf"))
-            # Use the filtered data frame for plotting
-            # Note: enrichplot::dotplot might need the enrichResult object.
-            # If this fails, we need to reconstruct ego or use ggplot directly.
-            # Let's try passing the filtered df first. If it errors, we'll adjust.
-            # Recreating enrichResult object to be safe for dotplot
-            ego_filtered <- ego
-            ego_filtered@result <- ego_filtered_df
-            
-            print(dotplot(ego_filtered, showCategory = num_categories_to_show, title = paste(name, "GO Enrichment (Filtered)")))
-            dev.off()
-            
-            # Save filtered results to CSV
-            write.csv(ego_filtered_df,
-                      file = paste0("peaks_annotation/", name, "_GO_enrichment_filtered.csv"))
+        # Get the IDs of the top 15 significant terms
+        top15_ids <- head(sorted_df$ID, 15)
+        
+        # Identify which prioritized terms are present in the results
+        prioritized_ids_present <- terms_to_prioritize[terms_to_prioritize %in% results_df$ID]
+        
+        # Combine top 15 and prioritized terms, ensuring uniqueness
+        final_ids_to_plot <- unique(c(top15_ids, prioritized_ids_present))
+        
+        # Create the final enrichResult object for plotting containing only the selected terms
+        ego_plot <- ego
+        # Ensure the result slot exists and is a dataframe before filtering
+        if (!is.null(ego@result) && is.data.frame(ego@result) && nrow(ego@result) > 0) {
+             ego_plot@result <- ego@result[ego@result$ID %in% final_ids_to_plot, ]
         } else {
-            message(paste("No significant GO terms remaining after filtering for", name))
+             # Handle cases where ego@result is NULL or not a dataframe or empty
+             ego_plot@result <- data.frame() # Assign an empty dataframe
         }
-    }
+
+        # Check if the plot object still has rows before plotting
+        if (nrow(ego_plot@result) > 0) {
+            # Determine the number of categories to actually show in the plot
+            num_categories_to_show <- length(final_ids_to_plot)
+            plot_title <- paste("GO Enrichment")
+
+            pdf(paste0("peaks_annotation/", name, "_GO_enrichment.pdf"))
+            # Plot using the prepared ego_plot object and parameters
+            print(dotplot(ego_plot, showCategory = num_categories_to_show, title = plot_title))
+            dev.off()
+        } else {
+            message(paste("No significant GO terms to plot for", name))
+            # Create an empty plot PDF
+            pdf(paste0("peaks_annotation/", name, "_GO_enrichment.pdf"))
+            plot.new()
+            text(0.5, 0.5, paste("No significant GO terms to display for", name))
+            title(main = paste("GO Enrichment"))
+            dev.off()
+        }
+        
+        # Save the original, full results to CSV
+        write.csv(results_df,
+                 file = paste0("peaks_annotation/", name, "_GO_enrichment.csv"))
     }
     
     return(ego)
